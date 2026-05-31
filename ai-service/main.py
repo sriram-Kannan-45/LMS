@@ -1,6 +1,6 @@
 b"""
 AI Quiz Generator Microservice - Enterprise Edition
-Uses LangChain + Groq (OpenAI-compatible) to generate quizzes from documents.
+Uses LangChain + Gemini (with Groq fallback) to generate quizzes from documents.
 
 Enhanced with:
 - Advanced prompt engineering with Bloom's taxonomy
@@ -154,26 +154,29 @@ Level: {difficulty}
 5. **Clarity**: Questions must be unambiguous with precise wording.
 
 ## OUTPUT FORMAT
-Return ONLY a valid JSON array. No markdown, no explanations, no preamble.
+Return ONLY a valid JSON object with a single key "questions" whose value is an array of question objects. No markdown, no explanations, no preamble.
 
-[
-  {{
-    "question": "Clear, well-formed question text?",
-    "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
-    "correct_answer": "A",
-    "explanation": "Brief explanation (1-2 sentences) referencing the document content",
-    "difficulty": "EASY or MEDIUM or HARD",
-    "bloom_level": "Remember/Understand/Apply/Analyze/Evaluate/Create"
-  }}
-]
+{{
+  "questions": [
+    {{
+      "question": "Clear, well-formed question text?",
+      "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
+      "correct_answer": "A",
+      "explanation": "Brief explanation (1-2 sentences) referencing the document content",
+      "difficulty": "EASY or MEDIUM or HARD",
+      "bloom_level": "Remember/Understand/Apply/Analyze/Evaluate/Create"
+    }}
+  ]
+}}
 
 ## IMPORTANT
-- Return ONLY the JSON array
-- Ensure valid JSON syntax (proper escaping of quotes)
+- Return ONLY the JSON object — no markdown fences, no commentary
+- Ensure valid JSON syntax. Escape any double-quote characters inside string values as \\"
+- Do not use line breaks inside string values
 - All {num_questions} questions must be unique and cover different aspects of the document
 - The correct_answer field must be exactly "A", "B", "C", or "D"
 
-Generate the JSON array now:
+Generate the JSON now:
 """
 
 # ── Similarity Detection ───────────────────────────────
@@ -285,72 +288,195 @@ def repair_question(question: Dict, index: int) -> Dict:
     
     return repaired
 
+def _try_json_repair(text: str) -> Tuple[Optional[Any], Optional[str]]:
+    """Try to repair malformed JSON using the json-repair library if available."""
+    try:
+        from json_repair import repair_json
+        repaired = repair_json(text, return_objects=True)
+        return repaired, None
+    except ImportError:
+        return None, "json-repair library not installed"
+    except Exception as e:
+        return None, f"json-repair failed: {e}"
+
+
+def _extract_question_objects(text: str) -> List[Dict]:
+    """
+    Last-resort parser: scan for top-level {...} blocks inside the array
+    and try to parse each one independently. This recovers as many
+    questions as possible when the overall array has syntax errors.
+    """
+    results: List[Dict] = []
+    depth = 0
+    start_idx = -1
+    in_string = False
+    escape = False
+
+    for i, ch in enumerate(text):
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            if depth == 0:
+                start_idx = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start_idx != -1:
+                block = text[start_idx:i + 1]
+                # Try strict JSON, then json-repair
+                try:
+                    parsed = json.loads(block)
+                    if isinstance(parsed, dict):
+                        results.append(parsed)
+                except json.JSONDecodeError:
+                    repaired, _ = _try_json_repair(block)
+                    if isinstance(repaired, dict):
+                        results.append(repaired)
+                start_idx = -1
+    return results
+
+
 def safe_json_parse(text: str) -> Tuple[List[Dict], List[str]]:
     """
     Safely parse JSON from text, with auto-repair capabilities.
     Returns (parsed_questions, warnings)
+
+    Strategy (in order):
+      1. Strip markdown fences and locate the JSON payload.
+      2. Try strict json.loads on the cleaned text.
+      3. Try json-repair on the cleaned text.
+      4. Scan for individual {...} question blocks and parse each.
     """
-    warnings = []
-    
-    # Clean the text
-    cleaned = text.strip()
-    
-    # Remove markdown code blocks
-    for marker in ["```json", "```"]:
-        if marker in cleaned:
-            cleaned = cleaned.split(marker)[1].split("```")[0] if "```" in cleaned else cleaned
-    
-    # Find JSON array bounds
-    start = cleaned.find('[')
-    end = cleaned.rfind(']') + 1
-    
-    if start == -1 or end == 0:
-        warnings.append("No JSON array found in response")
-        return [], warnings
-    
-    cleaned = cleaned[start:end]
-    
-    # Fix common JSON issues
-    # Remove trailing commas
-    cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
-    # Fix missing commas between array elements
-    cleaned = re.sub(r'}\s*{', '},{', cleaned)
-    # Fix single quotes
-    cleaned = cleaned.replace("'", '"')
-    # Fix unescaped quotes in strings (simple heuristic)
-    
-    try:
-        questions = json.loads(cleaned)
-        
-        if not isinstance(questions, list):
-            warnings.append("Parsed JSON is not an array")
-            return [], warnings
-        
-        # Validate and repair each question
-        valid_questions = []
-        for i, q in enumerate(questions):
-            if not isinstance(q, dict):
-                warnings.append(f"Question {i+1} is not an object")
-                continue
-            
-            if validate_question_structure(q):
-                valid_questions.append(q)
-            else:
-                warnings.append(f"Question {i+1} had structural issues - repaired")
-                valid_questions.append(repair_question(q, i))
-        
-        return valid_questions, warnings
-        
-    except json.JSONDecodeError as e:
-        warnings.append(f"JSON parse error: {str(e)}")
+    warnings: List[str] = []
+
+    if not text or not text.strip():
+        warnings.append("Empty response")
         return [], warnings
 
-# ── Groq Setup ──────────────────────────────
+    cleaned = text.strip()
+
+    # Remove markdown code fences (```json ... ``` or ``` ... ```)
+    fence_match = re.search(r"```(?:json)?\s*(.*?)```", cleaned, re.DOTALL | re.IGNORECASE)
+    if fence_match:
+        cleaned = fence_match.group(1).strip()
+
+    # Locate JSON payload. Prefer an array; fall back to a top-level object
+    # that contains a "questions" array (Groq JSON mode wraps things this way).
+    array_start = cleaned.find('[')
+    array_end = cleaned.rfind(']')
+    obj_start = cleaned.find('{')
+    obj_end = cleaned.rfind('}')
+
+    payload = None
+    if array_start != -1 and array_end > array_start:
+        payload = cleaned[array_start:array_end + 1]
+    elif obj_start != -1 and obj_end > obj_start:
+        payload = cleaned[obj_start:obj_end + 1]
+    else:
+        warnings.append("No JSON object or array found in response")
+        return [], warnings
+
+    # Light, *safe* fixups (do NOT touch quotes — that breaks apostrophes).
+    payload = re.sub(r',\s*([}\]])', r'\1', payload)   # trailing commas
+    payload = re.sub(r'}\s*{', '},{', payload)         # missing commas between objects
+
+    def _normalize(parsed: Any) -> List[Dict]:
+        """Coerce parsed JSON into a list of question dicts."""
+        if isinstance(parsed, list):
+            return [q for q in parsed if isinstance(q, dict)]
+        if isinstance(parsed, dict):
+            for key in ("questions", "quiz", "items", "data", "results"):
+                val = parsed.get(key)
+                if isinstance(val, list):
+                    return [q for q in val if isinstance(q, dict)]
+            # Single question wrapped in an object
+            if "question" in parsed and "options" in parsed:
+                return [parsed]
+        return []
+
+    questions: List[Dict] = []
+
+    # Attempt 1: strict parse
+    try:
+        questions = _normalize(json.loads(payload))
+    except json.JSONDecodeError as e:
+        warnings.append(f"Strict JSON parse failed: {e}")
+
+    # Attempt 2: json-repair
+    if not questions:
+        repaired, repair_err = _try_json_repair(payload)
+        if repaired is not None:
+            questions = _normalize(repaired)
+            if questions:
+                warnings.append("Recovered using json-repair")
+        elif repair_err:
+            warnings.append(repair_err)
+
+    # Attempt 3: per-object extraction
+    if not questions:
+        extracted = _extract_question_objects(payload)
+        if extracted:
+            questions = extracted
+            warnings.append(f"Recovered {len(extracted)} question(s) via per-object extraction")
+
+    if not questions:
+        warnings.append("Could not parse any questions from response")
+        return [], warnings
+
+    # Validate / repair each question
+    valid_questions: List[Dict] = []
+    for i, q in enumerate(questions):
+        if validate_question_structure(q):
+            valid_questions.append(q)
+        else:
+            warnings.append(f"Question {i + 1} had structural issues - repaired")
+            valid_questions.append(repair_question(q, i))
+
+    return valid_questions, warnings
+
+# ── LLM Setup (Gemini primary, Groq fallback) ──────────
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 llm = None
 llm_type = "None"
 
-if GROQ_API_KEY and GROQ_API_KEY not in ("", "your-groq-api-key-here"):
+# Try Gemini first (preferred for higher accuracy)
+if GEMINI_API_KEY and GEMINI_API_KEY not in ("", "your-gemini-api-key-here"):
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        from langchain_core.prompts import PromptTemplate
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+        # Gemini's native JSON mode (response_mime_type) guarantees valid JSON
+        # output — no more "Expecting ',' delimiter" parse failures.
+        llm = ChatGoogleGenerativeAI(
+            google_api_key=GEMINI_API_KEY,
+            model=GEMINI_MODEL,
+            temperature=0.2,            # Lower = more deterministic / accurate
+            max_output_tokens=8192,     # Gemini supports much larger outputs than Groq
+            timeout=120,
+            max_retries=2,
+            response_mime_type="application/json",
+        )
+        llm_type = f"Gemini ({GEMINI_MODEL})"
+        log.info("✅ LLM initialized with %s (JSON mode enabled)", llm_type)
+    except ImportError as e:
+        log.error("❌ Missing dependency: %s — run: pip install langchain-google-genai", e)
+    except Exception as e:
+        log.error("❌ Gemini initialization failed: %s", e)
+
+# Fall back to Groq if Gemini wasn't available
+if llm is None and GROQ_API_KEY and GROQ_API_KEY not in ("", "your-groq-api-key-here"):
     try:
         from langchain_openai import ChatOpenAI
         from langchain_core.prompts import PromptTemplate
@@ -365,17 +491,21 @@ if GROQ_API_KEY and GROQ_API_KEY not in ("", "your-groq-api-key-here"):
             max_tokens=4000,
             request_timeout=60,
         )
-        llm_type = "Groq"
-        log.info("✅ LLM initialized with Groq (llama-3.3-70b-versatile)")
+        # Force valid JSON output via OpenAI-compatible response_format
+        try:
+            llm = llm.bind(response_format={"type": "json_object"})
+            log.info("✅ Groq JSON mode enabled (response_format=json_object)")
+        except Exception as e:
+            log.warning("Could not enable JSON mode on Groq client: %s", e)
+        llm_type = "Groq (llama-3.3-70b-versatile)"
+        log.info("✅ LLM initialized with %s (fallback)", llm_type)
     except ImportError as e:
         log.error("❌ Missing dependency: %s — run: pip install langchain-openai", e)
     except Exception as e:
         log.error("❌ Groq initialization failed: %s", e)
-else:
-    log.warning("⚠️ GROQ_API_KEY not set or invalid. Using text-based fallback.")
 
 if llm is None:
-    log.warning("No LLM available — will use text-based fallback")
+    log.warning("⚠️ No LLM available (neither GEMINI_API_KEY nor GROQ_API_KEY set) — using text-based fallback")
 
 # ── Request / Response Models ─────────────────────────
 class QuizRequest(BaseModel):
@@ -534,7 +664,7 @@ def generate_cache_key(text: str, num_questions: int, difficulty: str) -> str:
 
 def generate_quiz_with_langchain(text: str, num_questions: int = 10, difficulty: str = "MIXED") -> List[Dict]:
     """
-    Generate quiz using LangChain + LLM (Groq) with enhanced prompt engineering.
+    Generate quiz using LangChain + LLM (Gemini primary, Groq fallback) with enhanced prompt engineering.
     
     Features:
     - Cache lookup for identical requests
@@ -915,6 +1045,7 @@ async def health_check():
         "status": "healthy",
         "service": "ai-quiz-generator",
         "llm": llm_type,
+        "gemini_key_set": bool(GEMINI_API_KEY and GEMINI_API_KEY != "your-gemini-api-key-here"),
         "groq_key_set": bool(GROQ_API_KEY and GROQ_API_KEY != "your-groq-api-key-here"),
     }
 
@@ -922,7 +1053,7 @@ async def health_check():
 async def generate_quiz(request: QuizRequest):
     """
     Generate quiz from provided text content.
-    Uses Groq (llama-3.3-70b-versatile) to create MCQ questions.
+    Uses Gemini (primary) or Groq (fallback) to create MCQ questions.
     """
     try:
         if not request.text or len(request.text.strip()) < 50:

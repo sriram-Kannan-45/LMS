@@ -638,20 +638,22 @@ router.get('/participant/quizzes',
       const { Enrollment } = require('../models');
 
       const enrollments = await Enrollment.findAll({
-        where: { participantId: req.user.id }
+        where: { participantId: req.user.id, status: 'ENROLLED' }
       });
-      const trainingIds = enrollments.map(e => e.trainingId);
+      const courseIds = enrollments.map(e => e.courseId).filter(Boolean);
+      const trainingIds = enrollments.map(e => e.trainingId).filter(Boolean);
 
-      console.log(`[participant/quizzes] participantId=${req.user.id}, enrolledTrainings=[${trainingIds.join(',')}]`);
+      console.log(`[participant/quizzes] participantId=${req.user.id}, enrolledCourses=[${courseIds.join(',')}], enrolledTrainings=[${trainingIds.join(',')}]`);
 
-      // Include quizzes linked to enrolled trainings OR quizzes with no training assigned
-      const whereClause = {
-        status: 'PUBLISHED',
-        [Op.or]: [
-          ...(trainingIds.length > 0 ? [{ trainingId: trainingIds }] : []),
-          { trainingId: null }
-        ]
-      };
+      // Only show PUBLISHED quizzes belonging to a course (or legacy training)
+      // the participant is actually enrolled in. No global/unscoped quizzes.
+      const orConds = [];
+      if (courseIds.length) orConds.push({ courseId: courseIds });
+      if (trainingIds.length) orConds.push({ trainingId: trainingIds });
+      if (orConds.length === 0) {
+        return res.json({ quizzes: [] });
+      }
+      const whereClause = { status: 'PUBLISHED', [Op.or]: orConds };
 
       const quizzes = await AIQuiz.findAll({
         where: whereClause,

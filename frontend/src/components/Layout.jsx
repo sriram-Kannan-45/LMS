@@ -6,6 +6,7 @@ import ProfileDropdown from './student/profile/ProfileDropdown'
 const iconMap = {
   Dashboard: <LayoutDashboard size={18} />,
   Trainings: <BookOpen size={18} />,
+  Courses: <GraduationCap size={18} />,
   Trainers: <Users size={18} />,
   Participants: <Users size={18} />,
   Feedback: <MessageSquare size={18} />,
@@ -13,6 +14,7 @@ const iconMap = {
   'Add Trainer': <UserPlus size={18} />,
   'Add Training': <BookPlus size={18} />,
   'My Trainings': <BookOpen size={18} />,
+  'My Courses': <GraduationCap size={18} />,
   'My Profile': <User size={18} />,
   Available: <BookOpen size={18} />,
   Enrollments: <BookPlus size={18} />,
@@ -29,6 +31,7 @@ const iconMap = {
 const navItems = {
   ADMIN: [
     { key: 'overview', label: 'Dashboard', icon: 'Dashboard' },
+    { key: 'programs', label: 'Programs & Courses', icon: 'Courses' },
     { key: 'trainings', label: 'Trainings', icon: 'Trainings' },
     { key: 'trainers', label: 'Trainers', icon: 'Trainers' },
     { key: 'participants', label: 'Participants', icon: 'Participants' },
@@ -38,6 +41,7 @@ const navItems = {
     { key: 'createTraining', label: 'Add Training', icon: 'Add Training' },
   ],
   TRAINER: [
+    { key: 'courses', label: 'My Courses', icon: 'My Courses' },
     { key: 'trainings', label: 'My Trainings', icon: 'My Trainings' },
     { key: 'feedback', label: 'Feedback', icon: 'Feedback' },
     { key: 'profile', label: 'My Profile', icon: 'My Profile' },

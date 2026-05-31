@@ -11,10 +11,22 @@
  *   4. DELETE FROM users WHERE role <> 'ADMIN'.
  *   5. SET FOREIGN_KEY_CHECKS = 1
  *
+ * Course-centric restructure note (May 2026): the legacy `trainings` table is
+ * renamed to `training_programs` by the app boot bootstrap. New tables added:
+ *   • courses
+ *   • lesson_materials
+ *   • course_trainer_assignments
+ *   • lessons.course_id, ai_quizzes.course_id/lesson_id/result_status,
+ *     enrollments.course_id/progress_percent, training_programs.thumbnail_url
+ * All are auto-discovered here — no hardcoded list to maintain.
+ *
  * Safety: requires `--yes` flag to actually run.
  *
- *   node scripts/wipe-except-admin.js          # dry-run, prints plan + counts
- *   node scripts/wipe-except-admin.js --yes    # actually wipes
+ *   node scripts/wipe-except-admin.js              # dry-run, prints plan + counts
+ *   node scripts/wipe-except-admin.js --yes        # truncate every non-admin row
+ *   node scripts/wipe-except-admin.js --yes --drop-legacy
+ *                                                    also DROPs orphaned `trainings`
+ *                                                    if it survives next to training_programs
  */
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
@@ -29,6 +41,7 @@ const DB = {
 };
 
 const CONFIRM = process.argv.includes('--yes');
+const DROP_LEGACY = process.argv.includes('--drop-legacy');
 const KEEP_TABLE = 'users';
 const KEEP_WHERE = "role = 'ADMIN'"; // rows to preserve in users
 
@@ -85,6 +98,21 @@ const KEEP_WHERE = "role = 'ADMIN'"; // rows to preserve in users
       `DELETE FROM \`${KEEP_TABLE}\` WHERE NOT (${KEEP_WHERE})`
     );
     console.log(`  deleted ${delRes.affectedRows} non-admin rows from ${KEEP_TABLE}`);
+
+    // Optional: drop the orphaned legacy `trainings` table if both it and
+    // `training_programs` exist (safe because we just truncated both).
+    if (DROP_LEGACY) {
+      const hasOld = names.includes('trainings');
+      const hasNew = names.includes('training_programs');
+      if (hasOld && hasNew) {
+        await conn.query('DROP TABLE `trainings`');
+        console.log('  dropped legacy `trainings` table (--drop-legacy)');
+      } else if (hasOld && !hasNew) {
+        console.log('  --drop-legacy: only `trainings` exists, skipping (boot will rename it)');
+      } else {
+        console.log('  --drop-legacy: nothing to drop');
+      }
+    }
   } finally {
     await conn.query('SET FOREIGN_KEY_CHECKS = 1');
   }

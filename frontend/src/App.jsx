@@ -68,9 +68,9 @@ function AppRoutes({ user, onLogin, onLogout }) {
         setActiveTab(defaultTab)
       } else if (user?.role === 'PARTICIPANT' && !['overview', 'available', 'myEnrollments', 'lessons', 'ai-quizzes', 'feedback', 'myFeedbacks', 'leaderboard', 'achievements', 'profile'].includes(activeTab)) {
         setActiveTab(defaultTab)
-      } else if (user?.role === 'TRAINER' && !['trainings', 'notes', 'ai-quiz', 'feedback', 'profile'].includes(activeTab)) {
+      } else if (user?.role === 'TRAINER' && !['courses', 'trainings', 'notes', 'ai-quiz', 'feedback', 'profile'].includes(activeTab)) {
         setActiveTab(defaultTab)
-      } else if (user?.role === 'ADMIN' && !['overview', 'pending', 'trainings', 'trainers', 'participants', 'sessions', 'notes', 'feedback', 'surveys', 'createTrainer', 'createTraining'].includes(activeTab)) {
+      } else if (user?.role === 'ADMIN' && !['overview', 'programs', 'pending', 'trainings', 'trainers', 'participants', 'sessions', 'notes', 'feedback', 'surveys', 'createTrainer', 'createTraining'].includes(activeTab)) {
         setActiveTab(defaultTab)
       }
     }, [user?.role, defaultTab])
@@ -118,7 +118,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
           path="/trainer"
           element={
             user?.role === 'TRAINER' ? (
-              <DashboardWrapper component={TrainerDashboard} user={user} onLogout={onLogout} defaultTab="trainings" />
+              <DashboardWrapper component={TrainerDashboard} user={user} onLogout={onLogout} defaultTab="courses" />
             ) : (
               <Navigate to="/login" />
             )
