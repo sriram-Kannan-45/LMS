@@ -103,6 +103,91 @@ export const API = {
     SUBMIT_ASSESSMENT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/submit`,
     QUIZ_RESULT:        (lessonQuizId) => `${API_BASE}/lessons/quizzes/${lessonQuizId}/result`,
     ASSESSMENT_RESULT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/result`
+  },
+
+  /**
+   * Course-centric endpoints (Steps 2–4 of the course restructure).
+   * Admin owns programs+courses. Trainer manages lessons/materials/quizzes
+   * for assigned courses. Participant browses enrolled courses.
+   */
+  ADMIN_COURSES: {
+    PROGRAMS:               `${API_BASE}/admin/training-programs`,
+    PROGRAM:        (id) => `${API_BASE}/admin/training-programs/${id}`,
+    PROGRAM_COURSES:(id) => `${API_BASE}/admin/training-programs/${id}/courses`,
+    COURSES:                `${API_BASE}/admin/courses`,
+    COURSE:         (id) => `${API_BASE}/admin/courses/${id}`,
+  },
+
+  TRAINER_COURSES: {
+    LIST:                                 `${API_BASE}/trainer/courses`,
+    DETAIL:        (courseId)          => `${API_BASE}/trainer/courses/${courseId}`,
+
+    LESSONS:       (courseId)          => `${API_BASE}/trainer/courses/${courseId}/lessons`,
+    LESSON:        (courseId, lessonId)=> `${API_BASE}/trainer/courses/${courseId}/lessons/${lessonId}`,
+    REORDER_LESSONS:(courseId)         => `${API_BASE}/trainer/courses/${courseId}/lessons/reorder`,
+
+    MATERIALS:     (lessonId)          => `${API_BASE}/trainer/lessons/${lessonId}/materials`,
+    MATERIAL:      (lessonId, id)      => `${API_BASE}/trainer/lessons/${lessonId}/materials/${id}`,
+    REORDER_MATERIALS:(lessonId)       => `${API_BASE}/trainer/lessons/${lessonId}/materials/reorder`,
+
+    QUIZ_MANUAL:   (courseId)          => `${API_BASE}/trainer/courses/${courseId}/quiz/manual`,
+    QUIZZES:       (courseId)          => `${API_BASE}/trainer/courses/${courseId}/quizzes`,
+    QUIZ:          (courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}`,
+    PUBLISH_QUIZ:  (courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}/publish`,
+    QUIZ_DASHBOARD:(courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}/dashboard`,
+
+    PARTICIPANTS:  (courseId)          => `${API_BASE}/trainer/courses/${courseId}/participants`,
+    PARTICIPANT:   (courseId, userId)  => `${API_BASE}/trainer/courses/${courseId}/participants/${userId}`,
+
+    ANALYTICS:     (courseId)          => `${API_BASE}/trainer/courses/${courseId}/analytics`,
+
+    ASSESSMENTS:   (courseId, lessonId)=> `${API_BASE}/trainer/courses/${courseId}/lessons/${lessonId}/assessments`,
+    ASSESSMENT:    (assessmentId)      => `${API_BASE}/trainer/assessments/${assessmentId}`,
+    SUBMISSIONS:   (assessmentId)      => `${API_BASE}/trainer/assessments/${assessmentId}/submissions`,
+    GRADE:         (submissionId)      => `${API_BASE}/trainer/submissions/${submissionId}/grade`,
+    PUBLISH_SUB:   (submissionId)      => `${API_BASE}/trainer/submissions/${submissionId}/publish`,
+  },
+
+  PARTICIPANT_COURSES: {
+    ENROLL:                   `${API_BASE}/participant/enroll`,
+    UNENROLL:    (courseId)=> `${API_BASE}/participant/enroll/${courseId}`,
+
+    LIST:                     `${API_BASE}/participant/courses`,
+    EXPLORE:                  `${API_BASE}/participant/courses/explore`,
+    OVERVIEW:    (courseId)=> `${API_BASE}/participant/courses/${courseId}`,
+    LESSONS:     (courseId)=> `${API_BASE}/participant/courses/${courseId}/lessons`,
+    RESOURCES:   (courseId)=> `${API_BASE}/participant/courses/${courseId}/resources`,
+    QUIZZES:     (courseId)=> `${API_BASE}/participant/courses/${courseId}/quizzes`,
+
+    LESSON:      (lessonId)=> `${API_BASE}/participant/lessons/${lessonId}`,
+    VIEW_LESSON: (lessonId)=> `${API_BASE}/participant/lessons/${lessonId}/view`,
+
+    QUIZ_START:  (quizId)  => `${API_BASE}/participant/quizzes/${quizId}/start`,
+    QUIZ_SUBMIT: (quizId)  => `${API_BASE}/participant/quizzes/${quizId}/submit`,
+    QUIZ_RESULT: (quizId)  => `${API_BASE}/participant/quizzes/${quizId}/result`,
+
+    ASSESSMENT_SUBMIT: (assessmentId) => `${API_BASE}/participant/assessments/${assessmentId}/submit`,
+    ASSESSMENT_RESULT: (assessmentId) => `${API_BASE}/participant/assessments/${assessmentId}/result`,
+  },
+
+  /** Coding Assessment module (Judge0 sandbox + AI gen/review + plagiarism) */
+  CODING: {
+    // Trainer
+    ASSESSMENTS:          `${API_BASE}/coding/assessments`,
+    ASSESSMENT:     (id) => `${API_BASE}/coding/assessments/${id}`,
+    QUESTIONS:      (id) => `${API_BASE}/coding/assessments/${id}/questions`,
+    GENERATE_Q:     (id) => `${API_BASE}/coding/assessments/${id}/generate-question`,
+    PLAGIARISM_CHECK:   (id) => `${API_BASE}/coding/assessments/${id}/plagiarism-check`,
+    PLAGIARISM_REPORTS: (id) => `${API_BASE}/coding/assessments/${id}/plagiarism-reports`,
+    RESULTS:        (id) => `${API_BASE}/coding/assessments/${id}/results`,
+    // Participant
+    P_ASSESSMENTS:        `${API_BASE}/coding/participant/assessments`,
+    P_ASSESSMENT:   (id) => `${API_BASE}/coding/participant/assessments/${id}`,
+    START:          (id) => `${API_BASE}/coding/participant/assessments/${id}/start`,
+    RUN:     (attemptId) => `${API_BASE}/coding/participant/attempts/${attemptId}/run`,
+    SUBMIT:  (attemptId) => `${API_BASE}/coding/participant/attempts/${attemptId}/submit`,
+    REVIEW:      (subId) => `${API_BASE}/coding/participant/submissions/${subId}/review`,
+    VIOLATION:(attemptId)=> `${API_BASE}/coding/participant/attempts/${attemptId}/violation`,
   }
 };
 

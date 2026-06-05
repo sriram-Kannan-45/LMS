@@ -2,6 +2,10 @@
 node_modules/
 Frontend/node_modules/
 backend/node_modules/
+venv/
+.venv/
+ENV/
+env/
 
 # Build outputs
 frontend/dist/
@@ -29,6 +33,11 @@ backup-*
 .env
 .env.local
 .env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 
 # Misc
 *.class

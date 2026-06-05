@@ -128,7 +128,7 @@ class AnalyticsService {
           ROUND(AVG(f.rating), 2) as avgRating,
           MAX(f.created_at) as lastFeedbackDate
         FROM users u
-        LEFT JOIN trainings t ON u.id = t.trainer_id
+        LEFT JOIN training_programs t ON u.id = t.trainer_id
         LEFT JOIN enrollments e ON t.id = e.training_id
         LEFT JOIN feedbacks f ON t.id = f.training_id
         WHERE u.role = 'TRAINER'

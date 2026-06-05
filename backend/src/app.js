@@ -19,6 +19,8 @@ const trainingRoutes = require('./routes/trainingRoutes');
 const enrollmentRoutes = require('./routes/enrollmentRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
 const trainerRoutes = require('./routes/trainerRoutes');
+const trainerCourseRoutes = require('./routes/trainerCourseRoutes');
+const participantCourseRoutes = require('./routes/participantCourseRoutes');
 const surveyRoutes = require('./routes/surveyRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const noteRoutes = require('./routes/noteRoutes');
@@ -29,6 +31,7 @@ const profileRoutes = require('./routes/profileRoutes');
 const participantProfileRoutes = require('./routes/participantProfileRoutes');
 const proctoringRoutes = require('./routes/proctoringRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
+const codingAssessmentRoutes = require('./routes/codingAssessmentRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -75,7 +78,9 @@ app.use((req, res, next) => {
 // ROUTE MOUNTING (order matters — more specific first)
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/trainer', trainerCourseRoutes);
 app.use('/api/trainer', trainerRoutes);
+app.use('/api/participant', participantCourseRoutes);
 app.use('/api/participant', enrollmentRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/trainings', trainingRoutes);
@@ -89,6 +94,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/participant-profile', participantProfileRoutes);
 app.use('/api/proctor', proctoringRoutes);
 app.use('/api/lessons', lessonRoutes);
+app.use('/api/coding', codingAssessmentRoutes);
 
 // Health check for AI service (separate path to avoid conflict with router)
 app.get('/api/ai/health', async (req, res) => {
@@ -217,21 +223,98 @@ const startServer = async () => {
       logger.error('Could not sync assessment_sessions', { error: e.message });
     }
 
+    // Course-centric architecture — must run BEFORE lesson/quiz/enrollment
+    // sync so the bootstrap (rename trainings → training_programs) and the
+    // new courses table exist when Lesson/AIQuiz/Enrollment are altered to
+    // add their course_id columns.
+    try {
+      const { bootstrapCourseSchema, relaxLegacyTrainingIdColumns } = require('./config/bootstrapCourseSchema');
+      await bootstrapCourseSchema(logger);
+      await relaxLegacyTrainingIdColumns(logger);
+
+      const {
+        Training,        // table: training_programs (renamed)
+        Course,
+        LessonMaterial,
+        CourseTrainerAssignment,
+      } = require('./models');
+
+      // FK checks off: altering Training adds thumbnail_url and (when
+      // training_programs was just created empty by the global sync and
+      // then dropped during bootstrap) any FK from courses to it should
+      // not block the alters.
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+      try {
+        // Re-sync Training so the new thumbnail_url column is added on
+        // existing rows. Legacy columns remain (kept nullable in the model).
+        await Training.sync({ alter: true });
+        await Course.sync({ alter: true });
+        await LessonMaterial.sync({ alter: true });
+        await CourseTrainerAssignment.sync({ alter: true });
+      } finally {
+        await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+      }
+      logger.info('course-centric tables ready');
+    } catch (e) {
+      logger.error('Could not sync course-centric tables', { error: e.message, stack: e.stack });
+    }
+
     // Lesson workflow tables — additive sync, scoped to module
     try {
       const {
         Lesson, LessonQuiz, LessonAssessment,
         AssessmentSubmission, QuizProgress, LessonProgress,
+        Enrollment, AIQuiz,
       } = require('./models');
-      await Lesson.sync({ alter: true });
-      await LessonQuiz.sync({ alter: true });
-      await LessonAssessment.sync({ alter: true });
-      await AssessmentSubmission.sync({ alter: true });
-      await QuizProgress.sync({ alter: true });
-      await LessonProgress.sync({ alter: true });
+      // FK checks off: altering lessons.training_id from NOT NULL to NULL
+      // and enrollments.training_id similarly conflicts with existing
+      // SET NULL FK actions (column must be nullable for SET NULL — older
+      // table state is inconsistent).
+      await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+      try {
+        // Lesson, AIQuiz, Enrollment now carry the new course_id columns.
+        await Lesson.sync({ alter: true });
+        await LessonQuiz.sync({ alter: true });
+        await LessonAssessment.sync({ alter: true });
+        await AssessmentSubmission.sync({ alter: true });
+        await QuizProgress.sync({ alter: true });
+        await LessonProgress.sync({ alter: true });
+        await Enrollment.sync({ alter: true });
+        await AIQuiz.sync({ alter: true });
+      } finally {
+        await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+      }
       logger.info('lesson workflow tables ready');
     } catch (e) {
       logger.error('Could not sync lesson workflow tables', { error: e.message });
+    }
+
+    // Coding Assessment tables — additive sync, scoped to module
+    try {
+      const {
+        CodingAssessment, CodingQuestion, TestCase, CodingAttempt,
+        CodingSubmission, SubmissionResult, CodingViolation, PlagiarismReport,
+      } = require('./models');
+      await CodingAssessment.sync({ alter: true });
+      await CodingQuestion.sync({ alter: true });
+      await TestCase.sync({ alter: true });
+      await CodingAttempt.sync({ alter: true });
+      await CodingSubmission.sync({ alter: true });
+      await SubmissionResult.sync({ alter: true });
+      await CodingViolation.sync({ alter: true });
+      await PlagiarismReport.sync({ alter: true });
+      logger.info('coding assessment tables ready');
+    } catch (e) {
+      logger.error('Could not sync coding assessment tables', { error: e.message });
+    }
+
+    // Add course-centric indexes that were intentionally omitted from the
+    // model definitions (to avoid racing the global sync). Idempotent.
+    try {
+      const { bootstrapCourseIndexes } = require('./config/bootstrapCourseSchema');
+      await bootstrapCourseIndexes(logger);
+    } catch (e) {
+      logger.warn('Could not finalize course-centric indexes', { error: e.message });
     }
 
     // Assessment session expiry job — runs every 5 min

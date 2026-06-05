@@ -1,15 +1,59 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
 
+/**
+ * AIQuiz
+ * ──────
+ * Course-scoped after the restructure. A quiz is always tied to one course
+ * (course_id); it MAY also be linked to a specific lesson within that course
+ * (lesson_id, optional) — when null the quiz is considered course-level.
+ *
+ * Visibility rule: participants see a quiz only when they are enrolled in the
+ * quiz's course. result_status gates whether participants can see their
+ * scores after submission.
+ *
+ * Legacy columns (document_id, time_limit, num_questions, difficulty,
+ * is_active, training_id) are kept nullable for backward compatibility with
+ * the existing aiQuizRoutes.js / TrainerAIQuiz.jsx flow and will be either
+ * dropped or repurposed in a later cleanup pass.
+ */
 const AIQuiz = sequelize.define('AIQuiz', {
   id: {
     type: DataTypes.BIGINT.UNSIGNED,
     autoIncrement: true,
     primaryKey: true
   },
+
+  // ── New course-centric columns ──
+  courseId: {
+    type: DataTypes.BIGINT.UNSIGNED,
+    // Nullable while legacy quizzes (trainingId-only) still exist.
+    allowNull: true,
+    field: 'course_id'
+  },
+  lessonId: {
+    type: DataTypes.BIGINT.UNSIGNED,
+    // Optional — quizzes can live at the course level (no specific lesson).
+    allowNull: true,
+    field: 'lesson_id'
+  },
+  resultStatus: {
+    type: DataTypes.ENUM('HIDDEN', 'PUBLISHED'),
+    allowNull: false,
+    defaultValue: 'HIDDEN',
+    field: 'result_status'
+  },
+  isMandatory: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true,
+    field: 'is_mandatory'
+  },
+
+  // ── Existing columns (preserved for compatibility) ──
   documentId: {
     type: DataTypes.BIGINT.UNSIGNED,
-    allowNull: false,
+    allowNull: true,
     field: 'document_id'
   },
   trainerId: {
@@ -38,7 +82,7 @@ const AIQuiz = sequelize.define('AIQuiz', {
   },
   numQuestions: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
     field: 'num_questions'
   },
   difficulty: {
@@ -61,6 +105,9 @@ const AIQuiz = sequelize.define('AIQuiz', {
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at'
+  // Indexes on course_id / lesson_id / result_status added later by
+  // bootstrapCourseSchema.js once the per-model sync has created the
+  // columns.
 });
 
 module.exports = AIQuiz;

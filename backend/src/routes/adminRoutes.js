@@ -315,4 +315,56 @@ router.get('/analytics/recent-activities', authenticateToken, roleMiddleware('AD
   analyticsController.getRecentActivities(req, res)
 );
 
+// =========================
+// COURSE-CENTRIC ENDPOINTS (Step 2 of the course restructure)
+// =========================
+//
+//   POST   /api/admin/training-programs              create program
+//   GET    /api/admin/training-programs              list programs (+ courses count)
+//   GET    /api/admin/training-programs/:id          program detail with its courses
+//   PUT    /api/admin/training-programs/:id          edit program
+//   DELETE /api/admin/training-programs/:id          delete program (cascades courses)
+//
+//   POST   /api/admin/training-programs/:id/courses  create course under program
+//   GET    /api/admin/courses                        list all courses (+ trainer/program/counts)
+//   GET    /api/admin/courses/:id                    course detail
+//   PUT    /api/admin/courses/:id                    edit course (reassign trainer, status, etc)
+//   DELETE /api/admin/courses/:id                    delete course (cascades lessons/quizzes/enrollments)
+//
+const adminCourseController = require('../controllers/adminCourseController');
+const adminAuth = [authenticateToken, roleMiddleware('ADMIN')];
+
+router.post(  '/training-programs',                       adminAuth, [
+  body('title').notEmpty().withMessage('Title is required'),
+], (req, res) => adminCourseController.createProgram(req, res));
+
+router.get(   '/training-programs',                       adminAuth, (req, res) =>
+  adminCourseController.listPrograms(req, res));
+
+router.get(   '/training-programs/:id',                   adminAuth, (req, res) =>
+  adminCourseController.getProgram(req, res));
+
+router.put(   '/training-programs/:id',                   adminAuth, (req, res) =>
+  adminCourseController.updateProgram(req, res));
+
+router.delete('/training-programs/:id',                   adminAuth, (req, res) =>
+  adminCourseController.deleteProgram(req, res));
+
+router.post(  '/training-programs/:id/courses',           adminAuth, [
+  body('title').notEmpty().withMessage('Title is required'),
+  body('trainerId').notEmpty().withMessage('trainerId is required'),
+], (req, res) => adminCourseController.createCourse(req, res));
+
+router.get(   '/courses',                                 adminAuth, (req, res) =>
+  adminCourseController.listCourses(req, res));
+
+router.get(   '/courses/:id',                             adminAuth, (req, res) =>
+  adminCourseController.getCourse(req, res));
+
+router.put(   '/courses/:id',                             adminAuth, (req, res) =>
+  adminCourseController.updateCourse(req, res));
+
+router.delete('/courses/:id',                             adminAuth, (req, res) =>
+  adminCourseController.deleteCourse(req, res));
+
 module.exports = router;
