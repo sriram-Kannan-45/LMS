@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Loader2 } from 'lucide-react'
 import AIQuizList from '../components/AIQuizList'
 import QuizTaking from '../components/QuizTaking'
 import { useToast } from '../components/Toast'
@@ -35,8 +36,6 @@ const fadeVariant = {
  */
 function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
   const { success, error: showError } = useToast()
-  const tab = activeTab || 'overview'
-  const handleTabChange = (next) => onTabChange?.(next)
 
   const [trainings, setTrainings] = useState([])
   const [enrollments, setEnrollments] = useState([])
@@ -46,48 +45,91 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
   const { track } = useContinueLearning()
 
   const auth = useCallback(
-    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` }),
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${user?.token || ''}` }),
     [user]
   )
+
+  const handleResponse = useCallback(async (res) => {
+    if (res.status === 401) {
+      onLogout?.()
+      throw new Error('Session expired. Please log in again.')
+    }
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Request failed')
+    return data
+  }, [onLogout])
 
   // ─── Fetchers ─────────────────────────────────────────────────────────────
   const fetchTrainings = useCallback(async () => {
     try {
       const r = await fetch(`${API}/trainings`, { headers: auth() })
-      const d = await r.json()
+      const d = await handleResponse(r)
       setTrainings(Array.isArray(d) ? d : (d.trainings || []))
-    } catch { /* ignore */ }
-  }, [auth])
+    } catch (e) {
+      console.error('fetchTrainings error:', e.message)
+    }
+  }, [auth, handleResponse])
 
   const fetchEnrollments = useCallback(async () => {
     try {
       const r = await fetch(`${API}/participant/enrollments`, { headers: auth() })
-      const d = await r.json()
+      const d = await handleResponse(r)
       setEnrollments(d.enrollments || [])
-    } catch { /* ignore */ }
-  }, [auth])
+    } catch (e) {
+      console.error('fetchEnrollments error:', e.message)
+    }
+  }, [auth, handleResponse])
 
   const fetchFeedbacks = useCallback(async () => {
     try {
       const r = await fetch(`${API}/participant/feedbacks`, { headers: auth() })
-      const d = await r.json()
+      const d = await handleResponse(r)
       setFeedbacks(d.feedbacks || [])
-    } catch { /* ignore */ }
-  }, [auth])
+    } catch (e) {
+      console.error('fetchFeedbacks error:', e.message)
+    }
+  }, [auth, handleResponse])
 
   const fetchQuizzes = useCallback(async () => {
     try {
       const r = await fetch(`${API}/ai-quiz/participant/quizzes`, { headers: auth() })
-      const d = await r.json()
+      const d = await handleResponse(r)
       setQuizzes(d.quizzes || [])
-    } catch { /* ignore */ }
-  }, [auth])
+    } catch (e) {
+      console.error('fetchQuizzes error:', e.message)
+    }
+  }, [auth, handleResponse])
 
   const fetchAll = useCallback(() => {
     fetchTrainings(); fetchEnrollments(); fetchFeedbacks(); fetchQuizzes()
   }, [fetchTrainings, fetchEnrollments, fetchFeedbacks, fetchQuizzes])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => {
+    if (user && user.token) {
+      fetchAll()
+    }
+  }, [fetchAll, user])
+
+  // Guard clause for missing/unauthorized user session
+  if (!user || !user.token) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f8fafc',
+        fontFamily: "'Manrope', 'Inter', sans-serif"
+      }}>
+        <Loader2 style={{ animation: 'spin 1s linear infinite', color: '#2563eb' }} size={36} />
+        <span style={{ marginTop: '12px', fontSize: '13px', color: '#64748b' }}>Verifying session...</span>
+      </div>
+    )
+  }
+
+  const tab = activeTab || 'overview'
+  const handleTabChange = (next) => onTabChange?.(next)
 
   // ─── Mutations ────────────────────────────────────────────────────────────
   const handleEnroll = async (trainingId) => {
@@ -96,8 +138,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       const r = await fetch(`${API}/participant/enroll`, {
         method: 'POST', headers: auth(), body: JSON.stringify({ trainingId }),
       })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error)
+      const d = await handleResponse(r)
       success('Enrolled successfully!')
       const t = trainings.find((x) => x.id === trainingId)
       if (t) track({ type: 'course', id: trainingId, title: t.title, subtitle: t.trainerName })
@@ -112,8 +153,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       const r = await fetch(`${API}/participant/enroll/${trainingId}`, {
         method: 'DELETE', headers: auth(),
       })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error)
+      const d = await handleResponse(r)
       success('Course unenrolled.')
       fetchAll()
     } catch (e) { showError(e.message) }
@@ -123,9 +163,10 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
   const fetchSurveyQuestions = async (trainingId) => {
     try {
       const r = await fetch(`${API}/survey/${trainingId}`, { headers: auth() })
-      const d = await r.json()
+      const d = await handleResponse(r)
       return d.questions || []
-    } catch {
+    } catch (e) {
+      console.error('fetchSurveyQuestions error:', e.message)
       return []
     }
   }
@@ -137,8 +178,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       const r = await fetch(`${API}/feedback`, {
         method: 'POST', headers: auth(), body: JSON.stringify(payload),
       })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error || 'Server error')
+      const d = await handleResponse(r)
       success(d.message || 'Feedback submitted successfully!')
       fetchFeedbacks()
     } catch (e) { showError(e.message); throw e }

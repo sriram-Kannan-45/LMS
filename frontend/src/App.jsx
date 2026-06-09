@@ -4,7 +4,11 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ToastProvider } from './components/Toast'
 import { AppThemeProvider } from './context/AppThemeContext'
 import Layout from './components/Layout'
+import ErrorBoundary from './components/ErrorBoundary'
 import Login from './pages/Login'
+import AdminLogin from './pages/AdminLogin'
+import TrainerLogin from './pages/TrainerLogin'
+import ParticipantLogin from './pages/ParticipantLogin'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import AdminDashboard from './pages/AdminDashboard'
@@ -35,8 +39,54 @@ function TrainerCodingResultsPage() {
   return <div className="p-4"><CodingAssessmentResults assessmentId={assessmentId} /></div>
 }
 
+function FullScreenLoader() {
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'linear-gradient(135deg, #f5f8ff 0%, #eef3ff 50%, #f8faff 100%)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 9999,
+      fontFamily: "'Manrope', 'Inter', sans-serif"
+    }}>
+      <div style={{
+        width: '44px',
+        height: '44px',
+        border: '3px solid rgba(37, 99, 235, 0.1)',
+        borderTop: '3px solid #2563eb',
+        borderRadius: '50%',
+        animation: 'appSpin 1s linear infinite',
+        marginBottom: '16px'
+      }} />
+      <div style={{
+        fontSize: '14px',
+        fontWeight: 600,
+        color: '#475569',
+        letterSpacing: '0.01em',
+        animation: 'appPulse 1.5s ease-in-out infinite'
+      }}>
+        Initializing LMS Workspace...
+      </div>
+      <style>{`
+        @keyframes appSpin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes appPulse {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 function App() {
   const [user, setUser] = useState(null)
+  const [initializing, setInitializing] = useState(true)
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user')
@@ -47,6 +97,7 @@ function App() {
         localStorage.removeItem('user')
       }
     }
+    setInitializing(false)
   }, [])
 
   const handleLogin = (userData) => {
@@ -57,6 +108,10 @@ function App() {
   const handleLogout = () => {
     setUser(null)
     localStorage.removeItem('user')
+  }
+
+  if (initializing) {
+    return <FullScreenLoader />
   }
 
   return (
@@ -70,34 +125,31 @@ function App() {
   )
 }
 
-function AppRoutes({ user, onLogin, onLogout }) {
-  const [activeTab, setActiveTab] = useState('overview')
-  const location = useLocation()
+const pageVariants = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -12 }
+}
 
-  const pageVariants = {
-    initial: { opacity: 0, y: 12 },
-    animate: { opacity: 1, y: 0 },
-    exit: { opacity: 0, y: -12 }
-  }
+function DashboardWrapper({ component: Component, user, onLogout, defaultTab, activeTab, onTabChange }) {
+  useEffect(() => {
+    if (defaultTab && activeTab === 'overview' && user?.role !== 'ADMIN' && user?.role !== 'PARTICIPANT') {
+      onTabChange(defaultTab)
+    } else if (user?.role === 'PARTICIPANT' && !['overview', 'available', 'myEnrollments', 'lessons', 'ai-quizzes', 'coding', 'feedback', 'myFeedbacks', 'leaderboard', 'achievements', 'profile'].includes(activeTab)) {
+      onTabChange(defaultTab)
+    } else if (user?.role === 'TRAINER' && !['courses', 'trainings', 'notes', 'ai-quiz', 'coding', 'feedback', 'profile'].includes(activeTab)) {
+      onTabChange(defaultTab)
+    } else if (user?.role === 'ADMIN' && !['overview', 'programs', 'pending', 'trainings', 'trainers', 'participants', 'sessions', 'notes', 'feedback', 'surveys', 'createTrainer', 'createTraining'].includes(activeTab)) {
+      onTabChange(defaultTab)
+    }
+  }, [user?.role, defaultTab, activeTab, onTabChange])
 
-  const DashboardWrapper = ({ component: Component, user, onLogout, defaultTab }) => {
-    useEffect(() => {
-      if (defaultTab && activeTab === 'overview' && user?.role !== 'ADMIN' && user?.role !== 'PARTICIPANT') {
-        setActiveTab(defaultTab)
-      } else if (user?.role === 'PARTICIPANT' && !['overview', 'available', 'myEnrollments', 'lessons', 'ai-quizzes', 'coding', 'feedback', 'myFeedbacks', 'leaderboard', 'achievements', 'profile'].includes(activeTab)) {
-        setActiveTab(defaultTab)
-      } else if (user?.role === 'TRAINER' && !['courses', 'trainings', 'notes', 'ai-quiz', 'coding', 'feedback', 'profile'].includes(activeTab)) {
-        setActiveTab(defaultTab)
-      } else if (user?.role === 'ADMIN' && !['overview', 'programs', 'pending', 'trainings', 'trainers', 'participants', 'sessions', 'notes', 'feedback', 'surveys', 'createTrainer', 'createTraining'].includes(activeTab)) {
-        setActiveTab(defaultTab)
-      }
-    }, [user?.role, defaultTab])
-
-    return (
+  return (
+    <ErrorBoundary>
       <Layout
         user={user}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={onTabChange}
         onLogout={onLogout}
         headerSlot={user?.role === 'PARTICIPANT' ? <NotificationsPanel /> : null}
       >
@@ -108,16 +160,24 @@ function AppRoutes({ user, onLogin, onLogout }) {
           variants={pageVariants}
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
         >
-          <Component user={user} onLogout={onLogout} activeTab={activeTab} onTabChange={setActiveTab} />
+          <Component user={user} onLogout={onLogout} activeTab={activeTab} onTabChange={onTabChange} />
         </motion.div>
       </Layout>
-    )
-  }
+    </ErrorBoundary>
+  )
+}
+
+function AppRoutes({ user, onLogin, onLogout }) {
+  const [activeTab, setActiveTab] = useState('overview')
+  const location = useLocation()
 
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        <Route path="/login" element={<Login onLogin={onLogin} />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/admin/login" element={<AdminLogin onLogin={onLogin} />} />
+        <Route path="/trainer/login" element={<TrainerLogin onLogin={onLogin} />} />
+        <Route path="/participant/login" element={<ParticipantLogin onLogin={onLogin} />} />
         <Route path="/register" element={<Register onLogin={onLogin} />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
@@ -125,9 +185,9 @@ function AppRoutes({ user, onLogin, onLogout }) {
           path="/admin"
           element={
             user?.role === 'ADMIN' ? (
-              <DashboardWrapper component={AdminDashboard} user={user} onLogout={onLogout} defaultTab="overview" />
+              <DashboardWrapper component={AdminDashboard} user={user} onLogout={onLogout} defaultTab="overview" activeTab={activeTab} onTabChange={setActiveTab} />
             ) : (
-              <Navigate to="/login" />
+              <Navigate to="/admin/login" />
             )
           }
         />
@@ -136,9 +196,9 @@ function AppRoutes({ user, onLogin, onLogout }) {
           path="/trainer"
           element={
             user?.role === 'TRAINER' ? (
-              <DashboardWrapper component={TrainerDashboard} user={user} onLogout={onLogout} defaultTab="courses" />
+              <DashboardWrapper component={TrainerDashboard} user={user} onLogout={onLogout} defaultTab="courses" activeTab={activeTab} onTabChange={setActiveTab} />
             ) : (
-              <Navigate to="/login" />
+              <Navigate to="/trainer/login" />
             )
           }
         />
@@ -147,9 +207,9 @@ function AppRoutes({ user, onLogin, onLogout }) {
           path="/participant"
           element={
             user?.role === 'PARTICIPANT' ? (
-              <DashboardWrapper component={ParticipantDashboard} user={user} onLogout={onLogout} defaultTab="overview" />
+              <DashboardWrapper component={ParticipantDashboard} user={user} onLogout={onLogout} defaultTab="overview" activeTab={activeTab} onTabChange={setActiveTab} />
             ) : (
-              <Navigate to="/login" />
+              <Navigate to="/participant/login" />
             )
           }
         />
@@ -162,7 +222,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
                 <ParticipantQuizzes user={user} />
               </Layout>
             ) : (
-              <Navigate to="/login" />
+              <Navigate to="/participant/login" />
             )
           }
         />
@@ -173,7 +233,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
           element={
             user?.role === 'PARTICIPANT'
               ? <PreExamReadiness />
-              : <Navigate to="/login" />
+              : <Navigate to="/participant/login" />
           }
         />
 
@@ -187,17 +247,17 @@ function AppRoutes({ user, onLogin, onLogout }) {
           element={
             (user?.role === 'TRAINER' || user?.role === 'ADMIN')
               ? <TrainerProctoringPage />
-              : <Navigate to="/login" />
+              : <Navigate to="/trainer/login" />
           }
         />
 
         {/* Coding Assessment module */}
         <Route path="/participant/coding/:assessmentId"
-          element={user?.role === 'PARTICIPANT' ? <ParticipantCodingPage /> : <Navigate to="/login" />} />
+          element={user?.role === 'PARTICIPANT' ? <ParticipantCodingPage /> : <Navigate to="/participant/login" />} />
         <Route path="/trainer/coding"
-          element={user?.role === 'TRAINER' ? <TrainerCodingFormPage /> : <Navigate to="/login" />} />
+          element={user?.role === 'TRAINER' ? <TrainerCodingFormPage /> : <Navigate to="/trainer/login" />} />
         <Route path="/trainer/coding/:assessmentId/results"
-          element={(user?.role === 'TRAINER' || user?.role === 'ADMIN') ? <TrainerCodingResultsPage /> : <Navigate to="/login" />} />
+          element={(user?.role === 'TRAINER' || user?.role === 'ADMIN') ? <TrainerCodingResultsPage /> : <Navigate to="/trainer/login" />} />
 
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
