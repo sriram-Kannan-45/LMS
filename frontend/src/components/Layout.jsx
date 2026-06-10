@@ -1,8 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Award, Bell, BookOpen, BookPlus, ChevronRight, ClipboardList, Code, FileText, GraduationCap, Home, LayoutDashboard, LogOut, Menu, MessageSquare, Sparkles, Trophy, User, UserPlus, Users, X } from 'lucide-react'
+import { Award, BookOpen, BookPlus, ClipboardList, Code, FileText, GraduationCap, Home, LayoutDashboard, LogOut, Menu, MessageSquare, Trophy, User, UserPlus, Users, X } from 'lucide-react'
 import { useState } from 'react'
 import ProfileDropdown from './student/profile/ProfileDropdown'
-import ThemeToggle from './ui/ThemeToggle'
 
 const iconMap = {
   Dashboard: <LayoutDashboard size={18} />,
@@ -142,100 +141,44 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
         {/* Navigation */}
         <nav className="sidebar-nav">
           <div className="sidebar-nav-label">Navigation</div>
-          {items.map((item, index) => (
-            <motion.button
+          {items.map((item) => (
+            <button
               key={item.key}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.04 }}
-              className={`sidebar-nav-item relative ${activeTab === item.key ? 'active font-semibold text-violet-600 dark:text-violet-400 bg-violet-50/50 dark:bg-violet-950/20' : ''}`}
+              className={`sidebar-nav-item${activeTab === item.key ? ' active' : ''}`}
               onClick={() => { onTabChange(item.key); closeSidebar() }}
             >
-              <span className={`nav-icon transition-colors duration-200 ${activeTab === item.key ? 'text-violet-600 dark:text-violet-400 opacity-100 scale-105' : 'text-slate-400 dark:text-slate-500'}`}>
+              <span className="nav-icon">
                 {iconMap[item.icon]}
               </span>
-              <span className="pl-1.5">{item.label}</span>
-              {activeTab === item.key && (
-                <motion.div
-                  layoutId="activeNavIndicator"
-                  className="absolute left-0 top-[20%] bottom-[20%] w-[3px] rounded-r-full bg-gradient-to-b from-violet-500 to-indigo-600"
-                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                />
-              )}
-            </motion.button>
+              <span>{item.label}</span>
+            </button>
           ))}
         </nav>
 
-        {/* Footer */}
+        {/* Footer — user profile only */}
         <div className="sidebar-footer">
-          {/* AI Badge */}
-          <motion.div 
-            whileHover={{ scale: 1.02 }}
-            style={{
-              margin: '0 8px 12px',
-              padding: '12px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08))',
-              border: '1px solid rgba(99,102,241,0.12)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              <Sparkles size={14} style={{ color: '#6366f1' }} />
-              <span style={{ fontSize: '12px', fontWeight: '700', color: '#4f46e5' }}>AI-Powered</span>
-            </div>
-            <p style={{ fontSize: '10px', color: '#64748b', margin: 0, lineHeight: '1.4' }}>
-              Smart quizzes & analytics enabled
-            </p>
-          </motion.div>
-
-          <div className="sidebar-footer-user-section" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {isParticipant ? (
-              <ProfileDropdown
-                user={user}
-                onTabChange={onTabChange}
-                onLogout={onLogout}
-              />
-            ) : (
-              <div className="sidebar-user" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px' }}>
-                <motion.div 
-                  whileHover={{ scale: 1.1 }}
-                  className="sidebar-user-avatar"
-                >
-                  {initials(user.name)}
-                </motion.div>
-                <div className="sidebar-user-info" style={{ flex: 1, minWidth: 0 }}>
-                  <div className="sidebar-user-name" style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>{user.name}</div>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', marginTop: '2px' }}>
-                    <span className={`badge ${colors.badge}`} style={{ fontSize: '9px', fontWeight: '700', padding: '2px 6px', textTransform: 'uppercase' }}>
-                      {user.role}
-                    </span>
-                  </div>
-                </div>
-                <motion.button 
-                  whileHover={{ scale: 1.1, rotate: -15 }}
-                  whileTap={{ scale: 0.9 }}
-                  className="sidebar-logout-btn" 
-                  onClick={onLogout} 
-                  title="Sign Out"
-                >
-                  <LogOut size={15} />
-                </motion.button>
+          {isParticipant ? (
+            <ProfileDropdown
+              user={user}
+              onTabChange={onTabChange}
+              onLogout={onLogout}
+            />
+          ) : (
+            <div className="sidebar-user" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '8px' }}>
+              <div className="sidebar-user-avatar">
+                {initials(user.name)}
               </div>
-            )}
-
-            {/* Sub-row for Actions: Notifications (if Participant) & ThemeToggle */}
-            <div className="sidebar-footer-prefs" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px 0', borderTop: '1px solid var(--border-muted)', marginTop: '4px' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Preferences</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {headerSlot && (
-                  <div className="sidebar-notifications">
-                    {headerSlot}
-                  </div>
-                )}
-                <ThemeToggle />
+              <div className="sidebar-user-info" style={{ flex: 1, minWidth: 0 }}>
+                <div className="sidebar-user-name" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{user.name}</div>
+                <span className={`badge ${colors.badge}`} style={{ fontSize: '9px', fontWeight: 700, padding: '2px 6px', textTransform: 'uppercase', marginTop: 1 }}>
+                  {user.role}
+                </span>
               </div>
+              <button className="sidebar-logout-btn" onClick={onLogout} title="Sign Out">
+                <LogOut size={14} />
+              </button>
             </div>
-          </div>
+          )}
         </div>
       </aside>
 
