@@ -143,9 +143,9 @@ function ParticipantList({
   const resultsMessage = `Showing ${paginatedItems.length} of ${filteredItems.length} participants`
 
   return (
-    <div className="space-y-6">
-      {/* Controls row: Search + Filter Chips */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="space-y-4">
+      {/* Toolbar: Search box & Segmented Filter Pills */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4">
         {/* Search */}
         <div className="relative flex-1 max-w-md">
           <label htmlFor="participant-search" className="sr-only">Search participants</label>
@@ -161,27 +161,26 @@ function ParticipantList({
           />
         </div>
 
-        {/* Filter Chips */}
-        <div className="flex gap-2 flex-wrap items-center">
+        {/* Segmented Filter Pills */}
+        <div className="tabs-pills flex items-center gap-1" style={{ marginBottom: 0 }}>
           {[
-            { key: 'all', label: 'All', count: counts.all, color: 'border-slate-200 text-slate-700 bg-white hover:bg-slate-50' },
-            { key: 'APPROVED', label: 'Approved', count: counts.APPROVED, color: 'border-emerald-200/60 text-emerald-700 bg-emerald-50/20 hover:bg-emerald-50/50' },
-            { key: 'PENDING', label: 'Pending', count: counts.PENDING, color: 'border-amber-200/60 text-amber-700 bg-amber-50/20 hover:bg-amber-50/50' },
-            { key: 'REJECTED', label: 'Rejected', count: counts.REJECTED, color: 'border-rose-200/60 text-rose-700 bg-rose-50/20 hover:bg-rose-50/50' }
+            { key: 'all', label: 'All', count: counts.all },
+            { key: 'APPROVED', label: 'Approved', count: counts.APPROVED },
+            { key: 'PENDING', label: 'Pending', count: counts.PENDING },
+            { key: 'REJECTED', label: 'Rejected', count: counts.REJECTED }
           ].map(chip => (
             <button
               key={chip.key}
+              type="button"
               onClick={() => { setStatusFilter(chip.key); setCurrentPage(1) }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all duration-200 cursor-pointer ${
-                statusFilter === chip.key
-                  ? 'bg-violet-600 border-violet-600 text-white shadow-sm'
-                  : `dark:border-zinc-850 dark:text-slate-300 dark:bg-zinc-900/40 dark:hover:bg-zinc-900 ${chip.color}`
+              className={`tab-pill flex items-center gap-1.5 px-3 py-1.5 cursor-pointer ${
+                statusFilter === chip.key ? 'active' : ''
               }`}
             >
               <span>{chip.label}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold transition-colors duration-200 ${
                 statusFilter === chip.key
-                  ? 'bg-white/25 text-white'
+                  ? 'bg-white/20 text-white'
                   : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-slate-400'
               }`}>
                 {chip.count}
@@ -193,7 +192,7 @@ function ParticipantList({
 
       <div 
         id="search-results" 
-        className="text-xs text-slate-500 dark:text-slate-400 font-semibold pl-1"
+        className="text-xs text-slate-500 dark:text-slate-400 font-semibold pl-1 pb-1"
         role="status"
         aria-live="polite"
         aria-atomic="true"
@@ -219,7 +218,7 @@ function ParticipantList({
             {paginatedItems.map((p) => (
               <tr key={p.id}>
                 <td>
-                  <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-xs font-bold border border-slate-200/50 dark:border-zinc-700/50">
+                  <div className="w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-950/30 text-violet-700 dark:text-violet-400 flex items-center justify-center text-xs font-bold border border-violet-200/30 dark:border-violet-800/30 flex-shrink-0">
                     {getInitials(p.name)}
                   </div>
                 </td>
@@ -237,7 +236,7 @@ function ParticipantList({
                     {onView && (
                       <button
                         onClick={() => onView(p)}
-                        className="p-2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30 rounded-full transition-all duration-200 cursor-pointer relative"
+                        className="p-2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30 rounded-full transition-all duration-200 hover:scale-110 cursor-pointer relative"
                         title="View Profile"
                       >
                         <Eye className="w-4 h-4" />
@@ -245,7 +244,7 @@ function ParticipantList({
                     )}
                     <button
                       onClick={() => { setEditingParticipant(p); setEditStatus(p.status || 'PENDING') }}
-                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-full transition-all duration-200 cursor-pointer"
+                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
                       title="Edit Status"
                     >
                       <Edit2 className="w-4 h-4" />
@@ -253,7 +252,7 @@ function ParticipantList({
                     {onDelete && (
                       <button
                         onClick={() => handleDelete(p.id, p.name)}
-                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full transition-all duration-200 cursor-pointer"
+                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full transition-all duration-200 hover:scale-110 cursor-pointer"
                         title="Remove Participant"
                       >
                         <Trash2 className="w-4 h-4" />

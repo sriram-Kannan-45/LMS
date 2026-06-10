@@ -717,8 +717,13 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               transition={{ duration: 0.3 }}
             >
               <div className="card">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Registered Participants ({participants.length})</h3>
+                <div className="flex items-center justify-between mb-5 border-b border-slate-200/60 dark:border-zinc-800/60 pb-4">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Registered Participants</h3>
+                    <span className="text-xs font-semibold px-2 py-0.5 bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-slate-400 rounded-full">
+                      {participants.length} total
+                    </span>
+                  </div>
                   <button 
                     className="btn btn-primary btn-sm rounded-xl cursor-pointer" 
                     onClick={() => setAddParticipantModal(true)}
