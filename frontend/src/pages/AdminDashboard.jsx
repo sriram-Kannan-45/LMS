@@ -417,19 +417,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   return (
     <AnimatePresence>
       <div className="dashboard">
-        <div className="tabs-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div className="tabs-pills">
-          {TABS.map(t => (
-            <button key={t.key} className={`tab-pill ${tab === t.key ? 'active' : ''}`} onClick={() => handleTabChange(t.key)}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <div className="header-actions" style={{ display: 'flex', gap: 12 }}>
-          <button className="btn" onClick={() => handleTabChange('createTrainer')}>+ Add Trainer</button>
-          <button className="btn btn-primary" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
-        </div>
-      </div>
+
 
 
           {/* OVERVIEW */}
