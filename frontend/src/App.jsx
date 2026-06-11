@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import AssessmentLobby from './components/coding-assessment/AssessmentLobby'
 import CodingAssessmentForm from './components/coding-assessment/CodingAssessmentForm'
@@ -133,13 +133,6 @@ const pageVariants = {
   exit: { opacity: 0, y: -12 }
 }
 
-// ─── Valid tabs per role ──────────────────────────────────────────────────────
-const VALID_TABS = {
-  ADMIN: ['overview', 'programs', 'pending', 'trainings', 'trainers', 'participants', 'sessions', 'notes', 'feedback', 'surveys', 'createTrainer', 'createTraining'],
-  TRAINER: ['courses', 'trainings', 'notes', 'ai-quiz', 'coding', 'feedback', 'profile'],
-  PARTICIPANT: ['overview', 'available', 'myEnrollments', 'lessons', 'ai-quizzes', 'coding', 'feedback', 'myFeedbacks', 'leaderboard', 'achievements', 'profile'],
-}
-
 const DEFAULT_TABS = {
   ADMIN: 'overview',
   TRAINER: 'courses',
@@ -147,28 +140,19 @@ const DEFAULT_TABS = {
 }
 
 // ─── DashboardWrapper ─────────────────────────────────────────────────────────
-// FIX: useEffect no longer calls onTabChange during render. Tab correction is
-// deferred so it never triggers a state update in the middle of a render pass,
-// which was corrupting React's hook dispatcher chain.
-function DashboardWrapper({ component: Component, user, onLogout, activeTab, onTabChange }) {
-  const defaultTab = DEFAULT_TABS[user?.role] || 'overview'
-  const validTabs = VALID_TABS[user?.role] || []
-  const correctedRef = useRef(false)
-
-  useEffect(() => {
-    // Only correct the tab once per mount, and only if it's invalid
-    if (!correctedRef.current && activeTab && !validTabs.includes(activeTab)) {
-      correctedRef.current = true
-      onTabChange(defaultTab)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+// activeTab state is LOCAL to each DashboardWrapper instance so it never bleeds
+// across routes. When navigating from /admin to /participant the old wrapper
+// unmounts and a fresh one mounts with a clean tab, eliminating the hook-
+// dispatcher corruption that the shared-state pattern caused.
+function DashboardWrapper({ component: Component, user, onLogout }) {
+  const [activeTab, setActiveTab] = useState(DEFAULT_TABS[user?.role] || 'overview')
 
   return (
     <ErrorBoundary>
       <Layout
         user={user}
         activeTab={activeTab}
-        onTabChange={onTabChange}
+        onTabChange={setActiveTab}
         onLogout={onLogout}
         headerSlot={user?.role === 'PARTICIPANT' ? <NotificationsPanel placement="top" /> : null}
       >
@@ -183,7 +167,7 @@ function DashboardWrapper({ component: Component, user, onLogout, activeTab, onT
             user={user}
             onLogout={onLogout}
             activeTab={activeTab}
-            onTabChange={onTabChange}
+            onTabChange={setActiveTab}
           />
         </motion.div>
       </Layout>
@@ -192,13 +176,9 @@ function DashboardWrapper({ component: Component, user, onLogout, activeTab, onT
 }
 
 // ─── AppRoutes ────────────────────────────────────────────────────────────────
-// FIX 1: AnimatePresence is removed from wrapping <Routes>. It was forcing
-//         full unmount/remount of DashboardWrapper on every location change,
-//         tearing down ParticipantDashboard mid-render and nulling the hook
-//         dispatcher. Page transitions are now handled inside DashboardWrapper.
-// FIX 2: activeTab state lives here and is passed down — no duplication.
+// AnimatePresence removed from wrapping <Routes> — page transitions handled
+// inside DashboardWrapper. Each route's tab state is self-contained.
 function AppRoutes({ user, onLogin, onLogout }) {
-  const [activeTab, setActiveTab] = useState('overview')
 
   return (
     <Routes>
@@ -213,13 +193,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
         path="/admin"
         element={
           user?.role === 'ADMIN' ? (
-            <DashboardWrapper
-              component={AdminDashboard}
-              user={user}
-              onLogout={onLogout}
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-            />
+            <DashboardWrapper component={AdminDashboard} user={user} onLogout={onLogout} />
           ) : (
             <Navigate to="/admin/login" />
           )
@@ -230,13 +204,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
         path="/trainer"
         element={
           user?.role === 'TRAINER' ? (
-            <DashboardWrapper
-              component={TrainerDashboard}
-              user={user}
-              onLogout={onLogout}
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-            />
+            <DashboardWrapper component={TrainerDashboard} user={user} onLogout={onLogout} />
           ) : (
             <Navigate to="/trainer/login" />
           )
@@ -247,13 +215,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
         path="/participant"
         element={
           user?.role === 'PARTICIPANT' ? (
-            <DashboardWrapper
-              component={ParticipantDashboard}
-              user={user}
-              onLogout={onLogout}
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-            />
+            <DashboardWrapper component={ParticipantDashboard} user={user} onLogout={onLogout} />
           ) : (
             <Navigate to="/participant/login" />
           )

@@ -1,10 +1,11 @@
 import React from 'react'
-import { AlertCircle, RotateCcw, RefreshCw, Home } from 'lucide-react'
+import { AlertCircle, RotateCcw, RefreshCw, Home, Copy } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
 
-class ErrorBoundary extends React.Component {
+class ErrorBoundaryClass extends React.Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null, errorInfo: null, errorId: null }
+    this.state = { hasError: false, error: null, errorInfo: null, errorId: null, copied: false }
   }
 
   static getDerivedStateFromError(error) {
@@ -12,8 +13,29 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error(`[LMS Error ID: ${this.state.errorId}] caught an error:`, error, errorInfo)
-    this.setState({ errorInfo })
+    const errorId = this.state.errorId || `ERR-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
+    console.error(`[LMS Error ID: ${errorId}] caught an error:`, error, errorInfo)
+    if (import.meta.env.DEV) {
+      console.error("[ErrorBoundary DEV LOG] Full Error Details:", error)
+      console.error("[ErrorBoundary DEV LOG] Component Stack:", errorInfo?.componentStack)
+    }
+    this.setState({ error, errorInfo, errorId })
+  }
+
+  handleCopyError = () => {
+    const details = `Error ID: ${this.state.errorId || 'Unknown'}
+Error: ${this.state.error?.toString() || 'Unknown runtime error'}
+Component Stack:
+${this.state.errorInfo?.componentStack || 'No stack trace available'}`
+
+    navigator.clipboard.writeText(details)
+      .then(() => {
+        this.setState({ copied: true })
+        setTimeout(() => this.setState({ copied: false }), 2000)
+      })
+      .catch((err) => {
+        console.error('Failed to copy error details:', err)
+      })
   }
 
   handleGoToLogin = () => {
@@ -131,6 +153,39 @@ class ErrorBoundary extends React.Component {
               )}
             </div>
 
+            <button
+              onClick={this.handleCopyError}
+              style={{
+                width: '100%',
+                height: '40px',
+                background: '#f8fafc',
+                color: '#64748b',
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                marginBottom: '16px',
+                transition: 'all 0.2s ease',
+                outline: 'none'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#f1f5f9'
+                e.currentTarget.style.color = '#334155'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#f8fafc'
+                e.currentTarget.style.color = '#64748b'
+              }}
+            >
+              <Copy size={15} />
+              <span>{this.state.copied ? 'Copied Details!' : 'Copy Error Details'}</span>
+            </button>
+
             <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button
@@ -208,6 +263,11 @@ class ErrorBoundary extends React.Component {
     }
     return this.props.children
   }
+}
+
+function ErrorBoundary({ children }) {
+  const location = useLocation()
+  return <ErrorBoundaryClass key={location.pathname}>{children}</ErrorBoundaryClass>
 }
 
 export default ErrorBoundary

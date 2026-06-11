@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Award, BookOpen, BookPlus, ClipboardList, Code, FileText, GraduationCap, Home, LayoutDashboard, LogOut, Menu, MessageSquare, Trophy, User, UserPlus, Users, X } from 'lucide-react'
+import { Award, BookOpen, BookPlus, ClipboardList, Code, FileText, GraduationCap, Home, LayoutDashboard, LogOut, Menu, MessageSquare, Sparkles, Trophy, User, UserPlus, Users, X } from 'lucide-react'
 import { useState } from 'react'
 import ProfileDropdown from './student/profile/ProfileDropdown'
 
@@ -106,7 +106,7 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         {/* Logo Header */}
         <div className="sidebar-header">
-          <motion.div 
+          <motion.div
             whileHover={{ scale: 1.08, rotate: 5 }}
             whileTap={{ scale: 0.95 }}
             className="sidebar-logo"
@@ -117,7 +117,6 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
             <span className="sidebar-brand-name">WAVE INIT</span>
             <span className="sidebar-brand-tagline">Learning Management</span>
           </div>
-          {/* Mobile close button */}
           <button
             className="sidebar-close-btn"
             onClick={closeSidebar}
@@ -142,16 +141,18 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
         <nav className="sidebar-nav">
           <div className="sidebar-nav-label">Navigation</div>
           {items.map((item) => (
-            <button
+            <motion.button
               key={item.key}
               className={`sidebar-nav-item${activeTab === item.key ? ' active' : ''}`}
               onClick={() => { onTabChange(item.key); closeSidebar() }}
+              whileHover={{ x: 3 }}
+              whileTap={{ scale: 0.98 }}
             >
               <span className="nav-icon">
                 {iconMap[item.icon]}
               </span>
               <span>{item.label}</span>
-            </button>
+            </motion.button>
           ))}
         </nav>
 
@@ -164,20 +165,24 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
               onLogout={onLogout}
             />
           ) : (
-            <div className="sidebar-user" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '8px' }}>
+            <motion.div
+              className="sidebar-user"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
               <div className="sidebar-user-avatar">
                 {initials(user.name)}
               </div>
-              <div className="sidebar-user-info" style={{ flex: 1, minWidth: 0 }}>
-                <div className="sidebar-user-name" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{user.name}</div>
-                <span className={`badge ${colors.badge}`} style={{ fontSize: '9px', fontWeight: 700, padding: '2px 6px', textTransform: 'uppercase', marginTop: 1 }}>
+              <div className="sidebar-user-info">
+                <div className="sidebar-user-name">{user.name}</div>
+                <span className={`badge ${colors.badge}`} style={{ fontSize: '9px', fontWeight: 700, padding: '2px 6px', textTransform: 'uppercase', marginTop: 2 }}>
                   {user.role}
                 </span>
               </div>
               <button className="sidebar-logout-btn" onClick={onLogout} title="Sign Out">
                 <LogOut size={14} />
               </button>
-            </div>
+            </motion.div>
           )}
         </div>
       </aside>
@@ -198,11 +203,16 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
       )}
 
       {/* Main Content */}
-      <main className="main-content">
+      <motion.main
+        className="main-content"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      >
         <div className="page-content">
           {children}
         </div>
-      </main>
+      </motion.main>
     </div>
   )
 }

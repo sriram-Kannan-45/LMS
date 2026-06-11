@@ -1,6 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <script>
+      (function() {
+        const report = (type, message, stack) => {
+          fetch('http://localhost:9876/log', {
+            method: 'POST',
+            mode: 'cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, message, stack })
+          }).catch(()=>{});
+        };
+        window.onerror = function(msg, url, line, col, err) {
+          report('error', msg + ' at ' + url + ':' + line + ':' + col, err?.stack);
+        };
+        window.onunhandledrejection = function(e) {
+          report('unhandledrejection', e.reason?.message || String(e.reason), e.reason?.stack);
+        };
+        const origError = console.error;
+        console.error = function(...args) {
+          report('console.error', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+          origError.apply(console, args);
+        };
+        report('info', 'Telemetry initialized! UA: ' + navigator.userAgent);
+        console.log('Telemetry initialized!');
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#6366f1" />

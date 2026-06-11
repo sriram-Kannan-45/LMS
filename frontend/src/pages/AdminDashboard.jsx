@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import TrainerList from '../components/TrainerList'
 import ParticipantList from '../components/ParticipantList'
 import ParticipantProfileView from '../components/shared/ParticipantProfileView'
@@ -11,7 +12,7 @@ import {
 import { Bar } from 'react-chartjs-2'
 import Skeleton, { SkeletonStats, SkeletonTable } from '../components/Skeleton'
 import { API, API_BASE } from '../api/api'
-import { X, Plus, Loader2, Search } from 'lucide-react'
+import { Loader2, TrendingUp, Users, BookOpen, MessageSquare, Star, Award, UserCheck, Activity } from 'lucide-react'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -23,6 +24,77 @@ const Stars = ({ v }) => (
     {[1,2,3,4,5].map(s => <span key={s} className={`star ${s <= v ? 'filled' : ''}`}>&#9733;</span>)}
   </span>
 )
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.05 }
+  }
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } }
+}
+
+const statCardVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: (i) => ({
+    opacity: 1, y: 0,
+    transition: { delay: i * 0.04, duration: 0.35, ease: [0.16, 1, 0.3, 1] }
+  })
+}
+
+const statIcons = {
+  trainings: <BookOpen size={20} />,
+  trainers: <Users size={20} />,
+  participants: <UserCheck size={20} />,
+  enrollments: <Activity size={20} />,
+  feedbacks: <MessageSquare size={20} />,
+  rating: <Star size={20} />,
+  topTrainer: <Award size={20} />,
+  satisfaction: <TrendingUp size={20} />,
+}
+
+const statColors = {
+  trainings: { bg: 'rgba(124,58,237,0.10)', text: '#7C3AED' },
+  trainers: { bg: 'rgba(6,182,212,0.10)', text: '#0891B2' },
+  participants: { bg: 'rgba(16,185,129,0.10)', text: '#059669' },
+  enrollments: { bg: 'rgba(245,158,11,0.10)', text: '#D97706' },
+  feedbacks: { bg: 'rgba(139,92,246,0.10)', text: '#8B5CF6' },
+  rating: { bg: 'rgba(236,72,153,0.10)', text: '#DB2777' },
+  topTrainer: { bg: 'rgba(251,146,60,0.10)', text: '#EA580C' },
+  satisfaction: { bg: 'rgba(34,211,238,0.10)', text: '#0891B2' },
+}
+
+function StatCard({ label, value, icon, color, index = 0 }) {
+  return (
+    <motion.div
+      className="stat-card"
+      variants={statCardVariants}
+      initial="hidden"
+      animate="visible"
+      custom={index}
+      whileHover={{ scale: 1.02, y: -2 }}
+      style={{ minHeight: 140, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+        <span className="stat-label">{label}</span>
+        <div style={{
+          width: 38, height: 38, borderRadius: 10,
+          background: color?.bg || 'rgba(124,58,237,0.10)',
+          color: color?.text || '#7C3AED',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0
+        }}>
+          {icon}
+        </div>
+      </div>
+      <div className="stat-value">{value}</div>
+    </motion.div>
+  )
+}
 
 function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const { success, error: showError, info, warning } = useToast()
@@ -498,89 +570,140 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
         minHeight: '100vh',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
-        background: '#f6f8fa'
+        background: '#F8F9FC'
       }}>
-        <Loader2 style={{ animation: 'spin 1s linear infinite', color: '#6366f1' }} size={24} />
-        <span style={{ marginTop: '12px', fontSize: '13px', color: '#64748b' }}>Verifying session...</span>
+        <Loader2 style={{ animation: 'spin 1s linear infinite', color: '#7C3AED' }} size={24} />
+        <span style={{ marginTop: '12px', fontSize: '13px', color: '#6B7280' }}>Verifying session...</span>
       </div>
     )
   }
 
+  const pageTitle = (title) => (
+    <h1 style={{
+      fontFamily: "'Outfit', sans-serif",
+      fontSize: 34,
+      fontWeight: 700,
+      letterSpacing: '-0.03em',
+      color: '#111827',
+      lineHeight: 1.2,
+      margin: 0
+    }}>{title}</h1>
+  )
+
   return (
-    <div className="dashboard">
+    <motion.div
+      className="dashboard"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      {/* Page Title Bar */}
+      <motion.div variants={itemVariants} style={{ marginBottom: 32 }}>
+        {pageTitle('Dashboard')}
+      </motion.div>
+
       {/* ── OVERVIEW ── */}
       {tab === 'overview' && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Dashboard Overview</h2>
-          </div>
+        <motion.div variants={itemVariants}>
           {initialLoading ? (
             <SkeletonStats />
           ) : (
-            <>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="card p-5">
-                  <div className="stat-label">Total Trainings</div>
-                  <div className="stat-value">{stats.totalTrainings ?? 0}</div>
-                </div>
-                <div className="card p-5">
-                  <div className="stat-label">Trainers</div>
-                  <div className="stat-value">{stats.totalTrainers ?? 0}</div>
-                </div>
-                <div className="card p-5">
-                  <div className="stat-label">Participants</div>
-                  <div className="stat-value">{stats.totalParticipants ?? 0}</div>
-                </div>
-                <div className="card p-5">
-                  <div className="stat-label">Active Enrollments</div>
-                  <div className="stat-value">{stats.totalEnrollments ?? 0}</div>
-                </div>
-                <div className="card p-5">
-                  <div className="stat-label">Feedback Responses</div>
-                  <div className="stat-value">{stats.totalFeedbacks ?? 0}</div>
-                </div>
-                <div className="card p-5">
-                  <div className="stat-label">Avg Trainer Rating</div>
-                  <div className="stat-value">{stats.avgTrainerRating ?? '0.0'} <span className="text-xs text-slate-400 font-medium">/5</span></div>
-                </div>
-                <div className="card p-5">
-                  <div className="stat-label">Top Trainer</div>
-                  <div className="stat-value" style={{ fontSize: '18px' }}>{topTrainer.name}</div>
-                </div>
-                <div className="card p-5">
-                  <div className="stat-label">Satisfaction</div>
-                  <div className="stat-value">{stats.satisfactionScore ?? '0.0'} <span className="text-xs text-slate-400 font-medium">/5</span></div>
-                </div>
-              </div>
-              <div className="card p-5 mt-4">
-                <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>Feedback Trends</h3>
-                {feedbacks.length > 0 ? (
-                  <div style={{ height: 260 }}>
-                    <Bar data={getChartData()} options={{ maintainAspectRatio: false }} />
-                  </div>
-                ) : (
-                  <div className="empty-state">
-                    <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Feedback trends will appear once participants start submitting feedback.</p>
-                  </div>
-                )}
-              </div>
-            </>
+            <motion.div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                gap: 24,
+                marginBottom: 32
+              }}
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              <StatCard
+                label="Total Trainings"
+                value={stats.totalTrainings ?? 0}
+                icon={statIcons.trainings}
+                color={statColors.trainings}
+                index={0}
+              />
+              <StatCard
+                label="Trainers"
+                value={stats.totalTrainers ?? 0}
+                icon={statIcons.trainers}
+                color={statColors.trainers}
+                index={1}
+              />
+              <StatCard
+                label="Participants"
+                value={stats.totalParticipants ?? 0}
+                icon={statIcons.participants}
+                color={statColors.participants}
+                index={2}
+              />
+              <StatCard
+                label="Active Enrollments"
+                value={stats.totalEnrollments ?? 0}
+                icon={statIcons.enrollments}
+                color={statColors.enrollments}
+                index={3}
+              />
+              <StatCard
+                label="Feedback Responses"
+                value={stats.totalFeedbacks ?? 0}
+                icon={statIcons.feedbacks}
+                color={statColors.feedbacks}
+                index={4}
+              />
+              <StatCard
+                label="Avg Trainer Rating"
+                value={`${stats.avgTrainerRating ?? '0.0'}`}
+                icon={statIcons.rating}
+                color={statColors.rating}
+                index={5}
+              />
+              <StatCard
+                label="Top Trainer"
+                value={topTrainer.name}
+                icon={statIcons.topTrainer}
+                color={statColors.topTrainer}
+                index={6}
+              />
+              <StatCard
+                label="Satisfaction Score"
+                value={`${stats.satisfactionScore ?? '0.0'}`}
+                icon={statIcons.satisfaction}
+                color={statColors.satisfaction}
+                index={7}
+              />
+            </motion.div>
           )}
-        </div>
+          <motion.div variants={itemVariants} className="card" style={{ padding: 28 }}>
+            <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 600, color: '#111827', marginBottom: 20, letterSpacing: '-0.02em' }}>Feedback Trends</h3>
+            {feedbacks.length > 0 ? (
+              <div style={{ height: 280 }}>
+                <Bar data={getChartData()} options={{ maintainAspectRatio: false }} />
+              </div>
+            ) : (
+              <div className="empty-state">
+                <p style={{ color: 'var(--text-secondary)' }}>Feedback trends will appear once participants start submitting feedback.</p>
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
       )}
 
       {/* ── PENDING APPROVAL ── */}
       {tab === 'pending' && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Pending Approval</h2>
+        <motion.div variants={itemVariants}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            {pageTitle('Pending Approval')}
           </div>
-          <div className="card p-0">
+          <div className="card" style={{ padding: 0 }}>
             {initialLoading ? (
               <SkeletonTable rows={3} />
             ) : pendingParticipants.length === 0 ? (
-              <div className="empty-state p-8">
-                <p className="text-sm text-slate-500">No participants are currently waiting for approval.</p>
+              <div className="empty-state">
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No participants are currently waiting for approval.</p>
               </div>
             ) : (
               <div className="table-wrapper" style={{ border: 'none' }}>
@@ -595,7 +718,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                         <td style={{ color: 'var(--text-secondary)' }}>{p.phone || '-'}</td>
                         <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(p.created_at)}</td>
                         <td>
-                          <button className="btn btn-sm btn-primary" onClick={() => handleApproveParticipant(p.id)} disabled={loading} style={{ fontSize: 12 }}>Approve</button>
+                          <button className="btn btn-sm btn-primary" onClick={() => handleApproveParticipant(p.id)} disabled={loading}>Approve</button>
                         </td>
                       </tr>
                     ))}
@@ -604,23 +727,23 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* ── TRAININGS (list) ── */}
       {tab === 'trainings' && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Training Sessions <span className="text-slate-400 font-normal text-sm ml-1">({trainings.length})</span></h2>
-            <button className="btn btn-primary btn-sm" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
+        <motion.div variants={itemVariants}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            {pageTitle('Training Sessions')}
+            <button className="btn btn-primary" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
           </div>
-          <div className="card p-0">
+          <div className="card" style={{ padding: 0 }}>
             {initialLoading ? (
               <SkeletonTable rows={5} />
             ) : trainings.length === 0 ? (
-              <div className="empty-state p-8">
-                <p className="text-sm text-slate-500">No training sessions created yet.</p>
-                <button className="btn btn-primary mt-3" onClick={() => handleTabChange('createTraining')}>+ Create Training</button>
+              <div className="empty-state">
+                <p style={{ color: 'var(--text-secondary)' }}>No training sessions created yet.</p>
+                <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => handleTabChange('createTraining')}>+ Create Training</button>
               </div>
             ) : (
               <div className="table-wrapper" style={{ border: 'none' }}>
@@ -634,8 +757,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                         <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
                         <td className="font-medium">{t.title}</td>
                         <td>{t.trainerName ? <span className="badge badge-blue">{t.trainerName}</span> : <span className="badge badge-gray">Unassigned</span>}</td>
-                        <td className="text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.startDate)}</td>
-                        <td className="text-sm" style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.endDate)}</td>
+                        <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.startDate)}</td>
+                        <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.endDate)}</td>
                         <td>{t.capacity ? t.capacity : <span className="badge badge-gray">∞</span>}</td>
                         <td>{t.enrolledCount ?? 0}</td>
                         <td>
@@ -651,15 +774,15 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* ── TRAINERS (list) ── */}
       {tab === 'trainers' && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Trainers <span className="text-slate-400 font-normal text-sm ml-1">({trainers.length})</span></h2>
-            <button className="btn btn-primary btn-sm" onClick={() => handleTabChange('createTrainer')}>+ Add Trainer</button>
+        <motion.div variants={itemVariants}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            {pageTitle('Trainers')}
+            <button className="btn btn-primary" onClick={() => handleTabChange('createTrainer')}>+ Add Trainer</button>
           </div>
           <div className="card">
             <TrainerList 
@@ -669,19 +792,19 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               onAddTrainer={() => handleTabChange('createTrainer')}
             />
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* ── PARTICIPANTS ── */}
       {tab === 'participants' && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Participants</h2>
-            <button className="btn btn-primary btn-sm" onClick={() => setAddParticipantModal(true)}>+ Add Participant</button>
+        <motion.div variants={itemVariants}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            {pageTitle('Participants')}
+            <button className="btn btn-primary" onClick={() => setAddParticipantModal(true)}>+ Add Participant</button>
           </div>
           <div className="card">
             {initialLoading ? (
-              <div className="text-center py-8 text-slate-500 text-sm">Loading participants...</div>
+              <div className="text-center py-8" style={{ color: 'var(--text-secondary)' }}>Loading participants...</div>
             ) : (
               <ParticipantList 
                 participants={participants}
@@ -712,19 +835,21 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               />
             )}
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* ── ASSESSMENT SESSIONS ── */}
       {tab === 'sessions' && (
-        <AssessmentSessionsPanel />
+        <motion.div variants={itemVariants}>
+          <AssessmentSessionsPanel />
+        </motion.div>
       )}
 
       {/* ── SURVEYS ── */}
       {tab === 'surveys' && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Survey Questions</h2>
+        <motion.div variants={itemVariants}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            {pageTitle('Survey Questions')}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24 }}>
             <div className="card">
@@ -763,16 +888,16 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                     <input className="form-control" type="text" value={questionForm.options} placeholder="Option A, Option B, Option C" required onChange={e => setQuestionForm(p => ({ ...p, options: e.target.value }))} />
                   </div>
                 )}
-                <button type="submit" className="btn btn-primary mt-2" disabled={loading}>Add Question</button>
+                <button type="submit" className="btn btn-primary" style={{ marginTop: 8 }} disabled={loading}>Add Question</button>
               </form>
             </div>
-            <div className="card p-0">
-              <div className="card-header px-5 pt-5 pb-0" style={{ border: 'none', margin: 0 }}>
+            <div className="card" style={{ padding: 0 }}>
+              <div className="card-header" style={{ padding: '24px 24px 0', border: 'none', margin: 0 }}>
                 <h3>Questions ({questions.length})</h3>
               </div>
               {questions.length === 0 ? (
-                <div className="empty-state p-6">
-                  <p className="text-sm text-slate-500">No custom questions added.</p>
+                <div className="empty-state">
+                  <p style={{ color: 'var(--text-secondary)' }}>No custom questions added.</p>
                 </div>
               ) : (
                 <div className="table-wrapper" style={{ border: 'none' }}>
@@ -797,14 +922,14 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               )}
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* ── NOTES MANAGEMENT ── */}
       {tab === 'notes' && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Notes Management</h2>
+        <motion.div variants={itemVariants}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            {pageTitle('Notes Management')}
             <div className="flex gap-2">
               {[
                 { key: '', label: 'All', count: notes.length },
@@ -816,7 +941,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   onClick={() => { setNoteFilter(btn.key); fetchNotes(btn.key) }}
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
-                    padding: '4px 12px', fontSize: 12, fontWeight: 600,
+                    padding: '6px 16px', fontSize: 13, fontWeight: 600,
                     borderRadius: 9999, border: '1px solid var(--border-default)',
                     cursor: 'pointer', fontFamily: 'inherit',
                     transition: 'all 180ms ease',
@@ -831,15 +956,15 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
             </div>
           </div>
           {notes.length === 0 ? (
-            <div className="card text-center py-10">
-              <p className="text-sm text-slate-500">
+            <div className="card" style={{ textAlign: 'center', padding: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
+              <p style={{ color: 'var(--text-secondary)' }}>
                 {noteFilter === 'pending' ? 'All pending notes have been reviewed.' : 
                  noteFilter === 'approved' ? 'No approved notes yet.' : 
                  'Notes will appear here when trainers upload them.'}
               </p>
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {notes.map((note, idx) => {
                 const isPending = note.status?.toUpperCase() === 'PENDING'
                 const isApproved = note.status?.toUpperCase() === 'APPROVED'
@@ -858,9 +983,9 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                           }}>{note.status}</span>
                           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmtDate(note.created_at)}</span>
                         </div>
-                        <h4 style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>{note.title}</h4>
-                        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{note.trainer?.name || 'Unknown'}</p>
-                        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.5 }}>{note.content}</p>
+                        <h4 style={{ fontWeight: 600, fontSize: 15, color: '#111827', fontFamily: "'Outfit', sans-serif" }}>{note.title}</h4>
+                        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>{note.trainer?.name || 'Unknown'}</p>
+                        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.6 }}>{note.content}</p>
                       </div>
                       {isPending && (
                         <div className="flex gap-2 flex-shrink-0">
@@ -874,35 +999,44 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               })}
             </div>
           )}
-        </div>
+        </motion.div>
       )}
 
       {/* ── FEEDBACK REPORTS ── */}
       {tab === 'feedback' && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Feedback Reports</h2>
+        <motion.div variants={itemVariants}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            {pageTitle('Feedback Reports')}
           </div>
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className="card p-5">
-              <div className="stat-label">Total Responses</div>
-              <div className="stat-value">{feedbacks.length}</div>
-            </div>
-            <div className="card p-5">
-              <div className="stat-label">Avg Trainer Rating</div>
-              <div className="stat-value">{stats.avgTrainerRating ?? '0.0'} <span className="text-xs text-slate-400 font-medium">/5</span></div>
-            </div>
-            <div className="card p-5">
-              <div className="stat-label">Avg Subject Rating</div>
-              <div className="stat-value">{stats.avgSubjectRating ?? '0.0'} <span className="text-xs text-slate-400 font-medium">/5</span></div>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 24, marginBottom: 24 }}>
+            <StatCard
+              label="Total Responses"
+              value={feedbacks.length}
+              icon={statIcons.feedbacks}
+              color={statColors.feedbacks}
+              index={0}
+            />
+            <StatCard
+              label="Avg Trainer Rating"
+              value={`${stats.avgTrainerRating ?? '0.0'}`}
+              icon={statIcons.rating}
+              color={statColors.rating}
+              index={1}
+            />
+            <StatCard
+              label="Avg Subject Rating"
+              value={`${stats.avgSubjectRating ?? '0.0'}`}
+              icon={statIcons.satisfaction}
+              color={statColors.satisfaction}
+              index={2}
+            />
           </div>
-          <div className="card p-0">
+          <div className="card" style={{ padding: 0 }}>
             {initialLoading ? (
               <SkeletonTable rows={5} />
             ) : feedbacks.length === 0 ? (
-              <div className="empty-state p-8">
-                <p className="text-sm text-slate-500">No feedback submitted yet.</p>
+              <div className="empty-state">
+                <p style={{ color: 'var(--text-secondary)' }}>No feedback submitted yet.</p>
               </div>
             ) : (
               <div className="table-wrapper" style={{ border: 'none' }}>
@@ -917,8 +1051,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                         <td className="font-medium">{f.trainingTitle}</td>
                         <td style={{ color: 'var(--text-secondary)' }}>{f.trainerName}</td>
                         <td>{f.anonymous ? <span className="badge badge-gray">Anonymous</span> : f.participantName}</td>
-                        <td><Stars v={f.trainerRating} /> <span className="text-xs text-slate-400 ml-1">{f.trainerRating}/5</span></td>
-                        <td><Stars v={f.subjectRating} /> <span className="text-xs text-slate-400 ml-1">{f.subjectRating}/5</span></td>
+                        <td><Stars v={f.trainerRating} /> <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: 4 }}>{f.trainerRating}/5</span></td>
+                        <td><Stars v={f.subjectRating} /> <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: 4 }}>{f.subjectRating}/5</span></td>
                         <td style={{ maxWidth: 150, color: 'var(--text-secondary)', fontSize: 13 }}>{f.comments || '-'}</td>
                         <td style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{fmtDate(f.submittedAt)}</td>
                       </tr>
@@ -928,138 +1062,148 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* ── CREATE TRAINER (two-column layout) ── */}
       {tab === 'createTrainer' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24 }}>
-          <div className="card">
-            <div className="card-header"><h3>Create Trainer Account</h3></div>
-            <form onSubmit={handleCreateTrainer}>
-              <div className="form-group">
-                <label className="form-label">Full Name</label>
-                <input className="form-control" type="text" value={trainerForm.name}
-                  onChange={e => setTrainerForm(p => ({ ...p, name: e.target.value }))} required placeholder="Trainer full name" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Email Address</label>
-                <input className="form-control" type="email" value={trainerForm.email}
-                  onChange={e => setTrainerForm(p => ({ ...p, email: e.target.value }))} required placeholder="trainer@company.com" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Password</label>
-                <input className="form-control" type="password" value={trainerForm.password}
-                  onChange={e => setTrainerForm(p => ({ ...p, password: e.target.value }))} required placeholder="Set password for trainer" />
-              </div>
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Creating...' : 'Create Trainer'}
-              </button>
-            </form>
+        <motion.div variants={itemVariants}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            {pageTitle('Create Trainer')}
           </div>
-          <div className="card">
-            <div className="card-header"><h3>Trainers ({trainers.length})</h3></div>
-            <TrainerList
-              trainers={trainers}
-              token={user.token}
-              onDelete={handleDeleteTrainer}
-              onAddTrainer={() => handleTabChange('createTrainer')}
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24 }}>
+            <div className="card">
+              <div className="card-header"><h3>Create Trainer Account</h3></div>
+              <form onSubmit={handleCreateTrainer}>
+                <div className="form-group">
+                  <label className="form-label">Full Name</label>
+                  <input className="form-control" type="text" value={trainerForm.name}
+                    onChange={e => setTrainerForm(p => ({ ...p, name: e.target.value }))} required placeholder="Trainer full name" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email Address</label>
+                  <input className="form-control" type="email" value={trainerForm.email}
+                    onChange={e => setTrainerForm(p => ({ ...p, email: e.target.value }))} required placeholder="trainer@company.com" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Password</label>
+                  <input className="form-control" type="password" value={trainerForm.password}
+                    onChange={e => setTrainerForm(p => ({ ...p, password: e.target.value }))} required placeholder="Set password for trainer" />
+                </div>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? 'Creating...' : 'Create Trainer'}
+                </button>
+              </form>
+            </div>
+            <div className="card">
+              <div className="card-header"><h3>Trainers ({trainers.length})</h3></div>
+              <TrainerList
+                trainers={trainers}
+                token={user.token}
+                onDelete={handleDeleteTrainer}
+                onAddTrainer={() => handleTabChange('createTrainer')}
+              />
+            </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* ── CREATE TRAINING (two-column layout) ── */}
       {tab === 'createTraining' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24 }}>
-          <div className="card">
-            <div className="card-header"><h3>Create Training Session</h3></div>
-            <form onSubmit={handleCreateTraining}>
-              <div className="form-group">
-                <label className="form-label">Training Title</label>
-                <input className="form-control" type="text" value={trainingForm.title}
-                  onChange={e => setTrainingForm(p => ({ ...p, title: e.target.value }))} required placeholder="e.g. React Fundamentals" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Description</label>
-                <textarea className="form-control" value={trainingForm.description}
-                  onChange={e => setTrainingForm(p => ({ ...p, description: e.target.value }))} placeholder="Training objectives and content overview..." />
-              </div>
-              <div className="form-group">
-                <AnimatedDropdown
-                  label="Assign Trainer"
-                  options={[
-                    { value: '', label: 'Select a trainer' },
-                    ...trainers.map(t => ({ value: t.id, label: `${t.name} (${t.email})` }))
-                  ]}
-                  value={trainingForm.trainerId}
-                  onChange={(val) => setTrainingForm(p => ({ ...p, trainerId: val }))}
-                />
-              </div>
-              <div className="form-grid-2">
-                <div className="form-group">
-                  <label className="form-label">Start Date &amp; Time</label>
-                  <input className="form-control" type="datetime-local" value={trainingForm.startDate}
-                    onChange={e => setTrainingForm(p => ({ ...p, startDate: e.target.value }))} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">End Date &amp; Time</label>
-                  <input className="form-control" type="datetime-local" value={trainingForm.endDate}
-                    onChange={e => setTrainingForm(p => ({ ...p, endDate: e.target.value }))} required />
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Capacity (blank for unlimited)</label>
-                <input className="form-control" type="number" value={trainingForm.capacity}
-                  onChange={e => setTrainingForm(p => ({ ...p, capacity: e.target.value }))} placeholder="e.g. 30" min="1" />
-              </div>
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Creating...' : 'Create Training Session'}
-              </button>
-            </form>
+        <motion.div variants={itemVariants}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            {pageTitle('Create Training')}
           </div>
-          <div className="card p-0">
-            <div className="card-header px-5 pt-5 pb-0" style={{ border: 'none', margin: 0 }}>
-              <h3>Recent Trainings</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24 }}>
+            <div className="card">
+              <div className="card-header"><h3>Create Training Session</h3></div>
+              <form onSubmit={handleCreateTraining}>
+                <div className="form-group">
+                  <label className="form-label">Training Title</label>
+                  <input className="form-control" type="text" value={trainingForm.title}
+                    onChange={e => setTrainingForm(p => ({ ...p, title: e.target.value }))} required placeholder="e.g. React Fundamentals" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Description</label>
+                  <textarea className="form-control" value={trainingForm.description}
+                    onChange={e => setTrainingForm(p => ({ ...p, description: e.target.value }))} placeholder="Training objectives and content overview..." />
+                </div>
+                <div className="form-group">
+                  <AnimatedDropdown
+                    label="Assign Trainer"
+                    options={[
+                      { value: '', label: 'Select a trainer' },
+                      ...trainers.map(t => ({ value: t.id, label: `${t.name} (${t.email})` }))
+                    ]}
+                    value={trainingForm.trainerId}
+                    onChange={(val) => setTrainingForm(p => ({ ...p, trainerId: val }))}
+                  />
+                </div>
+                <div className="form-grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Start Date &amp; Time</label>
+                    <input className="form-control" type="datetime-local" value={trainingForm.startDate}
+                      onChange={e => setTrainingForm(p => ({ ...p, startDate: e.target.value }))} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">End Date &amp; Time</label>
+                    <input className="form-control" type="datetime-local" value={trainingForm.endDate}
+                      onChange={e => setTrainingForm(p => ({ ...p, endDate: e.target.value }))} required />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Capacity (blank for unlimited)</label>
+                  <input className="form-control" type="number" value={trainingForm.capacity}
+                    onChange={e => setTrainingForm(p => ({ ...p, capacity: e.target.value }))} placeholder="e.g. 30" min="1" />
+                </div>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? 'Creating...' : 'Create Training Session'}
+                </button>
+              </form>
             </div>
-            {trainings.length === 0 ? (
-              <div className="empty-state p-6">
-                <p className="text-sm text-slate-500">No training sessions created yet.</p>
+            <div className="card" style={{ padding: 0 }}>
+              <div className="card-header" style={{ padding: '24px 24px 0', border: 'none', margin: 0 }}>
+                <h3>Recent Trainings</h3>
               </div>
-            ) : (
-              <div className="table-wrapper" style={{ border: 'none' }}>
-                <table className="table">
-                  <thead>
-                    <tr><th>Title</th><th>Trainer</th><th>Start</th><th>End</th><th></th></tr>
-                  </thead>
-                  <tbody>
-                    {trainings.slice(0, 10).map(t => (
-                      <tr key={t.id}>
-                        <td className="font-medium">{t.title}</td>
-                        <td>{t.trainerName ? <span className="badge badge-blue">{t.trainerName}</span> : <span className="badge badge-gray">Unassigned</span>}</td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.startDate)}</td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.endDate)}</td>
-                        <td>
-                          <div className="flex gap-1.5 justify-end">
-                            <button className="btn btn-sm" onClick={() => openEdit(t)}>Edit</button>
-                            <button className="btn btn-sm btn-danger" onClick={() => handleDeleteTraining(t.id, t.title)}>Delete</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+              {trainings.length === 0 ? (
+                <div className="empty-state">
+                  <p style={{ color: 'var(--text-secondary)' }}>No training sessions created yet.</p>
+                </div>
+              ) : (
+                <div className="table-wrapper" style={{ border: 'none' }}>
+                  <table className="table">
+                    <thead>
+                      <tr><th>Title</th><th>Trainer</th><th>Start</th><th>End</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {trainings.slice(0, 10).map(t => (
+                        <tr key={t.id}>
+                          <td className="font-medium">{t.title}</td>
+                          <td>{t.trainerName ? <span className="badge badge-blue">{t.trainerName}</span> : <span className="badge badge-gray">Unassigned</span>}</td>
+                          <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.startDate)}</td>
+                          <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.endDate)}</td>
+                          <td>
+                            <div className="flex gap-1.5 justify-end">
+                              <button className="btn btn-sm" onClick={() => openEdit(t)}>Edit</button>
+                              <button className="btn btn-sm btn-danger" onClick={() => handleDeleteTraining(t.id, t.title)}>Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* ── PROGRAMS & COURSES (two-column layout) ── */}
       {tab === 'programs' && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Programs & Courses</h2>
+        <motion.div variants={itemVariants}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            {pageTitle('Programs & Courses')}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24, marginBottom: 24 }}>
             <div className="card">
@@ -1078,13 +1222,13 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                 <button type="submit" className="btn btn-primary" disabled={loading}>Create Program</button>
               </form>
             </div>
-            <div className="card p-0">
-              <div className="card-header px-5 pt-5 pb-0" style={{ border: 'none', margin: 0 }}>
+            <div className="card" style={{ padding: 0 }}>
+              <div className="card-header" style={{ padding: '24px 24px 0', border: 'none', margin: 0 }}>
                 <h3>Programs ({programs.length})</h3>
               </div>
               {programs.length === 0 ? (
-                <div className="empty-state p-6">
-                  <p className="text-sm text-slate-500">No programs created yet.</p>
+                <div className="empty-state">
+                  <p style={{ color: 'var(--text-secondary)' }}>No programs created yet.</p>
                 </div>
               ) : (
                 <div className="table-wrapper" style={{ border: 'none' }}>
@@ -1143,13 +1287,13 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                 <button type="submit" className="btn btn-primary" disabled={loading}>Create Course</button>
               </form>
             </div>
-            <div className="card p-0">
-              <div className="card-header px-5 pt-5 pb-0" style={{ border: 'none', margin: 0 }}>
+            <div className="card" style={{ padding: 0 }}>
+              <div className="card-header" style={{ padding: '24px 24px 0', border: 'none', margin: 0 }}>
                 <h3>Courses ({courses.length})</h3>
               </div>
               {courses.length === 0 ? (
-                <div className="empty-state p-6">
-                  <p className="text-sm text-slate-500">No courses created yet.</p>
+                <div className="empty-state">
+                  <p style={{ color: 'var(--text-secondary)' }}>No courses created yet.</p>
                 </div>
               ) : (
                 <div className="table-wrapper" style={{ border: 'none' }}>
@@ -1171,7 +1315,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               )}
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* ── EDIT MODAL ── */}
@@ -1239,7 +1383,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               <button type="button" className="modal-close" onClick={() => setConfirmModal(null)}>×</button>
             </div>
             <div className="modal-body">
-              {confirmModal.subtitle && <p className="text-sm text-slate-500 mb-4">{confirmModal.subtitle}</p>}
+              {confirmModal.subtitle && <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>{confirmModal.subtitle}</p>}
               <div className="modal-footer">
                 <button type="button" className="btn" onClick={() => setConfirmModal(null)}>Cancel</button>
                 <button type="button" className="btn btn-danger" onClick={confirmAction} disabled={loading}>
@@ -1280,7 +1424,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                 <input className="form-control" type="password" value={participantForm.password}
                   onChange={e => setParticipantForm(p => ({ ...p, password: e.target.value }))} required placeholder="Min 6 characters" minLength="6" />
               </div>
-              <div className="modal-footer mt-6">
+              <div className="modal-footer" style={{ marginTop: 24 }}>
                 <button type="button" className="btn" onClick={() => setAddParticipantModal(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={loading}>
                   {loading ? 'Creating...' : 'Create Participant'}
@@ -1301,7 +1445,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
         } : null}
         onClose={() => setViewingParticipant(null)}
       />
-    </div>
+    </motion.div>
   )
 }
 

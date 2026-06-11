@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import React, { useEffect, useState, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { Loader2 } from 'lucide-react'
 import AIQuizList from '../components/AIQuizList'
 import QuizTaking from '../components/QuizTaking'
@@ -207,103 +207,101 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
 
   return (
     <div className="dashboard" style={{ padding: 0 }}>
-      <AnimatePresence mode="wait">
-        {tab === 'overview' && (
-          <motion.div key="overview" {...fadeVariant} transition={{ duration: 0.25 }}>
-            <OverviewSection
-              user={user}
-              trainings={trainings}
-              enrollments={enrollments}
-              quizzes={quizzes}
-              onGoToCourses={() => handleTabChange('available')}
-              onResume={handleResume}
-              onClickCourse={() => handleTabChange('myEnrollments')}
-              onClickQuiz={() => handleTabChange('ai-quizzes')}
-            />
-          </motion.div>
-        )}
+      {tab === 'overview' && (
+        <motion.div key="overview" {...fadeVariant} transition={{ duration: 0.25 }}>
+          <OverviewSection
+            user={user}
+            trainings={trainings}
+            enrollments={enrollments}
+            quizzes={quizzes}
+            onGoToCourses={() => handleTabChange('available')}
+            onResume={handleResume}
+            onClickCourse={() => handleTabChange('myEnrollments')}
+            onClickQuiz={() => handleTabChange('ai-quizzes')}
+          />
+        </motion.div>
+      )}
 
-        {tab === 'available' && (
-          <motion.div key="available" {...fadeVariant} transition={{ duration: 0.25 }}>
-            <AvailableCourses
-              trainings={trainings}
-              enrollments={enrollments}
-              loading={loading}
-              onEnroll={handleEnroll}
-            />
-          </motion.div>
-        )}
+      {tab === 'available' && (
+        <motion.div key="available" {...fadeVariant} transition={{ duration: 0.25 }}>
+          <AvailableCourses
+            trainings={trainings}
+            enrollments={enrollments}
+            loading={loading}
+            onEnroll={handleEnroll}
+          />
+        </motion.div>
+      )}
 
-        {tab === 'myEnrollments' && (
-          <motion.div key="myEnrollments" {...fadeVariant} transition={{ duration: 0.25 }}>
-            <ParticipantCourses user={user} />
-          </motion.div>
-        )}
+      {tab === 'myEnrollments' && (
+        <motion.div key="myEnrollments" {...fadeVariant} transition={{ duration: 0.25 }}>
+          <ParticipantCourses user={user} />
+        </motion.div>
+      )}
 
-        {tab === 'lessons' && (
-          <motion.div key="lessons" {...fadeVariant} transition={{ duration: 0.25 }}>
-            <LessonsSection />
-          </motion.div>
-        )}
+      {tab === 'lessons' && (
+        <motion.div key="lessons" {...fadeVariant} transition={{ duration: 0.25 }}>
+          <LessonsSection />
+        </motion.div>
+      )}
 
-        {tab === 'ai-quizzes' && (
-          <motion.div key="ai-quizzes" {...fadeVariant} transition={{ duration: 0.25 }}>
-            <AIQuizList user={user} onStartQuiz={handleStartQuiz} />
-          </motion.div>
-        )}
+      {tab === 'ai-quizzes' && (
+        <motion.div key="ai-quizzes" {...fadeVariant} transition={{ duration: 0.25 }}>
+          <AIQuizList user={user} onStartQuiz={handleStartQuiz} />
+        </motion.div>
+      )}
 
-        {tab === 'coding' && (
-          <motion.div key="coding" {...fadeVariant} transition={{ duration: 0.25 }}>
-            <ParticipantCodingList />
-          </motion.div>
-        )}
+      {tab === 'coding' && (
+        <motion.div key="coding" {...fadeVariant} transition={{ duration: 0.25 }}>
+          <ParticipantCodingList />
+        </motion.div>
+      )}
 
-        {tab === 'leaderboard' && (
-          <motion.div key="leaderboard" {...fadeVariant} transition={{ duration: 0.25 }}>
-            <LeaderboardSection
-              enrollments={enrollments}
-              quizzes={quizzes}
-              currentUserId={user?.id}
-            />
-          </motion.div>
-        )}
+      {tab === 'leaderboard' && (
+        <motion.div key="leaderboard" {...fadeVariant} transition={{ duration: 0.25 }}>
+          <LeaderboardSection
+            enrollments={enrollments}
+            quizzes={quizzes}
+            currentUserId={user?.id}
+          />
+        </motion.div>
+      )}
 
-        {tab === 'achievements' && (
-          <motion.div key="achievements" {...fadeVariant} transition={{ duration: 0.25 }}>
-            <AchievementsSection user={user} enrollmentsCount={enrollments.length} />
-          </motion.div>
-        )}
+      {tab === 'achievements' && (
+        <motion.div key="achievements" {...fadeVariant} transition={{ duration: 0.25 }}>
+          <AchievementsSection user={user} enrollmentsCount={enrollments.length} />
+        </motion.div>
+      )}
 
-        {tab === 'feedback' && (
-          <motion.div key="feedback" {...fadeVariant} transition={{ duration: 0.25 }}>
-            <FeedbackSection
-              enrollments={enrollments}
-              feedbacks={feedbacks}
-              loading={loading}
-              onSubmit={handleSubmitFeedback}
-              fetchQuestions={fetchSurveyQuestions}
-            />
-          </motion.div>
-        )}
+      {tab === 'feedback' && (
+        <motion.div key="feedback" {...fadeVariant} transition={{ duration: 0.25 }}>
+          <FeedbackSection
+            enrollments={enrollments}
+            feedbacks={feedbacks}
+            loading={loading}
+            onSubmit={handleSubmitFeedback}
+            fetchQuestions={fetchSurveyQuestions}
+          />
+        </motion.div>
+      )}
 
-        {tab === 'myFeedbacks' && (
-          <motion.div key="myFeedbacks" {...fadeVariant} transition={{ duration: 0.25 }}>
-            <MyFeedbacks feedbacks={feedbacks} loading={loading} />
-          </motion.div>
-        )}
+      {tab === 'myFeedbacks' && (
+        <motion.div key="myFeedbacks" {...fadeVariant} transition={{ duration: 0.25 }}>
+          <MyFeedbacks feedbacks={feedbacks} loading={loading} />
+        </motion.div>
+      )}
 
-        {tab === 'profile' && (
-          <motion.div key="profile" {...fadeVariant} transition={{ duration: 0.25 }}>
-            <ProfileSection
-              user={user}
-              enrollments={enrollments}
-              quizzes={quizzes}
-              onResume={handleResume}
-              onTabChange={handleTabChange}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {tab === 'profile' && (
+        <motion.div key="profile" {...fadeVariant} transition={{ duration: 0.25 }}>
+          <ProfileSection
+            user={user}
+            enrollments={enrollments}
+            quizzes={quizzes}
+            onResume={handleResume}
+            onTabChange={handleTabChange}
+          />
+        </motion.div>
+      )}
     </div>
   )
 }

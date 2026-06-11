@@ -347,7 +347,7 @@
 
 /* ── Dashboard ── */
 .dashboard {
-  padding: var(--space-3) 0;
+  animation: fadeIn 0.4s ease-out;
 }
 
 /* ── Spinner Enhancement ── */

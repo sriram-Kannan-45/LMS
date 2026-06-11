@@ -11,8 +11,12 @@ import './styles/academic-theme.css'
 import './styles/profile.css'
 import './styles/resources.css'
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+const RootElement = import.meta.env.DEV ? (
   <React.StrictMode>
     <App />
-  </React.StrictMode>,
+  </React.StrictMode>
+) : (
+  <App />
 )
+
+ReactDOM.createRoot(document.getElementById('root')).render(RootElement)
