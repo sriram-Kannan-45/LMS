@@ -240,7 +240,7 @@ function AdminLogin({ onLogin }) {
             <motion.button
               type="submit"
               disabled={loading}
-              className="trainer-submit-btn"
+              className="trainer-submit-btn trainer-submit-btn--red"
               whileHover={{ scale: loading ? 1 : 1.01 }}
               whileTap={{ scale: loading ? 1 : 0.99 }}
             >

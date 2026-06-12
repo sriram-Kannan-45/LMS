@@ -1257,7 +1257,6 @@ body:has(.premium-login-page) {
 .trainer-submit-btn {
   width: 100%;
   height: 48px;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
   color: #fff;
   border: none;
   border-radius: 12px;
@@ -1270,16 +1269,19 @@ body:has(.premium-login-page) {
   justify-content: center;
   gap: 8px;
   transition: transform 0.25s, box-shadow 0.3s;
-  box-shadow: 0 4px 14px rgba(59,130,246,0.35);
   position: relative;
   overflow: hidden;
   animation: trainerFieldIn 0.5s 0.35s cubic-bezier(0.16,1,0.3,1) backwards;
 }
 
-.trainer-submit-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(59,130,246,0.45);
-}
+.trainer-submit-btn--green { background: linear-gradient(135deg, #22c55e, #16a34a); box-shadow: 0 4px 14px rgba(34,197,94,0.35); }
+.trainer-submit-btn--green:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(34,197,94,0.45); }
+
+.trainer-submit-btn--blue { background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 4px 14px rgba(59,130,246,0.35); }
+.trainer-submit-btn--blue:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(59,130,246,0.45); }
+
+.trainer-submit-btn--red { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 4px 14px rgba(239,68,68,0.35); }
+.trainer-submit-btn--red:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(239,68,68,0.45); }
 
 .trainer-submit-btn:active:not(:disabled) { transform: translateY(0); }
 .trainer-submit-btn:disabled { opacity: 0.7; cursor: not-allowed; }
