@@ -978,8 +978,9 @@ body:has(.premium-login-page) {
 /* ─── VIDEO BACKGROUND LOGIN (Trainer) ─── */
 .trainer-video-login {
   position: relative;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -989,16 +990,13 @@ body:has(.premium-login-page) {
 
 .trainer-video-bg {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   z-index: 0;
   pointer-events: none;
   will-change: transform;
-  transform: translateZ(0);
-  backface-visibility: hidden;
 }
 
 .trainer-video-overlay {

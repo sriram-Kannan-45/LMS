@@ -16,6 +16,7 @@ function ParticipantLogin({ onLogin }) {
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [videoReady, setVideoReady] = useState(false)
 
   const navigate = useNavigate()
   const navTimeoutRef = useRef(null)
@@ -125,7 +126,8 @@ function ParticipantLogin({ onLogin }) {
         muted
         loop
         playsInline
-        poster={blueVideo}
+        preload="auto"
+        onLoadedData={() => setVideoReady(true)}
       >
         <source src={blueVideo} type="video/mp4" />
       </video>
@@ -135,7 +137,7 @@ function ParticipantLogin({ onLogin }) {
         <motion.div
           className="trainer-login-card"
           initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={videoReady ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
         >
           <div className="trainer-card-logo">
