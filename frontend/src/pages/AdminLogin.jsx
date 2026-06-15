@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -7,11 +7,12 @@ import {
 } from 'lucide-react'
 import { useToast } from '../components/Toast'
 import { API } from '../api/api'
+import redVideo from '../assets/red.mp4'
 
 function AdminLogin({ onLogin }) {
-  const [redVideo, setRedVideo] = useState('')
-  // Lazy-load background video to reduce initial bundle size
-  useEffect(() => { import('../assets/red.mp4').then(m => setRedVideo(m.default)).catch(() => {}) }, [])
+  const [videoReady, setVideoReady] = useState(false)
+  const videoRef = useRef(null)
+  const onVideoReady = useCallback(() => setVideoReady(true), [])
   const [form, setForm] = useState({ email: '', password: '', role: 'ADMIN' })
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -127,12 +128,15 @@ function AdminLogin({ onLogin }) {
   return (
     <div className="trainer-video-login">
       <video
-        className="trainer-video-bg"
+        ref={videoRef}
+        className={`trainer-video-bg${videoReady ? ' trainer-video-visible' : ''}`}
         autoPlay
         muted
         loop
         playsInline
         preload="auto"
+        onLoadedData={onVideoReady}
+        onPlaying={onVideoReady}
       >
         <source src={redVideo} type="video/mp4" />
       </video>

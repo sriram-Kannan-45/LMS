@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -7,9 +7,11 @@ import {
 } from 'lucide-react'
 import { useToast } from '../components/Toast'
 import { API } from '../api/api'
+import blueVideo from '../assets/blue.mp4'
 function ParticipantLogin({ onLogin }) {
-  const [blueVideo, setBlueVideo] = useState('')
-  useEffect(() => { import('../assets/blue.mp4').then(m => setBlueVideo(m.default)).catch(() => {}) }, [])
+  const [videoReady, setVideoReady] = useState(false)
+  const videoRef = useRef(null)
+  const onVideoReady = useCallback(() => setVideoReady(true), [])
   const [form, setForm] = useState({ email: '', password: '', role: 'PARTICIPANT' })
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -120,12 +122,15 @@ function ParticipantLogin({ onLogin }) {
   return (
     <div className="trainer-video-login">
       <video
-        className="trainer-video-bg"
+        ref={videoRef}
+        className={`trainer-video-bg${videoReady ? ' trainer-video-visible' : ''}`}
         autoPlay
         muted
         loop
         playsInline
         preload="auto"
+        onLoadedData={onVideoReady}
+        onPlaying={onVideoReady}
       >
         <source src={blueVideo} type="video/mp4" />
       </video>
