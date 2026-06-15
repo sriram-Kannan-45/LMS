@@ -1,4 +1,4 @@
-const { Training, User, Enrollment, Notification } = require('../models');
+const { Training, User, Enrollment, Notification, Feedback, Course, Lesson, LiveSession, AIQuiz, AIDocument, Note, SurveyQuestion, LessonMaterial, LessonQuiz, LessonAssessment, AssessmentSubmission, LessonProgress, QuizProgress, AIQuestion, QuizAttempt, QuizResult, CourseTrainerAssignment } = require('../models');
 const { Op, fn, col } = require('sequelize');
 const logger = require('../utils/logger');
 const cacheService = require('../services/cacheService');
@@ -151,9 +151,70 @@ const deleteTraining = async (req, res) => {
   try {
     const training = await Training.findByPk(req.params.id);
     if (!training) return res.status(404).json({ error: 'Training not found' });
+    const { id } = training;
 
-    await Enrollment.destroy({ where: { trainingId: training.id } });
-    await training.destroy();
+    // Delete courses (and their cascade: lessons, materials, quizzes, etc.)
+    const courses = await Course.findAll({ where: { trainingProgramId: id }, attributes: ['id'] });
+    const courseIds = courses.map(c => c.id);
+
+    if (courseIds.length > 0) {
+      const lessons = await Lesson.findAll({ where: { courseId: { [Op.in]: courseIds } }, attributes: ['id'] });
+      const lessonIds = lessons.map(l => l.id);
+      const quizzes = await AIQuiz.findAll({ where: { courseId: { [Op.in]: courseIds } }, attributes: ['id'] });
+      const quizIds = quizzes.map(q => q.id);
+      const assessments = lessonIds.length === 0 ? [] : await LessonAssessment.findAll({
+        where: { lessonId: { [Op.in]: lessonIds } }, attributes: ['id'],
+      });
+      const assessmentIds = assessments.map(a => a.id);
+
+      if (assessmentIds.length > 0) {
+        await AssessmentSubmission.destroy({ where: { assessmentId: { [Op.in]: assessmentIds } } });
+      }
+      if (lessonIds.length > 0) {
+        await Promise.all([
+          LessonMaterial.destroy({   where: { lessonId: { [Op.in]: lessonIds } } }),
+          LessonAssessment.destroy({ where: { lessonId: { [Op.in]: lessonIds } } }),
+          LessonProgress.destroy({   where: { lessonId: { [Op.in]: lessonIds } } }),
+          LessonQuiz.destroy({       where: { lessonId: { [Op.in]: lessonIds } } }),
+        ]);
+      }
+      if (quizIds.length > 0) {
+        const attempts = await QuizAttempt.findAll({ where: { quizId: { [Op.in]: quizIds } }, attributes: ['id'] });
+        const attemptIds = attempts.map(a => a.id);
+        if (attemptIds.length > 0) {
+          const { QuizAnswer } = require('../models');
+          await QuizAnswer.destroy({ where: { attemptId: { [Op.in]: attemptIds } } });
+          await QuizResult.destroy({ where: { attemptId: { [Op.in]: attemptIds } } });
+        }
+        await Promise.all([
+          QuizAttempt.destroy({ where: { quizId: { [Op.in]: quizIds } } }),
+          AIQuestion.destroy({  where: { quizId: { [Op.in]: quizIds } } }),
+          LessonQuiz.destroy({  where: { quizId: { [Op.in]: quizIds } } }),
+        ]);
+      }
+
+      await Promise.all([
+        Lesson.destroy({       where: { courseId: { [Op.in]: courseIds } } }),
+        AIQuiz.destroy({       where: { courseId: { [Op.in]: courseIds } } }),
+        Enrollment.destroy({   where: { courseId: { [Op.in]: courseIds } } }),
+        CourseTrainerAssignment.destroy({ where: { courseId: { [Op.in]: courseIds } } }),
+      ]);
+      await Course.destroy({ where: { id: { [Op.in]: courseIds } } });
+    }
+
+    // Delete legacy training-scoped records
+    await Promise.all([
+      Feedback.destroy({      where: { trainingId: id } }),
+      Enrollment.destroy({    where: { trainingId: id } }),
+      Lesson.destroy({        where: { trainingId: id } }),
+      LiveSession.destroy({   where: { trainingId: id } }),
+      AIQuiz.destroy({        where: { trainingId: id } }),
+      AIDocument.destroy({    where: { trainingId: id } }),
+      Note.destroy({          where: { trainingId: id } }),
+      SurveyQuestion.destroy({ where: { trainingId: id } }),
+    ]);
+
+    await Training.destroy({ where: { id } });
 
     await cacheService.invalidatePattern('admin:training*');
     res.json({ message: 'Training deleted successfully' });
