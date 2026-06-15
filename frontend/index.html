@@ -1,40 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <script>
-      (function() {
-        const report = (type, message, stack) => {
-          fetch('http://localhost:9876/log', {
-            method: 'POST',
-            mode: 'cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type, message, stack })
-          }).catch(()=>{});
-        };
-        window.onerror = function(msg, url, line, col, err) {
-          report('error', msg + ' at ' + url + ':' + line + ':' + col, err?.stack);
-        };
-        window.onunhandledrejection = function(e) {
-          report('unhandledrejection', e.reason?.message || String(e.reason), e.reason?.stack);
-        };
-        const origError = console.error;
-        console.error = function(...args) {
-          report('console.error', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
-          origError.apply(console, args);
-        };
-        report('info', 'Telemetry initialized! UA: ' + navigator.userAgent);
-        console.log('Telemetry initialized!');
-      })();
-    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#6366f1" />
     <meta name="description" content="WAVE INIT - Modern Learning Management System" />
     <title>WAVE INIT LMS</title>
+
+    <!-- DNS prefetch for external resources -->
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+    <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+
+    <!-- Preconnect for critical third-party origins -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=Playfair+Display:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin />
+
+    <!-- Optimized font loading with swap display -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%236366f1'/%3E%3Cstop offset='100%25' style='stop-color:%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='20' fill='url(%23g)'/%3E%3Cpath d='M50 25L30 45h15V75h10V45h15L50 25z' fill='white' opacity='0.9'/%3E%3C/svg%3E" />
+
+    <!-- Preload critical fonts -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" />
   </head>
   <body>
     <div id="root"></div>

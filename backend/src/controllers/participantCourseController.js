@@ -118,7 +118,8 @@ async function recomputeCourseProgress(courseId, participantId) {
 
   const progressByLesson = Object.fromEntries(progressRows.map(p => [String(p.lessonId), p]));
 
-  let completed = 0;
+  const toComplete = [];
+  const toProgress = [];
   for (const lesson of lessons) {
     const p = progressByLesson[String(lesson.id)];
     if (!p || !p.contentViewed) continue;
@@ -136,13 +137,25 @@ async function recomputeCourseProgress(courseId, participantId) {
 
     if (allQuizzesDone && allAssessmentsDone) {
       completed++;
-      // Also flip the LessonProgress.status to COMPLETED
       if (p.status !== 'COMPLETED') {
-        await p.update({ status: 'COMPLETED', completedAt: new Date() });
+        toComplete.push(p.id);
       }
     } else if (p.status === 'NOT_STARTED') {
-      await p.update({ status: 'IN_PROGRESS' });
+      toProgress.push(p.id);
     }
+  }
+  // Batch update progress statuses
+  if (toComplete.length > 0) {
+    await LessonProgress.update(
+      { status: 'COMPLETED', completedAt: new Date() },
+      { where: { id: toComplete } }
+    );
+  }
+  if (toProgress.length > 0) {
+    await LessonProgress.update(
+      { status: 'IN_PROGRESS' },
+      { where: { id: toProgress } }
+    );
   }
 
   const percent = (completed / lessons.length) * 100;
@@ -739,22 +752,23 @@ async function submitQuiz(req, res) {
       // option index (helpful for the review screen).
       const optionsByQ = Object.fromEntries(questions.map(q => [String(q.id), Array.isArray(q.options) ? q.options : []]));
 
-      for (const a of answers) {
+      const answerRows = answers.map(a => {
         const qid = String(a.questionId);
         const expected = correctByQ[qid];
         const submittedText = String(a.answer ?? '').trim();
         const isCorrect = expected != null && submittedText === String(expected).trim();
         if (isCorrect) correct++;
         const optionIdx = optionsByQ[qid] ? optionsByQ[qid].findIndex(o => String(o).trim() === submittedText) : -1;
-        await QuizAnswer.create({
+        return {
           attemptId:      attempt.id,
           questionId:     a.questionId,
           answerText:     submittedText,
           selectedOption: optionIdx >= 0 ? optionIdx : null,
           isCorrect,
           score:          isCorrect ? 1 : 0,
-        }, { transaction: t });
-      }
+        };
+      });
+      await QuizAnswer.bulkCreate(answerRows, { transaction: t });
 
       const submittedAt = new Date();
       await attempt.update({

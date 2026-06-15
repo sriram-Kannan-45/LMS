@@ -601,8 +601,7 @@ async function createManualQuiz(req, res) {
         isMandatory: isMandatory !== false,
       }, { transaction: t });
 
-      for (let i = 0; i < questions.length; i++) {
-        const qd = questions[i];
+      const questionRows = questions.map((qd, i) => {
         if (!qd.question || !Array.isArray(qd.options) || qd.options.length !== 4) {
           throw new Error(`Question ${i + 1} must have a question text and exactly 4 options`);
         }
@@ -610,7 +609,7 @@ async function createManualQuiz(req, res) {
         if (!Number.isInteger(correctIdx) || correctIdx < 0 || correctIdx > 3) {
           throw new Error(`Question ${i + 1} has invalid correctIndex (must be 0–3)`);
         }
-        await AIQuestion.create({
+        return {
           quizId:        q.id,
           questionText:  qd.question,
           questionType:  'MCQ',
@@ -618,8 +617,9 @@ async function createManualQuiz(req, res) {
           correctAnswer: qd.options[correctIdx],
           difficulty:    qd.difficulty || 'MEDIUM',
           order:         i,
-        }, { transaction: t });
-      }
+        };
+      });
+      const createdQuestions = await AIQuestion.bulkCreate(questionRows, { transaction: t });
       return q;
     });
 
@@ -711,10 +711,9 @@ async function updateCourseQuiz(req, res) {
         // Replace all questions atomically — simplest correct semantics for
         // a JSON PUT.
         await AIQuestion.destroy({ where: { quizId: quiz.id }, transaction: t });
-        for (let i = 0; i < questions.length; i++) {
-          const qd = questions[i];
+        const questionRows = questions.map((qd, i) => {
           const correctIdx = parseInt(qd.correctIndex, 10);
-          await AIQuestion.create({
+          return {
             quizId:        quiz.id,
             questionText:  qd.question,
             questionType:  'MCQ',
@@ -722,8 +721,9 @@ async function updateCourseQuiz(req, res) {
             correctAnswer: qd.options[correctIdx],
             difficulty:    qd.difficulty || 'MEDIUM',
             order:         i,
-          }, { transaction: t });
-        }
+          };
+        });
+        await AIQuestion.bulkCreate(questionRows, { transaction: t });
         await quiz.update({ numQuestions: questions.length }, { transaction: t });
       }
     });

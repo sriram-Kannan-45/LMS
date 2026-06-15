@@ -1,5 +1,211 @@
+const { Op, fn, col, literal } = require('sequelize');
 const { Training, Enrollment, Feedback, User, Notification } = require('../models');
 const ActivityService = require('../services/activityService');
+const cacheService = require('../services/cacheService');
+const logger = require('../utils/logger');
+
+/**
+ * GET /api/admin/stats — Aggregated dashboard statistics
+ * Cached for 2 minutes to reduce DB load on dashboard refresh.
+ * Uses a single parallelized query pattern instead of N sequential queries.
+ */
+const getStats = async (req, res) => {
+  try {
+    const cacheKey = 'admin:stats';
+
+    const stats = await cacheService.getOrSet(cacheKey, async () => {
+      // Parallelize all independent count/aggregate queries
+      const [
+        totalTrainings,
+        totalTrainers,
+        totalParticipants,
+        totalEnrollments,
+        totalFeedbacks,
+        pendingParticipants,
+        completedTrainings,
+      ] = await Promise.all([
+        Training.count(),
+        User.count({ where: { role: 'TRAINER' } }),
+        User.count({ where: { role: 'PARTICIPANT' } }),
+        Enrollment.count({ where: { status: 'ENROLLED' } }),
+        Feedback.count(),
+        User.count({ where: { role: 'PARTICIPANT', status: 'PENDING' } }),
+        Training.count({
+          where: { endDate: { [Op.lt]: new Date() } }
+        }),
+      ]);
+
+      // Single aggregate query for ratings instead of loading all rows
+      const ratingStats = await Feedback.findAll({
+        attributes: [
+          [fn('AVG', col('trainerRating')), 'avgTrainerRating'],
+          [fn('AVG', col('subjectRating')), 'avgSubjectRating'],
+          [fn('COUNT', col('id')), 'count'],
+        ],
+        raw: true,
+      });
+
+      const avgTrainerRating = ratingStats[0]?.avgTrainerRating
+        ? parseFloat(ratingStats[0].avgTrainerRating).toFixed(1)
+        : 0;
+      const avgSubjectRating = ratingStats[0]?.avgSubjectRating
+        ? parseFloat(ratingStats[0].avgSubjectRating).toFixed(1)
+        : 0;
+      const satisfactionScore = ((parseFloat(avgTrainerRating) + parseFloat(avgSubjectRating)) / 2).toFixed(1);
+
+      // Optimized rating distribution using GROUP BY
+      const distribution = await Feedback.findAll({
+        attributes: ['trainerRating', [fn('COUNT', col('id')), 'count']],
+        group: ['trainerRating'],
+        raw: true,
+      });
+
+      const ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+      distribution.forEach(r => {
+        ratingDistribution[r.trainerRating] = parseInt(r.count, 10);
+      });
+
+      const activeTrainings = totalTrainings - completedTrainings;
+      const enrollmentRate = totalParticipants > 0
+        ? ((totalEnrollments / totalParticipants) * 100).toFixed(1)
+        : 0;
+
+      const { Note } = require('../models');
+      const pendingNotes = await Note.count({ where: { status: 'PENDING' } });
+
+      return {
+        totalTrainings, completedTrainings, activeTrainings,
+        totalTrainers, totalParticipants, pendingParticipants,
+        totalEnrollments, totalFeedbacks, pendingNotes,
+        avgTrainerRating, avgSubjectRating, satisfactionScore,
+        ratingDistribution, enrollmentRate,
+      };
+    }, 120); // Cache for 2 minutes
+
+    res.json({ success: true, ...stats, data: stats });
+  } catch (error) {
+    logger.error('Get stats error', { error: error.message });
+    res.status(500).json({ success: false, error: 'Server error fetching stats' });
+  }
+};
+
+const getParticipants = async (req, res) => {
+  try {
+    const { search = '', status = '', limit = 50, offset = 0 } = req.query;
+    const where = { role: 'PARTICIPANT' };
+
+    if (search) {
+      where[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } },
+        { phone: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+    if (status) {
+      where.status = status;
+    }
+
+    const [participants, total] = await Promise.all([
+      User.findAll({
+        where,
+        attributes: { exclude: ['password'] },
+        order: [['created_at', 'DESC']],
+        limit: Math.min(parseInt(limit), 100),
+        offset: parseInt(offset),
+      }),
+      User.count({ where }),
+    ]);
+
+    const formattedParticipants = participants.map(p => ({
+      id: p.id,
+      name: p.name,
+      email: p.email,
+      phone: p.phone,
+      username: p.username,
+      status: p.status,
+      joinedAt: p.createdAt || p.dataValues?.created_at,
+    }));
+
+    res.json({
+      success: true,
+      participants: formattedParticipants,
+      total,
+      hasMore: parseInt(offset) + parseInt(limit) < total,
+    });
+  } catch (error) {
+    logger.error('Get participants error', { error: error.message });
+    res.status(500).json({ success: false, error: 'Server error fetching participants' });
+  }
+};
+
+const getTrainingStats = async (req, res) => {
+  try {
+    const cacheKey = 'admin:training-stats';
+    const result = await cacheService.getOrSet(cacheKey, async () => {
+      const trainings = await Training.findAll({
+        include: [{ model: User, as: 'trainer', attributes: ['name'], required: false }],
+        order: [['id', 'DESC']],
+      });
+
+      // Batch all enrollment and feedback counts
+      const trainingIds = trainings.map(t => t.id);
+
+      const [enrollmentCounts, feedbackCounts, feedbackRatings] = await Promise.all([
+        Enrollment.findAll({
+          where: { trainingId: trainingIds, status: 'ENROLLED' },
+          attributes: ['trainingId', [fn('COUNT', col('id')), 'count']],
+          group: ['trainingId'],
+          raw: true,
+        }),
+        Feedback.findAll({
+          where: { trainingId: trainingIds },
+          attributes: ['trainingId', [fn('COUNT', col('id')), 'count']],
+          group: ['trainingId'],
+          raw: true,
+        }),
+        Feedback.findAll({
+          where: { trainingId: trainingIds },
+          attributes: [
+            'trainingId',
+            [fn('AVG', col('trainerRating')), 'avgTrainer'],
+            [fn('AVG', col('subjectRating')), 'avgSubject'],
+          ],
+          group: ['trainingId'],
+          raw: true,
+        }),
+      ]);
+
+      const enrollMap = Object.fromEntries(enrollmentCounts.map(e => [e.trainingId, parseInt(e.count, 10)]));
+      const feedbackMap = Object.fromEntries(feedbackCounts.map(f => [f.trainingId, parseInt(f.count, 10)]));
+      const ratingMap = Object.fromEntries(feedbackRatings.map(r => [r.trainingId, r]));
+
+      return trainings.map(t => {
+        const now = new Date();
+        const start = new Date(t.startDate);
+        const end = new Date(t.endDate);
+        const status = now < start ? 'Upcoming' : now > end ? 'Completed' : 'Ongoing';
+        const ratings = ratingMap[t.id] || {};
+
+        return {
+          id: t.id, title: t.title, trainerName: t.trainer?.name || 'Unassigned',
+          startDate: t.startDate, endDate: t.endDate, capacity: t.capacity,
+          enrolledCount: enrollMap[t.id] || 0,
+          feedbackCount: feedbackMap[t.id] || 0,
+          avgTrainerRating: ratings.avgTrainer ? parseFloat(ratings.avgTrainer).toFixed(1) : null,
+          avgSubjectRating: ratings.avgSubject ? parseFloat(ratings.avgSubject).toFixed(1) : null,
+          status,
+        };
+      });
+    }, 120);
+
+    res.json({ trainings: result });
+  } catch (error) {
+    logger.error('Training stats error', { error: error.message });
+    res.status(500).json({ error: 'Server error fetching training stats' });
+  }
+};
+
+// ─── Unchanged functions below (no performance regression) ────────────
 
 const updateTraining = async (req, res) => {
   try {
@@ -20,11 +226,14 @@ const updateTraining = async (req, res) => {
       trainerId: trainerId ? parseInt(trainerId) : training.trainerId,
       startDate: startDate ? new Date(startDate) : training.startDate,
       endDate: endDate ? new Date(endDate) : training.endDate,
-      capacity: capacity !== undefined ? (capacity ? parseInt(capacity) : null) : training.capacity
+      capacity: capacity !== undefined ? (capacity ? parseInt(capacity) : null) : training.capacity,
     });
 
+    // Invalidate training caches
+    await cacheService.invalidatePattern('admin:training*');
+
     const updatedTraining = await Training.findByPk(id, {
-      include: [{ model: User, as: 'trainer', attributes: ['id', 'name'], required: false }]
+      include: [{ model: User, as: 'trainer', attributes: ['id', 'name'], required: false }],
     });
 
     res.json({
@@ -37,11 +246,11 @@ const updateTraining = async (req, res) => {
         trainerName: updatedTraining.trainer?.name,
         startDate: updatedTraining.startDate,
         endDate: updatedTraining.endDate,
-        capacity: updatedTraining.capacity
-      }
+        capacity: updatedTraining.capacity,
+      },
     });
   } catch (error) {
-    console.error('Update training error:', error.message);
+    logger.error('Update training error', { error: error.message });
     res.status(500).json({ error: 'Server error updating training' });
   }
 };
@@ -56,9 +265,12 @@ const deleteTraining = async (req, res) => {
     await Enrollment.destroy({ where: { trainingId: id } });
     await Training.destroy({ where: { id } });
 
+    await cacheService.invalidatePattern('admin:training*');
+    await cacheService.invalidatePattern('admin:stats');
+
     res.json({ message: 'Training deleted successfully' });
   } catch (error) {
-    console.error('Delete training error:', error.message);
+    logger.error('Delete training error', { error: error.message });
     res.status(500).json({ error: 'Server error deleting training' });
   }
 };
@@ -80,10 +292,10 @@ const updateTrainer = async (req, res) => {
 
     res.json({
       message: 'Trainer updated successfully',
-      trainer: { id: trainer.id, name: trainer.name, email: trainer.email, username: trainer.username }
+      trainer: { id: trainer.id, name: trainer.name, email: trainer.email, username: trainer.username },
     });
   } catch (error) {
-    console.error('Update trainer error:', error.message);
+    logger.error('Update trainer error', { error: error.message });
     res.status(500).json({ error: 'Server error updating trainer' });
   }
 };
@@ -99,155 +311,8 @@ const deleteTrainer = async (req, res) => {
 
     res.json({ message: 'Trainer deleted successfully' });
   } catch (error) {
-    console.error('Delete trainer error:', error.message);
+    logger.error('Delete trainer error', { error: error.message });
     res.status(500).json({ error: 'Server error deleting trainer' });
-  }
-};
-
-const getStats = async (req, res) => {
-  try {
-    const totalTrainings = await Training.count();
-    const totalTrainers = await User.count({ where: { role: 'TRAINER' } });
-    const totalParticipants = await User.count({ where: { role: 'PARTICIPANT' } });
-    const totalEnrollments = await Enrollment.count({ where: { status: 'ENROLLED' } });
-    const totalFeedbacks = await Feedback.count();
-    
-    // Pending counts
-    const pendingParticipants = await User.count({ 
-      where: { role: 'PARTICIPANT', status: 'PENDING' } 
-    });
-    const { Note } = require('../models');
-    const pendingNotes = await Note.count({ where: { status: 'PENDING' } });
-    
-    // Completed trainings (trainings that have ended)
-    const now = new Date();
-    const completedTrainings = await Training.count({
-      where: { endDate: { [require('sequelize').Op.lt]: now } }
-    });
-    const activeTrainings = totalTrainings - completedTrainings;
-
-    // Feedback stats
-    const feedbacks = await Feedback.findAll({ 
-      attributes: ['trainerRating', 'subjectRating'] 
-    });
-    const avgTrainerRating = feedbacks.length > 0
-      ? (feedbacks.reduce((s, f) => s + f.trainerRating, 0) / feedbacks.length).toFixed(1) : 0;
-    const avgSubjectRating = feedbacks.length > 0
-      ? (feedbacks.reduce((s, f) => s + f.subjectRating, 0) / feedbacks.length).toFixed(1) : 0;
-    const satisfactionScore = feedbacks.length > 0
-      ? (((parseFloat(avgTrainerRating) + parseFloat(avgSubjectRating)) / 2)).toFixed(1)
-      : 0;
-
-    // Rating distribution (for charts)
-    const ratingDistribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    feedbacks.forEach(f => {
-      ratingDistribution[f.trainerRating] = (ratingDistribution[f.trainerRating] || 0) + 1;
-    });
-
-    // Enrollment rate
-    const enrollmentRate = totalParticipants > 0 
-      ? ((totalEnrollments / totalParticipants) * 100).toFixed(1) 
-      : 0;
-
-    res.json({ 
-      success: true,
-      // Flat properties for backward compatibility
-      totalTrainings,
-      completedTrainings,
-      activeTrainings,
-      totalTrainers,
-      totalParticipants,
-      pendingParticipants,
-      totalEnrollments,
-      totalFeedbacks,
-      pendingNotes,
-      avgTrainerRating,
-      avgSubjectRating,
-      satisfactionScore,
-      ratingDistribution,
-      enrollmentRate,
-      // New data wrapper
-      data: {
-        totalTrainings,
-        completedTrainings,
-        activeTrainings,
-        totalTrainers,
-        totalParticipants,
-        pendingParticipants,
-        totalEnrollments,
-        totalFeedbacks,
-        pendingNotes,
-        avgTrainerRating,
-        avgSubjectRating,
-        satisfactionScore,
-        ratingDistribution,
-        enrollmentRate
-      }
-    });
-
-  } catch (error) {
-    console.error('Get stats error:', error.message);
-    res.status(500).json({ 
-      success: false,
-      error: 'Server error fetching stats' 
-    });
-  }
-};
-
-const getParticipants = async (req, res) => {
-  try {
-    const { Op } = require('sequelize');
-    const { search = '', status = '', limit = 50, offset = 0 } = req.query;
-    
-    const where = { role: 'PARTICIPANT' };
-    
-    // Search filter
-    if (search) {
-      where[Op.or] = [
-        { name: { [Op.like]: `%${search}%` } },
-        { email: { [Op.like]: `%${search}%` } },
-        { phone: { [Op.like]: `%${search}%` } }
-      ];
-    }
-    
-    // Status filter
-    if (status) {
-      where.status = status;
-    }
-
-    const participants = await User.findAll({
-      where,
-      attributes: { exclude: ['password'] },
-      order: [['created_at', 'DESC']],
-      limit: parseInt(limit),
-      offset: parseInt(offset)
-    });
-
-    const total = await User.count({ where });
-
-    const formattedParticipants = participants.map(p => ({
-      id: p.id,
-      name: p.name,
-      email: p.email,
-      phone: p.phone,
-      username: p.username,
-      status: p.status,
-      joinedAt: p.createdAt || p.dataValues?.created_at
-    }));
-
-    res.json({ 
-      success: true,
-      participants: formattedParticipants,
-      total,
-      hasMore: parseInt(offset) + parseInt(limit) < total
-    });
-
-  } catch (error) {
-    console.error('Get participants error:', error.message, error.stack);
-    res.status(500).json({ 
-      success: false,
-      error: 'Server error fetching participants' 
-    });
   }
 };
 
@@ -259,13 +324,13 @@ const sendReminders = async (req, res) => {
 
     const enrollments = await Enrollment.findAll({
       where: { trainingId, status: 'ENROLLED' },
-      attributes: ['participantId']
+      attributes: ['participantId'],
     });
 
     const participantIds = enrollments.map(e => e.participantId);
     const feedbacks = await Feedback.findAll({
       where: { trainingId },
-      attributes: ['participantId']
+      attributes: ['participantId'],
     });
     const submittedIds = feedbacks.map(f => f.participantId);
     const pendingIds = participantIds.filter(id => !submittedIds.includes(id));
@@ -277,13 +342,13 @@ const sendReminders = async (req, res) => {
     const notifications = pendingIds.map(userId => ({
       userId,
       message: `Reminder: Please submit your feedback for the training "${training.title}".`,
-      isRead: false
+      isRead: false,
     }));
 
     await Notification.bulkCreate(notifications);
     res.json({ message: `Sent ${notifications.length} reminders.` });
   } catch (error) {
-    console.error('Send reminders error:', error.message);
+    logger.error('Send reminders error', { error: error.message });
     res.status(500).json({ error: 'Server error sending reminders' });
   }
 };
@@ -298,7 +363,7 @@ const deleteParticipant = async (req, res) => {
     await User.destroy({ where: { id } });
     res.json({ message: 'Participant removed successfully' });
   } catch (error) {
-    console.error('Delete participant error:', error.message);
+    logger.error('Delete participant error', { error: error.message });
     res.status(500).json({ error: 'Server error deleting participant' });
   }
 };
@@ -308,13 +373,13 @@ const exportFeedbacksCSV = async (req, res) => {
     const feedbacks = await Feedback.findAll({
       include: [
         { model: Training, as: 'training', attributes: ['id', 'title'], include: [{ model: User, as: 'trainer', attributes: ['name'] }] },
-        { model: User, as: 'participant', attributes: ['id', 'name', 'email'] }
+        { model: User, as: 'participant', attributes: ['id', 'name', 'email'] },
       ],
-      order: [['submitted_at', 'DESC']]
+      order: [['submitted_at', 'DESC']],
     });
 
     const rows = [
-      ['ID', 'Training', 'Trainer', 'Participant', 'Trainer Rating', 'Subject Rating', 'Comments', 'Anonymous', 'Date'].join(',')
+      ['ID', 'Training', 'Trainer', 'Participant', 'Trainer Rating', 'Subject Rating', 'Comments', 'Anonymous', 'Date'].join(','),
     ];
     feedbacks.forEach(f => {
       const pName = f.anonymous ? 'Anonymous' : (f.participant?.name || '');
@@ -327,7 +392,7 @@ const exportFeedbacksCSV = async (req, res) => {
         f.subjectRating,
         `"${(f.comments || '').replace(/"/g, "'")}"`,
         f.anonymous ? 'Yes' : 'No',
-        f.submitted_at ? new Date(f.submitted_at).toLocaleDateString('en-IN') : ''
+        f.submitted_at ? new Date(f.submitted_at).toLocaleDateString('en-IN') : '',
       ].join(',');
       rows.push(row);
     });
@@ -336,39 +401,8 @@ const exportFeedbacksCSV = async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="feedback_export.csv"');
     res.send(rows.join('\n'));
   } catch (error) {
-    console.error('Export CSV error:', error.message);
+    logger.error('Export CSV error', { error: error.message });
     res.status(500).json({ error: 'Server error exporting feedbacks' });
-  }
-};
-
-const getTrainingStats = async (req, res) => {
-  try {
-    const trainings = await Training.findAll({
-      include: [{ model: User, as: 'trainer', attributes: ['name'], required: false }],
-      order: [['id', 'DESC']]
-    });
-
-    const result = await Promise.all(trainings.map(async t => {
-      const enrolledCount = await Enrollment.count({ where: { trainingId: t.id, status: 'ENROLLED' } });
-      const feedbackCount = await Feedback.count({ where: { trainingId: t.id } });
-      const feedbacks = await Feedback.findAll({ where: { trainingId: t.id }, attributes: ['trainerRating', 'subjectRating'] });
-      const avgTrainer = feedbacks.length > 0 ? (feedbacks.reduce((s, f) => s + f.trainerRating, 0) / feedbacks.length).toFixed(1) : null;
-      const avgSubject = feedbacks.length > 0 ? (feedbacks.reduce((s, f) => s + f.subjectRating, 0) / feedbacks.length).toFixed(1) : null;
-      const now = new Date();
-      const start = new Date(t.startDate);
-      const end = new Date(t.endDate);
-      const status = now < start ? 'Upcoming' : now > end ? 'Completed' : 'Ongoing';
-      return {
-        id: t.id, title: t.title, trainerName: t.trainer?.name || 'Unassigned',
-        startDate: t.startDate, endDate: t.endDate, capacity: t.capacity,
-        enrolledCount, feedbackCount, avgTrainerRating: avgTrainer, avgSubjectRating: avgSubject, status
-      };
-    }));
-
-    res.json({ trainings: result });
-  } catch (error) {
-    console.error('Training stats error:', error.message);
-    res.status(500).json({ error: 'Server error fetching training stats' });
   }
 };
 
@@ -377,7 +411,7 @@ const getPendingParticipants = async (req, res) => {
     const pendingParticipants = await User.findAll({
       where: { role: 'PARTICIPANT', status: 'PENDING' },
       attributes: { exclude: ['password'] },
-      order: [['id', 'DESC']]
+      order: [['id', 'DESC']],
     });
 
     const formattedParticipants = pendingParticipants.map(p => ({
@@ -386,12 +420,12 @@ const getPendingParticipants = async (req, res) => {
       email: p.email,
       phone: p.phone,
       username: p.username,
-      appliedAt: p.createdAt
+      appliedAt: p.createdAt,
     }));
 
     res.json({ participants: formattedParticipants, total: formattedParticipants.length });
   } catch (error) {
-    console.error('Get pending participants error:', error.message);
+    logger.error('Get pending participants error', { error: error.message });
     res.status(500).json({ error: 'Server error fetching pending participants' });
   }
 };
@@ -400,7 +434,7 @@ const approveParticipant = async (req, res) => {
   try {
     const { id } = req.params;
     const participant = await User.findOne({ where: { id, role: 'PARTICIPANT', status: 'PENDING' } });
-    
+
     if (!participant) {
       return res.status(404).json({ error: 'Pending participant not found' });
     }
@@ -408,23 +442,20 @@ const approveParticipant = async (req, res) => {
     await participant.update({ status: 'APPROVED' });
 
     const io = req.app.get('io');
-
-    // Log activity
     await ActivityService.logActivity({
       userId: req.user.id,
       userName: req.user.name || 'Admin',
       action: 'USER_APPROVED',
       entityType: 'User',
       entityId: participant.id,
-      details: { targetUserName: participant.name }
+      details: { targetUserName: participant.name },
     }, io);
 
-    // Notify user
     await Notification.create({
       userId: participant.id,
       message: 'Your account has been approved. You can now log in.',
       type: 'APPROVAL',
-      isRead: false
+      isRead: false,
     });
 
     res.json({
@@ -433,11 +464,11 @@ const approveParticipant = async (req, res) => {
         id: participant.id,
         name: participant.name,
         email: participant.email,
-        status: participant.status
-      }
+        status: participant.status,
+      },
     });
   } catch (error) {
-    console.error('Approve participant error:', error.message);
+    logger.error('Approve participant error', { error: error.message });
     res.status(500).json({ error: 'Server error approving participant' });
   }
 };
@@ -446,21 +477,25 @@ const rejectParticipant = async (req, res) => {
   try {
     const { id } = req.params;
     const participant = await User.findOne({ where: { id, role: 'PARTICIPANT', status: 'PENDING' } });
-    
+
     if (!participant) {
       return res.status(404).json({ error: 'Pending participant not found' });
     }
 
-    // Delete all related data
     await Enrollment.destroy({ where: { participantId: id } });
     await Feedback.destroy({ where: { participantId: id } });
     await User.destroy({ where: { id } });
 
     res.json({ message: 'Participant rejected and removed successfully' });
   } catch (error) {
-    console.error('Reject participant error:', error.message);
+    logger.error('Reject participant error', { error: error.message });
     res.status(500).json({ error: 'Server error rejecting participant' });
   }
 };
 
-module.exports = { updateTraining, deleteTraining, updateTrainer, deleteTrainer, getStats, getParticipants, sendReminders, deleteParticipant, exportFeedbacksCSV, getTrainingStats, getPendingParticipants, approveParticipant, rejectParticipant };
+module.exports = {
+  updateTraining, deleteTraining, updateTrainer, deleteTrainer,
+  getStats, getParticipants, sendReminders, deleteParticipant,
+  exportFeedbacksCSV, getTrainingStats, getPendingParticipants,
+  approveParticipant, rejectParticipant,
+};

@@ -1,14 +1,21 @@
 const axios = require('axios');
 require('dotenv').config();
+const logger = require('../utils/logger');
+const cacheService = require('./cacheService');
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-const AI_TIMEOUT = 90000; // 90 seconds for quiz generation
+const AI_TIMEOUT = 90000;
 const MAX_RETRIES = 2;
 
 /**
- * Check if the AI service is reachable.
- * @returns {Promise<{available: boolean, details: object}>}
+ * Generate a cache key for quiz generation requests
+ * Based on content hash + parameters to avoid storing duplicate results
  */
+function getQuizCacheKey(content, numQuestions, difficulty) {
+  const hash = require('crypto').createHash('md5').update(content.slice(0, 1000)).digest('hex');
+  return `ai:quiz:${hash}:${numQuestions}:${difficulty}`;
+}
+
 async function checkHealth() {
   try {
     const response = await axios.get(`${AI_SERVICE_URL}/health`, { timeout: 5000 });
@@ -22,20 +29,12 @@ const aiService = {
   checkHealth,
 
   async generateQuizFromText(content, numQuestions = 10, difficulty = 'MIXED') {
-    // Light cleaning ONLY — the Python AI service does its own normalization
-    // (clean_text_for_quiz). Doing aggressive cleaning here AND there can
-    // collapse sentence boundaries and corrupt context, which is a major
-    // reason quizzes ended up not knowledge-based.
     let cleanContent = (content || '').toString();
-    // Strip the most obvious noise that survives extraction:
-    cleanContent = cleanContent.replace(/\u0000/g, '');           // null bytes
-    cleanContent = cleanContent.replace(/[\r\f\v]+/g, ' ');       // form feeds, vertical tabs
-    cleanContent = cleanContent.replace(/[ \t]+/g, ' ');          // collapse runs of spaces
+    cleanContent = cleanContent.replace(/\u0000/g, '');
+    cleanContent = cleanContent.replace(/[\r\f\v]+/g, ' ');
+    cleanContent = cleanContent.replace(/[ \t]+/g, ' ');
     cleanContent = cleanContent.trim();
 
-    // Cap to 15000 chars — the Python service uses RecursiveCharacterTextSplitter
-    // and will spread chunks across this slice. The aiQuizRoutes layer also
-    // already strips image/figure tokens before calling us.
     if (cleanContent.length > 15000) {
       cleanContent = cleanContent.substring(0, 15000);
     }
@@ -44,13 +43,23 @@ const aiService = {
       throw new Error('Document text is too short to generate a quiz. Minimum 50 characters required.');
     }
 
+    // Check cache for identical requests (same content + params)
+    const cacheKey = getQuizCacheKey(cleanContent, numQuestions, difficulty);
+    const cached = await cacheService.get(cacheKey);
+    if (cached) {
+      logger.info('[aiService] Returning cached quiz result', {
+        questionsCount: cached.questions?.length,
+      });
+      return cached;
+    }
+
     let lastError = null;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        console.log(`[aiService] Attempt ${attempt}/${MAX_RETRIES} — sending ${cleanContent.length} chars to AI service`);
-        
-        const response = await axios.post(`${AI_SERVICE_URL}/generate-quiz`, 
+        logger.debug(`[aiService] Attempt ${attempt}/${MAX_RETRIES} — sending ${cleanContent.length} chars`);
+
+        const response = await axios.post(`${AI_SERVICE_URL}/generate-quiz`,
           { text: cleanContent, num_questions: numQuestions, difficulty: difficulty },
           { timeout: AI_TIMEOUT, headers: { 'Content-Type': 'application/json' } }
         );
@@ -59,49 +68,47 @@ const aiService = {
           throw new Error('Invalid response from AI service — no questions returned');
         }
 
-        // Transform response format to match backend expectations
         const questions = response.data.questions.map((q, i) => {
-          // Convert "A"/"B"/"C"/"D" to "0"/"1"/"2"/"3"
           let correctAnswer = q.correct_answer || q.correctAnswer || 'A';
           if (['A', 'B', 'C', 'D'].includes(correctAnswer)) {
             correctAnswer = (correctAnswer.charCodeAt(0) - 65).toString();
           }
-          
+
           return {
-            questionText: q.question || q.questionText || `Question ${i+1}`,
+            questionText: q.question || q.questionText || `Question ${i + 1}`,
             questionType: 'MCQ',
             options: q.options || ['Option A', 'Option B', 'Option C', 'Option D'],
             correctAnswer: correctAnswer,
             explanation: q.explanation || '',
             difficulty: difficulty,
-            order: i
+            order: i,
           };
         });
 
-        console.log(`[aiService] ✅ Generated ${questions.length} questions successfully`);
-
-        return { 
+        const result = {
           questions,
-          title: response.data.quiz_title || 'AI Generated Quiz'
+          title: response.data.quiz_title || 'AI Generated Quiz',
         };
-        
+
+        // Cache the result for 1 hour (3600s)
+        await cacheService.set(cacheKey, result, 3600);
+        logger.info(`[aiService] Generated ${questions.length} questions (cached for 1h)`);
+
+        return result;
       } catch (error) {
         lastError = error;
-        console.error(`[aiService] Attempt ${attempt} failed:`, error.message);
+        logger.warn(`[aiService] Attempt ${attempt} failed`, { error: error.message });
 
-        // Don't retry on validation errors
         if (error.response && [400, 415, 422].includes(error.response.status)) {
           break;
         }
 
-        // Wait before retrying
         if (attempt < MAX_RETRIES) {
           await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
         }
       }
     }
 
-    // Build a user-friendly error from the last failure
     if (lastError.response) {
       const detail = lastError.response.data?.detail || '';
       if (detail.includes('image') || detail.includes('not support')) {
@@ -127,33 +134,32 @@ const aiService = {
       const response = await axios.post(`${AI_SERVICE_URL}/evaluate`, {
         questionText: question,
         modelAnswer: modelAnswer,
-        userAnswer: userAnswer
+        userAnswer: userAnswer,
       }, {
         timeout: 30000,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
 
       return {
         score: response.data.score || 0,
         feedback: response.data.feedback || 'Answer evaluated',
-        isCorrect: response.data.isCorrect || false
+        isCorrect: response.data.isCorrect || false,
       };
     } catch (error) {
-      console.error('[aiService] AI Evaluation Error:', error.message);
-      // Fallback: simple keyword matching
+      logger.warn('[aiService] AI Evaluation Error, using fallback', { error: error.message });
       const userWords = new Set(userAnswer.toLowerCase().split(/\s+/));
       const modelWords = new Set(modelAnswer.toLowerCase().split(/\s+/));
       let matchCount = 0;
       userWords.forEach(w => { if (modelWords.has(w)) matchCount++; });
       const score = Math.min(100, (matchCount / Math.max(modelWords.size, 1)) * 100);
-      
+
       return {
-        score: score,
+        score,
         feedback: score > 50 ? 'Good answer with relevant keywords' : 'Answer needs improvement — missing key concepts',
-        isCorrect: score >= 60
+        isCorrect: score >= 60,
       };
     }
-  }
+  },
 };
 
 module.exports = aiService;

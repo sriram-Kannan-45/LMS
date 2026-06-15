@@ -1,24 +1,23 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Loader2 } from 'lucide-react'
 import AIQuizList from '../components/AIQuizList'
-import QuizTaking from '../components/QuizTaking'
 import { useToast } from '../components/Toast'
-import { API_BASE as API } from '../api/api'
+import { API_BASE as API, requestAll, getAuthHeaders } from '../api'
+import SkeletonCard from '../components/SkeletonCard'
+import { SkeletonStats } from '../components/Skeleton'
 
-// ─── New student components ─────────────────────────────────────────────────
-import OverviewSection from '../components/student/overview/OverviewSection'
-import AvailableCourses from '../components/student/dashboard/AvailableCourses'
-import MyEnrollments from '../components/student/dashboard/MyEnrollments'
-import FeedbackSection from '../components/student/dashboard/FeedbackSection'
-import MyFeedbacks from '../components/student/dashboard/MyFeedbacks'
-import LeaderboardSection from '../components/student/leaderboard/LeaderboardSection'
-import AchievementsSection from '../components/student/achievements/AchievementsSection'
-import LessonsSection from '../components/student/lessons/LessonsSection'
-import ProfileSection from '../components/student/profile/ProfileSection'
-import ParticipantCourses from './ParticipantCourses'
-import ParticipantCodingList from '../components/coding-assessment/ParticipantCodingList'
-import { useContinueLearning } from '../hooks/useContinueLearning'
+// Lazy-load large section components
+const OverviewSection = React.lazy(() => import('../components/student/overview/OverviewSection'))
+const AvailableCourses = React.lazy(() => import('../components/student/dashboard/AvailableCourses'))
+const MyEnrollments = React.lazy(() => import('../components/student/dashboard/MyEnrollments'))
+const FeedbackSection = React.lazy(() => import('../components/student/dashboard/FeedbackSection'))
+const MyFeedbacks = React.lazy(() => import('../components/student/dashboard/MyFeedbacks'))
+const LeaderboardSection = React.lazy(() => import('../components/student/leaderboard/LeaderboardSection'))
+const AchievementsSection = React.lazy(() => import('../components/student/achievements/AchievementsSection'))
+const LessonsSection = React.lazy(() => import('../components/student/lessons/LessonsSection'))
+const ProfileSection = React.lazy(() => import('../components/student/profile/ProfileSection'))
+const ParticipantCodingList = React.lazy(() => import('../components/coding-assessment/ParticipantCodingList'))
 
 const fadeVariant = {
   initial: { opacity: 0, y: 8 },
@@ -26,14 +25,13 @@ const fadeVariant = {
   exit:    { opacity: 0, y: -8 },
 }
 
-/**
- * ParticipantDashboard — thin orchestrator for the student LMS.
- * Holds shared data (trainings, enrollments, feedbacks, quizzes) and routes
- * each tab to its dedicated section component.
- *
- * Backend contracts (unchanged): /api/trainings, /api/participant/*, /api/feedback,
- * /api/survey, /api/ai-quiz/*. All existing flows preserved.
- */
+const SectionLoader = () => (
+  <div className="space-y-4 p-4">
+    <SkeletonStats />
+    <SkeletonCard variant="training" count={2} />
+  </div>
+)
+
 function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
   const { success, error: showError } = useToast()
 
@@ -42,75 +40,64 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
   const [feedbacks, setFeedbacks] = useState([])
   const [quizzes, setQuizzes] = useState([])
   const [loading, setLoading] = useState(false)
-  const { track } = useContinueLearning()
+  const [initialLoading, setInitialLoading] = useState(true)
+  const mountedRef = useRef(true)
 
   const auth = useCallback(
-    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${user?.token || ''}` }),
+    () => getAuthHeaders(user),
     [user]
   )
 
-  const handleResponse = useCallback(async (res) => {
-    if (res.status === 401) {
-      onLogout?.()
-      throw new Error('Session expired. Please log in again.')
-    }
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Request failed')
-    return data
-  }, [onLogout])
+  // ─── Parallel data fetching ────────────────────────────────────────────
+  const fetchAll = useCallback(async () => {
+    const headers = auth()
+    if (!headers.Authorization) return
 
-  // ─── Fetchers ─────────────────────────────────────────────────────────────
-  const fetchTrainings = useCallback(async () => {
     try {
-      const r = await fetch(`${API}/trainings`, { headers: auth() })
-      const d = await handleResponse(r)
-      setTrainings(Array.isArray(d) ? d : (d.trainings || []))
-    } catch (e) {
-      console.error('fetchTrainings error:', e.message)
-    }
-  }, [auth, handleResponse])
+      const results = await requestAll([
+        { url: `${API}/trainings`, options: { headers } },
+        { url: `${API}/participant/enrollments`, options: { headers } },
+        { url: `${API}/participant/feedbacks`, options: { headers } },
+        { url: `${API}/ai-quiz/participant/quizzes`, options: { headers } },
+      ])
 
-  const fetchEnrollments = useCallback(async () => {
-    try {
-      const r = await fetch(`${API}/participant/enrollments`, { headers: auth() })
-      const d = await handleResponse(r)
-      setEnrollments(d.enrollments || [])
-    } catch (e) {
-      console.error('fetchEnrollments error:', e.message)
-    }
-  }, [auth, handleResponse])
+      if (!mountedRef.current) return
 
-  const fetchFeedbacks = useCallback(async () => {
-    try {
-      const r = await fetch(`${API}/participant/feedbacks`, { headers: auth() })
-      const d = await handleResponse(r)
-      setFeedbacks(d.feedbacks || [])
+      results.forEach(r => {
+        if (r.status === 'fulfilled' && r.data) {
+          switch (true) {
+            case r.url.includes('/trainings'):
+              setTrainings(Array.isArray(r.data) ? r.data : (r.data.trainings || []))
+              break
+            case r.url.includes('/enrollments'):
+              setEnrollments(r.data.enrollments || [])
+              break
+            case r.url.includes('/feedbacks'):
+              setFeedbacks(r.data.feedbacks || [])
+              break
+            case r.url.includes('/quizzes'):
+              setQuizzes(r.data.quizzes || [])
+              break
+          }
+        }
+      })
     } catch (e) {
-      console.error('fetchFeedbacks error:', e.message)
+      if (mountedRef.current) showError('Failed to load dashboard data')
+    } finally {
+      if (mountedRef.current) setInitialLoading(false)
     }
-  }, [auth, handleResponse])
-
-  const fetchQuizzes = useCallback(async () => {
-    try {
-      const r = await fetch(`${API}/ai-quiz/participant/quizzes`, { headers: auth() })
-      const d = await handleResponse(r)
-      setQuizzes(d.quizzes || [])
-    } catch (e) {
-      console.error('fetchQuizzes error:', e.message)
-    }
-  }, [auth, handleResponse])
-
-  const fetchAll = useCallback(() => {
-    fetchTrainings(); fetchEnrollments(); fetchFeedbacks(); fetchQuizzes()
-  }, [fetchTrainings, fetchEnrollments, fetchFeedbacks, fetchQuizzes])
+  }, [auth, showError])
 
   useEffect(() => {
+    mountedRef.current = true
     if (user && user.token) {
       fetchAll()
+    } else {
+      setInitialLoading(false)
     }
+    return () => { mountedRef.current = false }
   }, [fetchAll, user])
 
-  // Guard clause for missing/unauthorized user session
   if (!user || !user.token) {
     return (
       <div style={{
@@ -131,17 +118,16 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
   const tab = activeTab || 'overview'
   const handleTabChange = (next) => onTabChange?.(next)
 
-  // ─── Mutations ────────────────────────────────────────────────────────────
+  // ─── Mutations with cache invalidation ────────────────────────────────
   const handleEnroll = async (trainingId) => {
     setLoading(true)
     try {
       const r = await fetch(`${API}/participant/enroll`, {
         method: 'POST', headers: auth(), body: JSON.stringify({ trainingId }),
       })
-      const d = await handleResponse(r)
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Enrollment failed')
       success('Enrolled successfully!')
-      const t = trainings.find((x) => x.id === trainingId)
-      if (t) track({ type: 'course', id: trainingId, title: t.title, subtitle: t.trainerName })
       fetchAll()
     } catch (e) { showError(e.message) }
     finally { setLoading(false) }
@@ -153,7 +139,8 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       const r = await fetch(`${API}/participant/enroll/${trainingId}`, {
         method: 'DELETE', headers: auth(),
       })
-      const d = await handleResponse(r)
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Unenrollment failed')
       success('Course unenrolled.')
       fetchAll()
     } catch (e) { showError(e.message) }
@@ -163,10 +150,9 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
   const fetchSurveyQuestions = async (trainingId) => {
     try {
       const r = await fetch(`${API}/survey/${trainingId}`, { headers: auth() })
-      const d = await handleResponse(r)
+      const d = await r.json()
       return d.questions || []
-    } catch (e) {
-      console.error('fetchSurveyQuestions error:', e.message)
+    } catch {
       return []
     }
   }
@@ -174,74 +160,67 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
   const handleSubmitFeedback = async ({ enrollment, fbForm, surveyAnswers }) => {
     setLoading(true)
     try {
-      const payload = { trainingId: enrollment.trainingId, ...fbForm, surveyAnswers }
       const r = await fetch(`${API}/feedback`, {
-        method: 'POST', headers: auth(), body: JSON.stringify(payload),
+        method: 'POST', headers: auth(), body: JSON.stringify({
+          trainingId: enrollment.trainingId, ...fbForm, surveyAnswers,
+        }),
       })
-      const d = await handleResponse(r)
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Feedback failed')
       success(d.message || 'Feedback submitted successfully!')
-      fetchFeedbacks()
+      fetchAll()
     } catch (e) { showError(e.message); throw e }
     finally { setLoading(false) }
   }
 
-  // ─── Quiz state ─────────────────────────────────────────────────────────
-  // The secure assessment flow (consent gate → fullscreen → live exam) now
-  // lives entirely inside <AIQuizzesDashboard /> — we no longer render
-  // <QuizTaking /> from this page. handleStartQuiz remains only as a hook
-  // for the continue-learning tracker; the dashboard renders normally.
-  const handleStartQuiz = (attemptId, quiz) => {
-    if (quiz?.id) track({ type: 'quiz', id: quiz.id, title: quiz.title })
-  }
-  const handleQuizComplete = (result) => {
-    if (result?.percentage != null) success(`Quiz submitted! Score: ${result.percentage.toFixed(1)}%`)
-    fetchQuizzes()
-  }
+  const handleStartQuiz = (attemptId, quiz) => {}
 
-  // ─── Continue-learning click handler ──────────────────────────────────────
-  const handleResume = (item) => {
-    if (item.type === 'course') handleTabChange('available')
-    else if (item.type === 'quiz') handleTabChange('ai-quizzes')
-    else if (item.type === 'lesson') handleTabChange('lessons')
-  }
+  if (initialLoading) return <SectionLoader />
 
   return (
     <div className="dashboard" style={{ padding: 0 }}>
       {tab === 'overview' && (
         <motion.div key="overview" {...fadeVariant} transition={{ duration: 0.25 }}>
-          <OverviewSection
-            user={user}
-            trainings={trainings}
-            enrollments={enrollments}
-            quizzes={quizzes}
-            onGoToCourses={() => handleTabChange('available')}
-            onResume={handleResume}
-            onClickCourse={() => handleTabChange('myEnrollments')}
-            onClickQuiz={() => handleTabChange('ai-quizzes')}
-          />
+          <React.Suspense fallback={<SectionLoader />}>
+            <OverviewSection
+              user={user}
+              trainings={trainings}
+              enrollments={enrollments}
+              quizzes={quizzes}
+              onGoToCourses={() => handleTabChange('available')}
+              onClickCourse={() => handleTabChange('myEnrollments')}
+              onClickQuiz={() => handleTabChange('ai-quizzes')}
+            />
+          </React.Suspense>
         </motion.div>
       )}
 
       {tab === 'available' && (
         <motion.div key="available" {...fadeVariant} transition={{ duration: 0.25 }}>
-          <AvailableCourses
-            trainings={trainings}
-            enrollments={enrollments}
-            loading={loading}
-            onEnroll={handleEnroll}
-          />
+          <React.Suspense fallback={<SectionLoader />}>
+            <AvailableCourses
+              trainings={trainings}
+              enrollments={enrollments}
+              loading={loading}
+              onEnroll={handleEnroll}
+            />
+          </React.Suspense>
         </motion.div>
       )}
 
       {tab === 'myEnrollments' && (
         <motion.div key="myEnrollments" {...fadeVariant} transition={{ duration: 0.25 }}>
-          <ParticipantCourses user={user} />
+          <React.Suspense fallback={<SectionLoader />}>
+            <ParticipantCourses user={user} />
+          </React.Suspense>
         </motion.div>
       )}
 
       {tab === 'lessons' && (
         <motion.div key="lessons" {...fadeVariant} transition={{ duration: 0.25 }}>
-          <LessonsSection />
+          <React.Suspense fallback={<SectionLoader />}>
+            <LessonsSection />
+          </React.Suspense>
         </motion.div>
       )}
 
@@ -253,53 +232,64 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
 
       {tab === 'coding' && (
         <motion.div key="coding" {...fadeVariant} transition={{ duration: 0.25 }}>
-          <ParticipantCodingList />
+          <React.Suspense fallback={<SectionLoader />}>
+            <ParticipantCodingList />
+          </React.Suspense>
         </motion.div>
       )}
 
       {tab === 'leaderboard' && (
         <motion.div key="leaderboard" {...fadeVariant} transition={{ duration: 0.25 }}>
-          <LeaderboardSection
-            enrollments={enrollments}
-            quizzes={quizzes}
-            currentUserId={user?.id}
-          />
+          <React.Suspense fallback={<SectionLoader />}>
+            <LeaderboardSection
+              enrollments={enrollments}
+              quizzes={quizzes}
+              currentUserId={user?.id}
+            />
+          </React.Suspense>
         </motion.div>
       )}
 
       {tab === 'achievements' && (
         <motion.div key="achievements" {...fadeVariant} transition={{ duration: 0.25 }}>
-          <AchievementsSection user={user} enrollmentsCount={enrollments.length} />
+          <React.Suspense fallback={<SectionLoader />}>
+            <AchievementsSection user={user} enrollmentsCount={enrollments.length} />
+          </React.Suspense>
         </motion.div>
       )}
 
       {tab === 'feedback' && (
         <motion.div key="feedback" {...fadeVariant} transition={{ duration: 0.25 }}>
-          <FeedbackSection
-            enrollments={enrollments}
-            feedbacks={feedbacks}
-            loading={loading}
-            onSubmit={handleSubmitFeedback}
-            fetchQuestions={fetchSurveyQuestions}
-          />
+          <React.Suspense fallback={<SectionLoader />}>
+            <FeedbackSection
+              enrollments={enrollments}
+              feedbacks={feedbacks}
+              loading={loading}
+              onSubmit={handleSubmitFeedback}
+              fetchQuestions={fetchSurveyQuestions}
+            />
+          </React.Suspense>
         </motion.div>
       )}
 
       {tab === 'myFeedbacks' && (
         <motion.div key="myFeedbacks" {...fadeVariant} transition={{ duration: 0.25 }}>
-          <MyFeedbacks feedbacks={feedbacks} loading={loading} />
+          <React.Suspense fallback={<SectionLoader />}>
+            <MyFeedbacks feedbacks={feedbacks} loading={loading} />
+          </React.Suspense>
         </motion.div>
       )}
 
       {tab === 'profile' && (
         <motion.div key="profile" {...fadeVariant} transition={{ duration: 0.25 }}>
-          <ProfileSection
-            user={user}
-            enrollments={enrollments}
-            quizzes={quizzes}
-            onResume={handleResume}
-            onTabChange={handleTabChange}
-          />
+          <React.Suspense fallback={<SectionLoader />}>
+            <ProfileSection
+              user={user}
+              enrollments={enrollments}
+              quizzes={quizzes}
+              onTabChange={handleTabChange}
+            />
+          </React.Suspense>
         </motion.div>
       )}
     </div>

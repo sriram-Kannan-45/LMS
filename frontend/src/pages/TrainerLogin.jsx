@@ -7,9 +7,9 @@ import {
 } from 'lucide-react'
 import { useToast } from '../components/Toast'
 import { API } from '../api/api'
-import greenVideo from '../assets/green.mp4'
-
 function TrainerLogin({ onLogin }) {
+  const [greenVideo, setGreenVideo] = useState('')
+  useEffect(() => { import('../assets/green.mp4').then(m => setGreenVideo(m.default)).catch(() => {}) }, [])
   const [form, setForm] = useState({ email: '', password: '', role: 'TRAINER' })
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)

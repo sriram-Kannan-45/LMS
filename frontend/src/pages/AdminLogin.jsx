@@ -7,9 +7,11 @@ import {
 } from 'lucide-react'
 import { useToast } from '../components/Toast'
 import { API } from '../api/api'
-import redVideo from '../assets/red.mp4'
 
 function AdminLogin({ onLogin }) {
+  const [redVideo, setRedVideo] = useState('')
+  // Lazy-load background video to reduce initial bundle size
+  useEffect(() => { import('../assets/red.mp4').then(m => setRedVideo(m.default)).catch(() => {}) }, [])
   const [form, setForm] = useState({ email: '', password: '', role: 'ADMIN' })
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)

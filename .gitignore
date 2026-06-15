@@ -25,14 +25,17 @@ Thumbs.db
 npm-debug.log*
 
 # DB backups / dumps (contain user data)
-*.sql
 *.sql.gz
-backup-*
+**/backup-*
+# Allow migration files, ignore root-level scripts
+/dbscript.sql
+/seed-data.sql
+/render.txt
 
 # Environment
 .env
-.env.local
-.env.*.local
+.env.*
+form.env
 
 # Python
 __pycache__/
@@ -41,6 +44,8 @@ __pycache__/
 
 # Misc
 *.class
+*.zip
+*.xlsx
 target/
 build/
 out/

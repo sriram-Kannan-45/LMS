@@ -3,6 +3,9 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const http = require('http');
+const compression = require('compression');
+const responseTime = require('response-time');
+const helmet = require('helmet');
 const bcrypt = require('bcryptjs');
 const { User } = require('./models');
 const { sequelize, connectDB } = require('./config/db');
@@ -12,6 +15,13 @@ const {
   setupRedisAdapter,
   cleanupSocket,
 } = require('./config/socket');
+const {
+  performanceMonitor,
+  requestTimeout,
+  cacheControl,
+  compressionConfig,
+} = require('./middleware/performance');
+const cacheService = require('./services/cacheService');
 
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
@@ -37,9 +47,26 @@ const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
 
-// CORS — allow common Vite dev ports plus any origin in FRONTEND_URL.
-// Vite picks 5174/5175/... when 5173 is busy, so we whitelist a small range
-// to avoid "Cannot connect to server" failures during local dev.
+// ─── Global Middleware (order matters — performant middleware first) ─
+
+// 1. Security headers (Helmet) — improves Lighthouse score
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+  contentSecurityPolicy: false, // Disabled for SPA with inline styles
+}));
+
+// 2. Compression — gzip/brotli for all responses > 1KB
+app.use(compression(compressionConfig()));
+
+// 3. Response time header (X-Response-Time)
+app.use(responseTime({ suffix: false }));
+
+// 3. Performance monitoring & timeout
+app.use(performanceMonitor);
+app.use(requestTimeout);
+
+// 4. CORS
 const allowedOrigins = new Set([
   'http://localhost:5173',
   'http://localhost:5174',
@@ -52,30 +79,27 @@ const allowedOrigins = new Set([
 
 app.use(cors({
   origin: (origin, cb) => {
-    // Allow same-origin / curl / server-to-server (no Origin header)
     if (!origin) return cb(null, true);
     if (allowedOrigins.has(origin)) return cb(null, true);
     return cb(new Error(`CORS: origin ${origin} not allowed`));
   },
-  credentials: true
+  credentials: true,
 }));
-// Body parsers — limit raised to 10 MB to safely accommodate participant
-// avatar payloads (sent as base-64 data URLs). The frontend now compresses
-// avatars to ~400×400 JPEG before upload, so real payloads are typically
-// <100 KB; this header is the safety net.
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve uploaded files statically
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// 5. Body parsers with reduced limit for non-upload routes
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// Global request logger
+// 6. Cache control headers for static assets
+app.use('/uploads', cacheControl(86400), express.static(path.join(__dirname, '../uploads')));
+
+// 7. Request logging (using logger, not console.log)
 app.use((req, res, next) => {
-  console.log('➡️ API HIT:', req.method, req.originalUrl);
+  logger.debug('API HIT', { method: req.method, url: req.originalUrl });
   next();
 });
 
-// ROUTE MOUNTING (order matters — more specific first)
+// ─── Route Mounting ────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/trainer', trainerCourseRoutes);
@@ -96,50 +120,70 @@ app.use('/api/proctor', proctoringRoutes);
 app.use('/api/lessons', lessonRoutes);
 app.use('/api/coding', codingAssessmentRoutes);
 
-// Health check for AI service (separate path to avoid conflict with router)
-app.get('/api/ai/health', async (req, res) => {
+// Cache-aware health check for AI service
+app.get('/api/ai/health', cacheControl(30), async (req, res) => {
   try {
     const aiService = require('./services/aiService');
     const result = await aiService.checkHealth();
     if (result.available) {
       res.json({ status: 'ok', aiService: result.details });
     } else {
-      res.status(503).json({ 
-        status: 'error', 
+      res.status(503).json({
+        status: 'error',
         message: 'AI service is not responding',
         hint: 'Start the Python service: cd ai-service && python main.py'
       });
     }
   } catch (error) {
-    res.status(503).json({ 
-      status: 'error', 
+    res.status(503).json({
+      status: 'error',
       message: 'AI service unavailable',
       hint: 'Start the Python service: cd ai-service && python main.py'
     });
   }
 });
 
-// Custom route for updating profile exactly as requested
+// Custom route for updating profile
 const profileController = require('./controllers/profileController');
 const upload = require('./middleware/upload');
 const authenticateToken = require('./middleware/auth');
 app.put('/api/update-profile', authenticateToken, upload.single('profilePic'), profileController.updateProfile);
 
-// Top-level /api/test-mail alias (matches the spec's debugging step #5)
+// Top-level test-mail alias
 const { testMail } = require('./controllers/forgotPasswordController');
 app.get('/api/test-mail', testMail);
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+// Health check with cache control
+app.get('/health', cacheControl(10), (req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    cache: cacheService.getStats(),
+    uptime: process.uptime(),
+  });
 });
 
-// ─── Global error handler ────────────────────────────────────────────────────
-app.use((err, req, res, next) => {
-  console.error('❌ Unhandled error on', req.method, req.originalUrl);
-  console.error(err.stack);
+// Performance stats endpoint (admin only)
+app.get('/api/admin/performance', authenticateToken, (req, res) => {
+  if (req.user.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  const { getSlowestEndpoints } = require('./middleware/performance');
+  res.json({
+    cache: cacheService.getStats(),
+    slowEndpoints: getSlowestEndpoints(20),
+  });
+});
 
-  // Multer file-type / size errors
+// ─── Global error handler ──────────────────────────────────────────
+app.use((err, req, res, next) => {
+  logger.error('Unhandled error', {
+    method: req.method,
+    url: req.originalUrl,
+    error: err.message,
+    stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined,
+  });
+
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ success: false, message: 'File too large. Maximum size is 5 MB.' });
   }
@@ -154,9 +198,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Global 404 fallback with detailed logging
+// 404 handler
 app.use((req, res) => {
-  console.error('❌ ENDPOINT NOT FOUND:', req.method, req.originalUrl);
+  logger.warn('Endpoint not found', { method: req.method, url: req.originalUrl });
   res.status(404).json({
     error: 'Endpoint not found',
     path: req.originalUrl,
@@ -164,19 +208,18 @@ app.use((req, res) => {
   });
 });
 
+// ─── Server Startup ────────────────────────────────────────────────
 const startServer = async () => {
   try {
     await connectDB();
-    // ✅ IMPORTANT: Never use alter: true in production
-    // See src/config/db.js for detailed explanation
-    // Sync is already handled safely in connectDB()
-    // await sequelize.sync({ alter: false });
-
-    // Schema is pre-created via dbscript.sql — Sequelize sync is not needed.
-    // The following ensures models are loaded and associated.
     require('./models');
 
-    // Assessment session expiry job — runs every 5 min
+    // Initialize cache service
+    await cacheService.initialize();
+    app.set('cache', cacheService);
+    logger.info('Cache service initialized', { mode: cacheService.getStats().mode });
+
+    // Background jobs (started with .unref() so they don't block shutdown)
     try {
       const { startAssessmentSessionExpiryJob } = require('./jobs/expireAssessmentSessions');
       startAssessmentSessionExpiryJob({ intervalMs: 5 * 60_000, logger });
@@ -184,7 +227,6 @@ const startServer = async () => {
       logger.warn('Could not start assessment session expiry job', { error: e.message });
     }
 
-    // Background heartbeat reaper (60s)
     try {
       const proctoring = require('./services/proctoringService');
       setInterval(() => {
@@ -194,11 +236,9 @@ const startServer = async () => {
       }, 60_000).unref();
     } catch (e) { /* non-fatal */ }
 
-    // Background OTP cleanup — removes expired & old-used rows every 5 min
-    // (replaces MongoDB TTL index since we use Sequelize/MySQL).
     try {
       const { cleanupExpiredOtps } = require('./controllers/forgotPasswordController');
-      cleanupExpiredOtps(); // run once at startup
+      cleanupExpiredOtps();
       setInterval(() => cleanupExpiredOtps(), 5 * 60_000).unref();
     } catch (e) { /* non-fatal */ }
 
@@ -207,8 +247,7 @@ const startServer = async () => {
     app.set('io', io);
     logger.info('Socket.IO initialized');
 
-    // Setup Redis adapter for multi-instance scaling (disabled for local dev)
-    logger.info('Running Socket.IO in single-instance mode (Redis disabled for local dev)');
+    logger.info('Running Socket.IO in single-instance mode (enable Redis for multi-instance)');
 
     // Create default admin if not exists
     const adminExists = await User.findOne({ where: { email: 'admin@test.com' } });
@@ -226,76 +265,34 @@ const startServer = async () => {
       logger.info('Admin already exists');
     }
 
-    // Friendly EADDRINUSE handler — exits with actionable instructions instead
-    // of a raw stack trace when port is busy.
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        console.error('');
-        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.error(`❌ Port ${PORT} is already in use.`);
-        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.error('   Another process (most likely a previous backend) is bound to this port.');
-        console.error('');
-        console.error('   To free it:');
-        console.error('     • Quick (recommended):  npm run start:clean');
-        console.error('     • PowerShell one-liner: Get-NetTCPConnection -LocalPort ' + PORT + ' -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }');
-        console.error(`     • Manual:               netstat -ano | findstr :${PORT}   then   taskkill /PID <pid> /F`);
-        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.error('');
+        logger.error(`Port ${PORT} is already in use.`);
         process.exit(1);
       }
-      // Anything else is a genuine server error — re-throw so it isn't silently swallowed.
       throw err;
     });
 
     server.listen(PORT, () => {
-      logger.info(`🚀 WAVE INIT LMS Server running on http://localhost:${PORT}`);
-      logger.info(`📋 Mounted routes:
-   /api/auth      → auth routes
-   /api/admin     → admin routes (+ analytics endpoints)
-   /api/trainer   → trainer routes
-   /api/participant → enrollment routes
-   /api/feedback  → feedback routes
-   /api/trainings → training routes
-   /api/feed      → activity feed routes
-   /api/notifications → notification routes (+ Socket.IO)
-   /api/notes     → notes routes
-   /api/ai-quiz   → AI quiz routes
-   /api/profile   → trainer profile routes
-   /api/participant-profile → participant profile routes
-       · GET    /me                  (own profile)
-       · PUT    /me                  (update name/bio/skills/links)
-       · POST   /me/avatar           (multipart upload)
-       · DELETE /me/avatar           (remove avatar)
-       · GET    /:userId             (admin/trainer view)
-   /api/survey    → survey routes
-      `);
-      logger.info('🔌 WebSocket server active on Socket.IO');
+      logger.info(`Server running on http://localhost:${PORT}`);
     });
 
     // Graceful shutdown
-    process.on('SIGTERM', async () => {
-      logger.info('SIGTERM signal received: closing HTTP server');
+    const shutdown = async (signal) => {
+      logger.info(`${signal} received: closing server`);
       server.close(async () => {
-        logger.info('HTTP server closed');
+        await cacheService.shutdown();
         await cleanupSocket(io);
         await sequelize.close();
         process.exit(0);
       });
-    });
+    };
 
-    process.on('SIGINT', async () => {
-      logger.info('SIGINT signal received: closing HTTP server');
-      server.close(async () => {
-        logger.info('HTTP server closed');
-        await cleanupSocket(io);
-        await sequelize.close();
-        process.exit(0);
-      });
-    });
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
 
   } catch (error) {
-    logger.error('Failed to start server', { 
+    logger.error('Failed to start server', {
       error: error.message,
       stack: error.stack,
       code: error.code
