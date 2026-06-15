@@ -8,6 +8,19 @@ import {
 import { useToast } from '../components/Toast'
 import { API } from '../api/api'
 import blueVideo from '../assets/blue.mp4'
+
+const PARTICIPANT_POSTER = 'data:image/svg+xml;base64,' + btoa(
+`<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0a1a"/>
+      <stop offset="50%" stop-color="#15153d"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#g)"/>
+</svg>`)
+
 function ParticipantLogin({ onLogin }) {
   const [form, setForm] = useState({ email: '', password: '', role: 'PARTICIPANT' })
   const [loading, setLoading] = useState(false)
@@ -125,6 +138,7 @@ function ParticipantLogin({ onLogin }) {
         loop
         playsInline
         preload="auto"
+        poster={PARTICIPANT_POSTER}
       >
         <source src={blueVideo} type="video/mp4" />
       </video>
@@ -140,143 +154,107 @@ function ParticipantLogin({ onLogin }) {
           <div className="trainer-card-logo">
             <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
               <rect width="32" height="32" rx="8" fill="url(#participantLogoGrad)" />
-              <path d="M7 16C9.5 16 11 11 13 11C15 11 16.5 21 18.5 21C20.5 21 22 16 25 16" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="16" cy="10" r="4" stroke="white" strokeWidth="2.5" />
+              <path d="M6 26C6 20 10.5 17 16 17C21.5 17 26 20 26 26" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
               <defs>
                 <linearGradient id="participantLogoGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#2563eb" />
-                  <stop offset="1" stopColor="#60a5fa" />
+                  <stop stopColor="#3B82F6" />
+                  <stop offset="1" stopColor="#2563EB" />
                 </linearGradient>
               </defs>
             </svg>
-            <span>WaveInit</span>
           </div>
 
-          <div className="trainer-card-header">
-            <h2>Welcome back</h2>
-            <p>Sign in to your Participant Portal</p>
-          </div>
+          <h2 className="trainer-card-title">Participant Login</h2>
+          <p className="trainer-card-subtitle">Sign in to access your courses</p>
 
           {error && (
-            <div className="trainer-alert trainer-alert-error">
+            <motion.div className="trainer-message trainer-message--error" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
               <AlertCircle size={16} />
               <span>{error}</span>
-            </div>
+            </motion.div>
           )}
+
           {success && (
-            <div className="trainer-alert trainer-alert-success">
+            <motion.div className="trainer-message trainer-message--success" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
               <CheckCircle2 size={16} />
               <span>{success}</span>
-            </div>
+            </motion.div>
           )}
 
           <form onSubmit={handleSubmit}>
-            <div className="trainer-field">
-              <label className="trainer-label" htmlFor="participant-email">Username or Email</label>
-              <div className="trainer-input-wrap">
-                <Mail size={16} className="trainer-input-icon" />
+            <div className="trainer-input-group">
+              <label className="trainer-input-label">Email Address or Username</label>
+              <div className="trainer-input-wrapper">
+                <Mail size={18} className="trainer-input-icon" />
                 <input
-                  id="participant-email"
                   type="text"
                   className="trainer-input"
+                  placeholder="participant@example.com"
                   value={form.email}
                   onChange={e => set('email', e.target.value)}
-                  placeholder="participant_username"
-                  autoComplete="username"
+                  disabled={loading}
                 />
               </div>
             </div>
 
-            <div className="trainer-field">
-              <label className="trainer-label" htmlFor="participant-password">Password</label>
-              <div className="trainer-input-wrap">
-                <Lock size={16} className="trainer-input-icon" />
+            <div className="trainer-input-group">
+              <label className="trainer-input-label">Password</label>
+              <div className="trainer-input-wrapper">
+                <Lock size={18} className="trainer-input-icon" />
                 <input
-                  id="participant-password"
                   type={showPassword ? 'text' : 'password'}
                   className="trainer-input"
+                  placeholder="••••••••"
                   value={form.password}
                   onChange={e => set('password', e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
+                  disabled={loading}
                 />
                 <button
                   type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowPassword(v => !v)}
                   className="trainer-password-toggle"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowPassword(prev => !prev)}
+                  tabIndex={-1}
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
             <div className="trainer-options-row">
-              <label className="trainer-checkbox-label">
+              <label className="trainer-remember">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={e => setRememberMe(e.target.checked)}
-                  className="trainer-checkbox"
+                  disabled={loading}
                 />
-                <span className="trainer-checkmark" />
                 <span>Remember me</span>
               </label>
-              <button
-                type="button"
-                onClick={() => navigate('/forgot-password')}
-                className="trainer-forgot-link"
-              >
-                Forgot password?
-              </button>
             </div>
 
-            <motion.button
+            <button
+              className={`trainer-submit-btn trainer-submit-btn--blue${loading ? ' trainer-submit-btn--loading' : ''}`}
               type="submit"
               disabled={loading}
-              className="trainer-submit-btn trainer-submit-btn--blue"
-              whileHover={{ scale: loading ? 1 : 1.01 }}
-              whileTap={{ scale: loading ? 1 : 0.99 }}
             >
               {loading ? (
-                <>
-                  <Loader2 size={18} className="trainer-spinner" />
-                  <span>Signing in...</span>
-                </>
+                <Loader2 size={20} className="trainer-spinner" />
               ) : (
                 <>
-                  <span>Sign In as Participant</span>
-                  <ArrowRight size={18} />
+                  Sign In <ArrowRight size={18} />
                 </>
               )}
-            </motion.button>
+            </button>
           </form>
 
-          <p className="trainer-footer" style={{ marginTop: 12 }}>
-            Don't have an account?{' '}
-            <button
-              type="button"
-              onClick={() => navigate('/register')}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '12.5px',
-                fontWeight: 600,
-                color: '#2563eb',
-                cursor: 'pointer',
-                fontFamily: 'Poppins, sans-serif',
-                padding: 0
-              }}
-            >
-              Create Account
-            </button>
+          <p className="trainer-card-footer">
+            Looking for{' '}
+            <a href="/login/admin" onClick={e => { e.preventDefault(); navigate('/login/admin') }}>Admin Login</a>
+            {' '}or{' '}
+            <a href="/login/trainer" onClick={e => { e.preventDefault(); navigate('/login/trainer') }}>Trainer Login</a>?
           </p>
-
-
-
         </motion.div>
-
-        <p className="trainer-footer">© 2026 · WaveInit LMS · Learning Space</p>
       </div>
     </div>
   )

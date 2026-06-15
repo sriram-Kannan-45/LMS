@@ -998,11 +998,6 @@ body:has(.premium-login-page) {
   z-index: 0;
   pointer-events: none;
   will-change: transform;
-  animation: trainerFadeIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-@keyframes trainerFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 .trainer-video-login::before {
   content: '';
