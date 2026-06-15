@@ -998,11 +998,6 @@ body:has(.premium-login-page) {
   z-index: 0;
   pointer-events: none;
   will-change: transform;
-  opacity: 0;
-  transition: opacity 0.8s ease;
-}
-.trainer-video-visible {
-  opacity: 1;
 }
 .trainer-video-login::before {
   content: '';
