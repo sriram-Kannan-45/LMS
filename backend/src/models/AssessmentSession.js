@@ -21,23 +21,23 @@ const AssessmentSession = sequelize.define(
   'AssessmentSession',
   {
     id: {
-      type: DataTypes.BIGINT.UNSIGNED,
+      type: DataTypes.BIGINT,
       autoIncrement: true,
       primaryKey: true,
     },
     attemptId: {
-      type: DataTypes.BIGINT.UNSIGNED,
+      type: DataTypes.BIGINT,
       allowNull: false,
       unique: true,
       field: 'attempt_id',
     },
     quizId: {
-      type: DataTypes.BIGINT.UNSIGNED,
+      type: DataTypes.BIGINT,
       allowNull: false,
       field: 'quiz_id',
     },
     participantId: {
-      type: DataTypes.BIGINT.UNSIGNED,
+      type: DataTypes.BIGINT,
       allowNull: false,
       field: 'participant_id',
     },
@@ -78,7 +78,7 @@ const AssessmentSession = sequelize.define(
       field: 'expires_at',
     },
     resetByAdmin: {
-      type: DataTypes.BIGINT.UNSIGNED,
+      type: DataTypes.BIGINT,
       allowNull: true,
       field: 'reset_by_admin',
     },

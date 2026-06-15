@@ -2,10 +2,10 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
 
 const CodingSubmission = sequelize.define('CodingSubmission', {
-  id: { type: DataTypes.BIGINT.UNSIGNED, autoIncrement: true, primaryKey: true },
-  attemptId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'attempt_id' },
-  questionId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'question_id' },
-  participantId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'participant_id' },
+  id: { type: DataTypes.BIGINT, autoIncrement: true, primaryKey: true },
+  attemptId: { type: DataTypes.BIGINT, allowNull: false, field: 'attempt_id' },
+  questionId: { type: DataTypes.BIGINT, allowNull: false, field: 'question_id' },
+  participantId: { type: DataTypes.BIGINT, allowNull: false, field: 'participant_id' },
   language: { type: DataTypes.STRING, allowNull: false },
   sourceCode: { type: DataTypes.TEXT('long'), allowNull: false, field: 'source_code' },
   status: { type: DataTypes.ENUM('PENDING', 'PASSED', 'FAILED', 'PARTIAL', 'CE', 'RE', 'TLE', 'MLE'), allowNull: false, defaultValue: 'PENDING' },

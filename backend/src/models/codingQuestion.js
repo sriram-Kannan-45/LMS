@@ -2,8 +2,8 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
 
 const CodingQuestion = sequelize.define('CodingQuestion', {
-  id: { type: DataTypes.BIGINT.UNSIGNED, autoIncrement: true, primaryKey: true },
-  assessmentId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'assessment_id' },
+  id: { type: DataTypes.BIGINT, autoIncrement: true, primaryKey: true },
+  assessmentId: { type: DataTypes.BIGINT, allowNull: false, field: 'assessment_id' },
   title: { type: DataTypes.STRING, allowNull: false },
   problemDescription: { type: DataTypes.TEXT, allowNull: false, field: 'problem_description' },
   inputFormat: { type: DataTypes.TEXT, allowNull: true, field: 'input_format' },

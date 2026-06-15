@@ -19,20 +19,20 @@ const { sequelize } = require('../config/db');
  */
 const AIQuiz = sequelize.define('AIQuiz', {
   id: {
-    type: DataTypes.BIGINT.UNSIGNED,
+    type: DataTypes.BIGINT,
     autoIncrement: true,
     primaryKey: true
   },
 
   // ── New course-centric columns ──
   courseId: {
-    type: DataTypes.BIGINT.UNSIGNED,
+    type: DataTypes.BIGINT,
     // Nullable while legacy quizzes (trainingId-only) still exist.
     allowNull: true,
     field: 'course_id'
   },
   lessonId: {
-    type: DataTypes.BIGINT.UNSIGNED,
+    type: DataTypes.BIGINT,
     // Optional — quizzes can live at the course level (no specific lesson).
     allowNull: true,
     field: 'lesson_id'
@@ -52,17 +52,17 @@ const AIQuiz = sequelize.define('AIQuiz', {
 
   // ── Existing columns (preserved for compatibility) ──
   documentId: {
-    type: DataTypes.BIGINT.UNSIGNED,
+    type: DataTypes.BIGINT,
     allowNull: true,
     field: 'document_id'
   },
   trainerId: {
-    type: DataTypes.BIGINT.UNSIGNED,
+    type: DataTypes.BIGINT,
     allowNull: false,
     field: 'trainer_id'
   },
   trainingId: {
-    type: DataTypes.BIGINT.UNSIGNED,
+    type: DataTypes.BIGINT,
     allowNull: true,
     field: 'training_id'
   },

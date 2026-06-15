@@ -123,7 +123,7 @@ class ActivityService {
 
       const { rows, count } = await ActivityLog.findAndCountAll({
         where,
-        order: [['createdAt', 'DESC']],
+        order: [['created_at', 'DESC']],
         limit,
         offset,
       });

@@ -2,9 +2,9 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
 
 const CodingAttempt = sequelize.define('CodingAttempt', {
-  id: { type: DataTypes.BIGINT.UNSIGNED, autoIncrement: true, primaryKey: true },
-  assessmentId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'assessment_id' },
-  participantId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'participant_id' },
+  id: { type: DataTypes.BIGINT, autoIncrement: true, primaryKey: true },
+  assessmentId: { type: DataTypes.BIGINT, allowNull: false, field: 'assessment_id' },
+  participantId: { type: DataTypes.BIGINT, allowNull: false, field: 'participant_id' },
   status: { type: DataTypes.ENUM('IN_PROGRESS', 'SUBMITTED', 'AUTO_SUBMITTED', 'EXPIRED'), allowNull: false, defaultValue: 'IN_PROGRESS' },
   score: { type: DataTypes.FLOAT, allowNull: false, defaultValue: 0 },
   violationCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'violation_count' },

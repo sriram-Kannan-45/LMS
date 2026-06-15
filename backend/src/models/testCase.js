@@ -2,8 +2,8 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
 
 const TestCase = sequelize.define('TestCase', {
-  id: { type: DataTypes.BIGINT.UNSIGNED, autoIncrement: true, primaryKey: true },
-  questionId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'question_id' },
+  id: { type: DataTypes.BIGINT, autoIncrement: true, primaryKey: true },
+  questionId: { type: DataTypes.BIGINT, allowNull: false, field: 'question_id' },
   input: { type: DataTypes.TEXT, allowNull: true },
   expectedOutput: { type: DataTypes.TEXT, allowNull: true, field: 'expected_output' },
   isHidden: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'is_hidden' },

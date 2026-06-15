@@ -2,10 +2,10 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
 
 const CodingAssessment = sequelize.define('CodingAssessment', {
-  id: { type: DataTypes.BIGINT.UNSIGNED, autoIncrement: true, primaryKey: true },
-  courseId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'course_id' },
-  lessonId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'lesson_id' },
-  trainerId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'trainer_id' },
+  id: { type: DataTypes.BIGINT, autoIncrement: true, primaryKey: true },
+  courseId: { type: DataTypes.BIGINT, allowNull: true, field: 'course_id' },
+  lessonId: { type: DataTypes.BIGINT, allowNull: true, field: 'lesson_id' },
+  trainerId: { type: DataTypes.BIGINT, allowNull: false, field: 'trainer_id' },
   title: { type: DataTypes.STRING, allowNull: false },
   description: { type: DataTypes.TEXT, allowNull: true },
   timeLimit: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 60, field: 'time_limit' },

@@ -16,23 +16,23 @@ const { sequelize } = require('../config/db');
 
 const ExamSession = sequelize.define('ExamSession', {
   id: {
-    type: DataTypes.BIGINT.UNSIGNED,
+    type: DataTypes.BIGINT,
     autoIncrement: true,
     primaryKey: true,
   },
   quizId: {
-    type: DataTypes.BIGINT.UNSIGNED,
+    type: DataTypes.BIGINT,
     allowNull: false,
     field: 'quiz_id',
   },
   attemptId: {
-    type: DataTypes.BIGINT.UNSIGNED,
+    type: DataTypes.BIGINT,
     allowNull: true,
     field: 'attempt_id',
     comment: 'Linked QuizAttempt.id once created',
   },
   participantId: {
-    type: DataTypes.BIGINT.UNSIGNED,
+    type: DataTypes.BIGINT,
     allowNull: false,
     field: 'participant_id',
   },
@@ -43,7 +43,7 @@ const ExamSession = sequelize.define('ExamSession', {
     field: 'session_token',
   },
   deviceFingerprintId: {
-    type: DataTypes.BIGINT.UNSIGNED,
+    type: DataTypes.BIGINT,
     allowNull: true,
     field: 'device_fingerprint_id',
   },

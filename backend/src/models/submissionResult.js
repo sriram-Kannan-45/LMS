@@ -2,9 +2,9 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
 
 const SubmissionResult = sequelize.define('SubmissionResult', {
-  id: { type: DataTypes.BIGINT.UNSIGNED, autoIncrement: true, primaryKey: true },
-  submissionId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false, field: 'submission_id' },
-  testCaseId: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true, field: 'test_case_id' },
+  id: { type: DataTypes.BIGINT, autoIncrement: true, primaryKey: true },
+  submissionId: { type: DataTypes.BIGINT, allowNull: false, field: 'submission_id' },
+  testCaseId: { type: DataTypes.BIGINT, allowNull: true, field: 'test_case_id' },
   status: { type: DataTypes.ENUM('PASSED', 'FAILED', 'TLE', 'CE', 'RE', 'MLE'), allowNull: false, defaultValue: 'FAILED' },
   runtimeMs: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'runtime_ms' },
   memoryKb: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'memory_kb' },

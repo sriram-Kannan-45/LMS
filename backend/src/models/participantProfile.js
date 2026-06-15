@@ -14,12 +14,12 @@ const ParticipantProfile = sequelize.define(
   'ParticipantProfile',
   {
     id: {
-      type: DataTypes.BIGINT.UNSIGNED,
+      type: DataTypes.BIGINT,
       autoIncrement: true,
       primaryKey: true,
     },
     userId: {
-      type: DataTypes.BIGINT.UNSIGNED,
+      type: DataTypes.BIGINT,
       allowNull: false,
       unique: true,
       field: 'user_id',

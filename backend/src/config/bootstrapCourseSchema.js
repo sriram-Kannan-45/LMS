@@ -23,8 +23,8 @@ const { sequelize } = require('../config/db');
 
 async function tableExists(name) {
   const [rows] = await sequelize.query(
-    `SELECT COUNT(*) AS c FROM information_schema.TABLES
-      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+    `SELECT COUNT(*) AS c FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = ?`,
     { replacements: [name] }
   );
   return rows[0].c > 0;
@@ -33,7 +33,7 @@ async function tableExists(name) {
 async function rowCount(name) {
   try {
     const [rows] = await sequelize.query(
-      `SELECT COUNT(*) AS c FROM \`${name}\``
+      `SELECT COUNT(*) AS c FROM "${name}"`
     );
     return rows[0].c;
   } catch {
@@ -45,23 +45,12 @@ async function bootstrapCourseSchema(logger = console) {
   const hasOld = await tableExists('trainings');
   const hasNew = await tableExists('training_programs');
 
-  // Helper that disables FK checks while running a body — needed because
-  // courses.training_program_id holds a FK that blocks DROP/RENAME of
-  // `training_programs` even when the target is empty.
-  async function withoutFkChecks(body) {
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
-    try {
-      return await body();
-    } finally {
-      await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
-    }
-  }
+  // PostgreSQL handles FK dependencies gracefully — no DISABLE/ENABLE needed.
+  // The DROP TABLE will cascade where defined, or fail with a clear error.
 
   if (hasOld && !hasNew) {
     logger.info('[course-schema] renaming trainings → training_programs');
-    await withoutFkChecks(() =>
-      sequelize.query('RENAME TABLE `trainings` TO `training_programs`')
-    );
+    await sequelize.query('ALTER TABLE trainings RENAME TO training_programs');
     return { renamed: true };
   }
 
@@ -70,30 +59,25 @@ async function bootstrapCourseSchema(logger = console) {
     const newCount = await rowCount('training_programs');
 
     if (oldCount === 0) {
-      logger.info('[course-schema] dropping empty legacy `trainings` table');
-      await withoutFkChecks(() => sequelize.query('DROP TABLE `trainings`'));
+      logger.info('[course-schema] dropping empty legacy trainings table');
+      await sequelize.query('DROP TABLE IF EXISTS trainings');
       return { droppedEmptyLegacy: true };
     }
     if (newCount === 0) {
       logger.info(
-        '[course-schema] dropping empty `training_programs` then renaming legacy table'
+        '[course-schema] dropping empty training_programs then renaming legacy table'
       );
-      await withoutFkChecks(async () => {
-        await sequelize.query('DROP TABLE `training_programs`');
-        await sequelize.query(
-          'RENAME TABLE `trainings` TO `training_programs`'
-        );
-      });
+      await sequelize.query('DROP TABLE IF EXISTS training_programs');
+      await sequelize.query('ALTER TABLE trainings RENAME TO training_programs');
       return { renamed: true };
     }
     logger.warn(
-      '[course-schema] BOTH `trainings` and `training_programs` are populated. ' +
+      '[course-schema] BOTH trainings and training_programs are populated. ' +
       'Manual reconciliation required — leaving as-is.'
     );
     return { conflict: true };
   }
 
-  // Only `training_programs` exists, or neither — sync will handle creation.
   return { noop: true };
 }
 
@@ -105,10 +89,10 @@ async function bootstrapCourseSchema(logger = console) {
 
 async function indexExists(table, indexName) {
   const [rows] = await sequelize.query(
-    `SELECT COUNT(*) AS c FROM information_schema.STATISTICS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = ?
-        AND INDEX_NAME = ?`,
+    `SELECT COUNT(*) AS c FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = ?
+        AND indexname = ?`,
     { replacements: [table, indexName] }
   );
   return rows[0].c > 0;
@@ -116,10 +100,10 @@ async function indexExists(table, indexName) {
 
 async function columnExists(table, column) {
   const [rows] = await sequelize.query(
-    `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = ?
-        AND COLUMN_NAME = ?`,
+    `SELECT COUNT(*) AS c FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = ?
+        AND column_name = ?`,
     { replacements: [table, column] }
   );
   return rows[0].c > 0;
@@ -127,13 +111,13 @@ async function columnExists(table, column) {
 
 async function columnIsNullable(table, column) {
   const [rows] = await sequelize.query(
-    `SELECT IS_NULLABLE FROM information_schema.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = ?
-        AND COLUMN_NAME = ?`,
+    `SELECT is_nullable FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = ?
+        AND column_name = ?`,
     { replacements: [table, column] }
   );
-  return rows.length > 0 && rows[0].IS_NULLABLE === 'YES';
+  return rows.length > 0 && rows[0].is_nullable === 'YES';
 }
 
 /**
@@ -167,17 +151,8 @@ async function relaxLegacyTrainingIdColumns(logger = console) {
     if (await columnIsNullable(table, column)) continue;
 
     try {
-      // Look up the actual COLUMN_TYPE so we don't accidentally narrow it.
-      const [r] = await sequelize.query(
-        `SELECT COLUMN_TYPE FROM information_schema.COLUMNS
-          WHERE TABLE_SCHEMA = DATABASE()
-            AND TABLE_NAME = ?
-            AND COLUMN_NAME = ?`,
-        { replacements: [table, column] }
-      );
-      const colType = r[0]?.COLUMN_TYPE || 'BIGINT UNSIGNED';
       await sequelize.query(
-        `ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` ${colType} NULL`
+        `ALTER TABLE "${table}" ALTER COLUMN "${column}" DROP NOT NULL`
       );
       logger.info(`[course-schema] relaxed ${table}.${column} → NULL (explicit)`);
     } catch (e) {
@@ -188,38 +163,38 @@ async function relaxLegacyTrainingIdColumns(logger = console) {
   }
 
   // (2) Generic scan — any FK with SET NULL action on a still-NOT-NULL column.
+  // PostgreSQL stores this in pg_constraint + information_schema.
   const [rows] = await sequelize.query(
     `
     SELECT
-      kcu.TABLE_NAME           AS tableName,
-      kcu.COLUMN_NAME          AS columnName,
-      kcu.CONSTRAINT_NAME      AS constraintName,
-      rc.DELETE_RULE           AS onDelete,
-      rc.UPDATE_RULE           AS onUpdate,
-      cols.IS_NULLABLE         AS isNullable,
-      cols.COLUMN_TYPE         AS columnType
-    FROM information_schema.KEY_COLUMN_USAGE kcu
-    JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
-      ON rc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA
-     AND rc.CONSTRAINT_NAME   = kcu.CONSTRAINT_NAME
-    JOIN information_schema.COLUMNS cols
-      ON cols.TABLE_SCHEMA = kcu.TABLE_SCHEMA
-     AND cols.TABLE_NAME   = kcu.TABLE_NAME
-     AND cols.COLUMN_NAME  = kcu.COLUMN_NAME
-    WHERE kcu.TABLE_SCHEMA = DATABASE()
-      AND (rc.DELETE_RULE = 'SET NULL' OR rc.UPDATE_RULE = 'SET NULL')
-      AND cols.IS_NULLABLE = 'NO'
+      c.conname                          AS "constraintName",
+      c.confdeltype                      AS "onDelete",
+      c.confupdtype                      AS "onUpdate",
+      ta.attname                         AS "columnName",
+      cls.relname                        AS "tableName",
+      cols.is_nullable                   AS "isNullable"
+    FROM pg_constraint c
+    JOIN pg_class cls ON cls.oid = c.conrelid
+    JOIN pg_attribute ta ON ta.attrelid = c.conrelid AND ta.attnum = c.conkey[1]
+    JOIN information_schema.columns cols
+      ON cols.table_name = cls.relname
+     AND cols.column_name = ta.attname
+     AND cols.table_schema = 'public'
+    WHERE c.contype = 'f'
+      AND (c.confdeltype = 'n' OR c.confupdtype = 'n')
+      AND cols.is_nullable = 'NO'
     `
   );
 
   for (const r of rows) {
     try {
       await sequelize.query(
-        `ALTER TABLE \`${r.tableName}\` MODIFY COLUMN \`${r.columnName}\` ${r.columnType} NULL`
+        `ALTER TABLE "${r.tableName}" ALTER COLUMN "${r.columnName}" DROP NOT NULL`
       );
       logger.info(
         `[course-schema] relaxed ${r.tableName}.${r.columnName} → NULL ` +
-        `(scan: FK ${r.constraintName} ${r.onDelete}/${r.onUpdate})`
+        `(scan: FK ${r.constraintName} ${r.onDelete === 'n' ? 'SET NULL' : '?'}/` +
+        `${r.onUpdate === 'n' ? 'SET NULL' : '?'})`
       );
     } catch (e) {
       logger.warn(
@@ -230,8 +205,6 @@ async function relaxLegacyTrainingIdColumns(logger = console) {
 }
 
 async function addIndexIfMissing(table, indexName, columns, { unique = false } = {}, logger = console) {
-  // Verify all referenced columns exist first — otherwise CREATE INDEX
-  // throws "Key column ... doesn't exist in table".
   for (const col of columns) {
     if (!(await columnExists(table, col))) {
       logger.warn(`[course-schema] skipping index ${indexName}: column ${table}.${col} missing`);
@@ -239,8 +212,8 @@ async function addIndexIfMissing(table, indexName, columns, { unique = false } =
     }
   }
   if (await indexExists(table, indexName)) return false;
-  const colList = columns.map(c => `\`${c}\``).join(', ');
-  const sql = `CREATE ${unique ? 'UNIQUE ' : ''}INDEX \`${indexName}\` ON \`${table}\` (${colList})`;
+  const colList = columns.map(c => `"${c}"`).join(', ');
+  const sql = `CREATE ${unique ? 'UNIQUE ' : ''}INDEX "${indexName}" ON "${table}" (${colList})`;
   await sequelize.query(sql);
   logger.info(`[course-schema] created index ${indexName} on ${table}`);
   return true;
