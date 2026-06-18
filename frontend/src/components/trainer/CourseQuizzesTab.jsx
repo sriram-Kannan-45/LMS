@@ -1006,12 +1006,12 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
                   <label style={{ ...lblStyle, marginTop: 0 }}>Select File <span style={{ color: '#dc2626' }}>*</span></label>
                   <div style={{ fontSize: 11, color: '#92400e', background: '#fef3c7', padding: '8px 12px', borderRadius: 6, marginBottom: 8, display: 'flex', gap: 6 }}>
                     <span>⚠️</span>
-                    <span>Only PDF, DOCX, and TXT files are supported. Images are not supported.</span>
+                    <span>Only PDF, DOCX, PPTX, and TXT files are supported. Images are not supported.</span>
                   </div>
                   <input
                     type="file"
                     ref={fileInputRef}
-                    accept=".pdf,.docx,.txt"
+                    accept=".pdf,.docx,.pptx,.txt"
                     onChange={e => setFile(e.target.files[0])}
                     style={{ display: 'none' }}
                   />
@@ -1033,7 +1033,7 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
                       <div>
                         <div style={{ fontSize: 24, marginBottom: 4, color: '#94a3b8' }}>☁️</div>
                         <div style={{ fontSize: 13, fontWeight: 550, color: '#475569' }}>Click to select a file</div>
-                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>PDF, DOCX, or TXT up to 10MB</div>
+                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>PDF, DOCX, PPTX, or TXT up to 25MB</div>
                       </div>
                     )}
                   </div>

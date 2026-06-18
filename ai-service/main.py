@@ -16,9 +16,10 @@ import logging
 import asyncio
 import hashlib
 import re
+from pathlib import Path
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-load_dotenv()  # Load .env file
+load_dotenv(Path(__file__).resolve().parent / ".env")  # Load ai-service/.env regardless of cwd
 
 import json
 import random
@@ -38,6 +39,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 import PyPDF2
 import docx
+from rag.extraction import UnsupportedSourceError
+from rag.generation import QuizGenerationError
+from rag.orchestrator import RAGQuizGenerator, RAGQuizRequest
 
 # ── Logging Setup ──────────────────────────────────────
 class ColoredFormatter(logging.Formatter):
@@ -782,12 +786,29 @@ json_validator = JSONValidator()
 duplicate_remover = DuplicateRemover()
 option_randomizer = OptionRandomizer()
 explanation_generator = ExplanationGenerator()
+rag_quiz_generator = RAGQuizGenerator()
 
 # ── Request / Response Models ─────────────────────────
 class QuizRequest(BaseModel):
     text: str
     num_questions: int = 10
     difficulty: str = "MIXED"  # EASY, MEDIUM, HARD, MIXED
+    training_id: Optional[Any] = None
+    course_id: Optional[Any] = None
+    question_type: str = "MIXED"
+    source_title: Optional[str] = None
+
+class RAGGenerateRequest(BaseModel):
+    training_id: Optional[Any] = None
+    course_id: Optional[Any] = None
+    difficulty: str = "MIXED"
+    numberOfQuestions: int = 10
+    questionType: str = "MIXED"
+    file_path: Optional[str] = None
+    mime_type: Optional[str] = None
+    source_url: Optional[str] = None
+    text: Optional[str] = None
+    source_title: Optional[str] = None
 
 class PromptQuizRequest(BaseModel):
     prompt: str
@@ -1525,12 +1546,48 @@ async def health_check():
         "service": "ai-quiz-generator",
         "llm": llm_type,
         "gemini_key_set": bool(GEMINI_API_KEY and GEMINI_API_KEY != "your-gemini-api-key-here"),
+        "rag": {
+            "enabled": True,
+            "embedding_model": rag_quiz_generator.embeddings.model_name,
+            "retrieval_top_k": rag_quiz_generator.config.retrieval_top_k,
+            "chunk_size_tokens": rag_quiz_generator.config.chunk_size_tokens,
+            "chunk_overlap_tokens": rag_quiz_generator.config.chunk_overlap_tokens,
+        },
     }
+
+@app.post("/rag/generate-quiz")
+async def generate_rag_quiz(request: RAGGenerateRequest):
+    """
+    Generate a quiz with the enterprise RAG pipeline.
+    Accepts exactly one source: file_path, source_url, or text.
+    """
+    try:
+        return rag_quiz_generator.generate(
+            RAGQuizRequest(
+                training_id=request.training_id,
+                course_id=request.course_id,
+                difficulty=request.difficulty,
+                number_of_questions=request.numberOfQuestions,
+                question_type=request.questionType,
+                file_path=request.file_path,
+                mime_type=request.mime_type,
+                source_url=request.source_url,
+                text=request.text,
+                source_title=request.source_title,
+            )
+        )
+    except (UnsupportedSourceError, FileNotFoundError, ValueError) as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except QuizGenerationError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        log.error("RAG quiz generation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/generate-quiz")
 async def generate_quiz(request: QuizRequest):
     """
-    Generate quiz from provided text content using Gemini AI.
+    Backward-compatible text endpoint, now backed by the RAG pipeline.
     """
     try:
         if not request.text or len(request.text.strip()) < 50:
@@ -1545,6 +1602,38 @@ async def generate_quiz(request: QuizRequest):
                 detail="Number of questions must be between 1 and 50."
             )
 
+        result = rag_quiz_generator.generate(
+            RAGQuizRequest(
+                training_id=request.training_id,
+                course_id=request.course_id,
+                difficulty=request.difficulty,
+                number_of_questions=request.num_questions,
+                question_type=request.question_type,
+                text=request.text,
+                source_title=request.source_title or "Provided learning material",
+            )
+        )
+        return {
+            "questions": result["questions"],
+            "quiz_title": result["title"],
+            "metadata": result.get("metadata", {}),
+        }
+    except HTTPException:
+        raise
+    except (UnsupportedSourceError, ValueError) as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except QuizGenerationError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        log.error("Quiz generation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/generate-quiz-legacy")
+async def generate_quiz_legacy(request: QuizRequest):
+    """
+    Legacy whole-text prompt generator kept as an explicit fallback endpoint.
+    """
+    try:
         res = generate_quiz_with_langchain(
             text=request.text,
             num_questions=request.num_questions,
@@ -1768,7 +1857,7 @@ async def upload_and_generate(
     difficulty: str = Form("MIXED"),
 ):
     """
-    Upload document (PDF, DOCX, TXT only) and generate quiz.
+    Upload document (PDF, DOCX, PPTX, TXT only) and generate quiz.
     Accepts multipart/form-data.
     """
     try:
@@ -1784,16 +1873,17 @@ async def upload_and_generate(
                 "application/pdf",
                 "text/plain",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             ]
             if file.content_type not in allowed_mimes:
                 raise HTTPException(
                     status_code=415,
-                    detail=f"Unsupported file type: {file.content_type}. Only PDF, DOCX, and TXT files are allowed."
+                    detail=f"Unsupported file type: {file.content_type}. Only PDF, DOCX, PPTX, and TXT files are allowed."
                 )
         
         # LAYER 2: FILE EXTENSION CHECK
         suffix = file.filename.split('.')[-1].lower() if '.' in file.filename else ""
-        allowed_extensions = ["pdf", "docx", "doc", "txt", "md"]
+        allowed_extensions = ["pdf", "docx", "pptx", "txt"]
         image_extensions = ["png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "ico", "tiff", "tif"]
         
         if suffix in image_extensions:
@@ -1805,7 +1895,7 @@ async def upload_and_generate(
         if suffix not in allowed_extensions:
             raise HTTPException(
                 status_code=415,
-                detail=f"Unsupported file extension: .{suffix}. Only .pdf, .docx, .doc, .txt files are allowed."
+                detail=f"Unsupported file extension: .{suffix}. Only .pdf, .docx, .pptx, and .txt files are allowed."
             )
         
         # LAYER 3: MAGIC BYTES CHECK
@@ -1831,55 +1921,98 @@ async def upload_and_generate(
             tmp.write(file_content)
             tmp_path = tmp.name
         
-        # Extract text
+        # Generate quiz through RAG. Extraction, cleaning, chunking, embeddings,
+        # FAISS retrieval, LLM JSON validation, and retries happen in the RAG layer.
         try:
-            if suffix == "pdf":
-                text = extract_text_from_pdf(tmp_path)
-            elif suffix in ["docx", "doc"]:
-                text = extract_text_from_docx(tmp_path)
-            elif suffix in ["txt", "md"]:
-                text = extract_text_from_txt(tmp_path)
-            else:
-                raise HTTPException(status_code=415, detail="Unsupported file type")
+            result = rag_quiz_generator.generate(
+                RAGQuizRequest(
+                    difficulty=difficulty,
+                    number_of_questions=num_questions,
+                    question_type="MIXED",
+                    file_path=tmp_path,
+                    mime_type=file.content_type,
+                    source_title=file.filename,
+                )
+            )
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
-        
-        if not text or len(text.strip()) < 50:
-            raise HTTPException(
-                status_code=400,
-                detail="Document appears to be empty or contains insufficient text."
-            )
-        
-        # Generate quiz
-        try:
-            res = generate_quiz_with_langchain(text, num_questions, difficulty)
-            if isinstance(res, tuple):
-                questions, quiz_title = res
-            else:
-                questions = res
-                quiz_title = "Fallback Quiz"
-        except Exception as e:
-            error_msg = str(e)
-            if any(kw in error_msg.lower() for kw in ["image", "does not support", "invalid input"]):
-                raise HTTPException(
-                    status_code=415,
-                    detail="This AI model does not support image input. Please upload PDF, DOCX, or TXT files only."
-                )
-            raise
-        
+
         return {
             "success": True,
-            "questions": questions,
-            "quiz_title": quiz_title,
-            "message": f"Generated {len(questions)} questions from uploaded document using {llm_type}"
+            "questions": result["questions"],
+            "quiz_title": result["title"],
+            "metadata": result.get("metadata", {}),
+            "message": f"Generated {len(result['questions'])} questions from uploaded document using RAG"
         }
         
     except HTTPException:
         raise
+    except (UnsupportedSourceError, ValueError) as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except QuizGenerationError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         log.error("Upload-and-generate failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+
+@app.post("/api/trainer/generate-ai-quiz")
+async def trainer_generate_ai_quiz(
+    training_id: Optional[str] = Form(None),
+    difficulty: str = Form("MIXED"),
+    numberOfQuestions: int = Form(10),
+    questionType: str = Form("MIXED"),
+    file: Optional[UploadFile] = File(None),
+    url: Optional[str] = Form(None),
+):
+    """
+    FastAPI-native RAG endpoint matching the LMS trainer contract.
+    The Node backend exposes the authenticated public route and persists results.
+    """
+    tmp_path = None
+    try:
+        if file and url:
+            raise HTTPException(status_code=422, detail="Provide either file or url, not both.")
+        if not file and not url:
+            raise HTTPException(status_code=422, detail="A file or URL is required.")
+
+        request_kwargs = {
+            "training_id": training_id,
+            "difficulty": difficulty,
+            "number_of_questions": numberOfQuestions,
+            "question_type": questionType,
+        }
+
+        if file:
+            suffix = file.filename.split(".")[-1].lower() if file.filename and "." in file.filename else ""
+            file_content = await file.read()
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as tmp:
+                tmp.write(file_content)
+                tmp_path = tmp.name
+            request_kwargs.update(
+                {
+                    "file_path": tmp_path,
+                    "mime_type": file.content_type,
+                    "source_title": file.filename,
+                }
+            )
+        else:
+            request_kwargs.update({"source_url": url, "source_title": url})
+
+        return rag_quiz_generator.generate(RAGQuizRequest(**request_kwargs))
+
+    except HTTPException:
+        raise
+    except (UnsupportedSourceError, FileNotFoundError, ValueError) as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except QuizGenerationError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        log.error("Trainer RAG quiz generation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 @app.post("/evaluate", response_model=EvaluateResponse)
 async def evaluate_answer(request: EvaluateRequest):

@@ -47,6 +47,15 @@ const AIQuestion = sequelize.define('AIQuestion', {
     type: DataTypes.TEXT,
     allowNull: true
   },
+  topic: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  bloomsLevel: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'blooms_level'
+  },
   difficulty: {
     type: DataTypes.ENUM('EASY', 'MEDIUM', 'HARD'),
     allowNull: false,

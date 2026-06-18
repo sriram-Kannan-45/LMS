@@ -104,6 +104,16 @@ const connectDB = async () => {
         console.log('➕ Adding pairs column to ai_questions...');
         await sequelize.query("ALTER TABLE `ai_questions` ADD COLUMN `pairs` JSON NULL COMMENT 'Pairs for MATCHING question type'");
       }
+
+      if (!columnNames.includes('topic')) {
+        console.log('Adding topic column to ai_questions...');
+        await sequelize.query("ALTER TABLE `ai_questions` ADD COLUMN `topic` VARCHAR(255) NULL");
+      }
+
+      if (!columnNames.includes('blooms_level')) {
+        console.log('Adding blooms_level column to ai_questions...');
+        await sequelize.query("ALTER TABLE `ai_questions` ADD COLUMN `blooms_level` VARCHAR(64) NULL");
+      }
       
       // Check and update question_type enum column
       const questionTypeCol = columns.find(c => c.Field === 'question_type');

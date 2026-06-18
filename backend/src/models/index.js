@@ -18,6 +18,7 @@ const ParticipantProfile = require('./participantProfile');
 const AIDocument = require('./aiDocument');
 const AIQuiz = require('./aiQuiz');
 const AIQuestion = require('./aiQuestion');
+const AIQuestionOption = require('./aiQuestionOption');
 const QuizAttempt = require('./quizAttempt');
 const QuizAnswer = require('./quizAnswer');
 const QuizResult = require('./quizResult');
@@ -157,6 +158,8 @@ Course.hasMany(AIQuiz, { foreignKey: 'courseId', as: 'quizzes' });
 Lesson.hasMany(AIQuiz, { foreignKey: 'lessonId', as: 'directQuizzes' });
 
 AIQuestion.belongsTo(AIQuiz, { foreignKey: 'quizId', as: 'quiz' });
+AIQuestion.hasMany(AIQuestionOption, { foreignKey: 'questionId', as: 'optionRows' });
+AIQuestionOption.belongsTo(AIQuestion, { foreignKey: 'questionId', as: 'question' });
 
 QuizAttempt.belongsTo(AIQuiz, { foreignKey: 'quizId', as: 'quiz' });
 QuizAttempt.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
@@ -278,6 +281,7 @@ module.exports = {
   AIDocument,
   AIQuiz,
   AIQuestion,
+  AIQuestionOption,
   QuizAttempt,
   QuizAnswer,
   QuizResult,

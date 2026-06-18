@@ -8,6 +8,8 @@ const aiService = require('../services/aiService');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
 const fs = require('fs');
+const { generateAIQuiz } = require('../controllers/aiQuizGenerationController');
+const { uploadAIQuizMaterial } = require('../middleware/uploadAIQuizMaterial');
 
 const { gradeAnswer } = require('../utils/gradeAnswer');
 
@@ -100,6 +102,16 @@ const router = express.Router();
     }
     throw new Error('Unsupported file type: ' + mimeType);
   };
+
+  // RAG replacement for the document quiz generator. This route is registered
+  // before the legacy inline handler below, so existing clients keep using the
+  // same URL while the implementation moves to retrieval-first generation.
+  router.post('/trainer/upload-document',
+    authenticateToken,
+    roleMiddleware('TRAINER'),
+    uploadAIQuizMaterial.single('file'),
+    generateAIQuiz
+  );
 
   // POST /api/ai-quiz/trainer/upload-document
   router.post('/trainer/upload-document',

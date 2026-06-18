@@ -44,3 +44,9 @@ __pycache__/
 target/
 build/
 out/
+
+# Vector store
+ai-service/vector_store/
+
+# Uploaded documents
+backend/uploads/ai-docs/

@@ -7,7 +7,7 @@ import Leaderboard from './Leaderboard';
 import './TrainerAIQuiz.css';
 
 const FILE_TYPE_ICONS = { pdf: '📕', docx: '📘', doc: '📘', txt: '📄' };
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
 const TrainerAIQuiz = ({ user }) => {
   const [activeTab, setActiveTab] = useState('upload');
@@ -58,16 +58,16 @@ const TrainerAIQuiz = ({ user }) => {
     const fileExt = '.' + selected.name.split('.').pop().toLowerCase();
 
     if (imageTypes.includes(selected.type) || imageExts.includes(fileExt)) {
-      setError('Images are NOT supported. Please upload PDF, DOCX, or TXT files only.');
+      setError('Images are NOT supported. Please upload PDF, DOCX, PPTX, or TXT files only.');
       return false;
     }
-    const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
-    if (!validTypes.includes(selected.type) && !selected.name.match(/\.(pdf|docx|txt)$/i)) {
-      setError('Unsupported file type. Please upload PDF, DOCX, or TXT files only.');
+    const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'text/plain'];
+    if (!validTypes.includes(selected.type) && !selected.name.match(/\.(pdf|docx|pptx|txt)$/i)) {
+      setError('Unsupported file type. Please upload PDF, DOCX, PPTX, or TXT files only.');
       return false;
     }
     if (selected.size > MAX_FILE_SIZE) {
-      setError('File size must be less than 10 MB.');
+      setError('File size must be less than 25 MB.');
       return false;
     }
     return true;
@@ -275,7 +275,7 @@ const TrainerAIQuiz = ({ user }) => {
                 <form onSubmit={handleUpload} className="upload-form">
                   <div className="form-group">
                     <label>Upload Training Document</label>
-                    <div className="upload-warning">⚠️ Only PDF, DOCX, and TXT files are supported. Images are NOT supported.</div>
+                    <div className="upload-warning">⚠️ Only PDF, DOCX, PPTX, and TXT files are supported. Images are NOT supported.</div>
                     <div
                       className={`drop-zone ${dragOver ? 'drag-over' : ''}`}
                       onClick={() => fileInputRef.current?.click()}
@@ -283,7 +283,7 @@ const TrainerAIQuiz = ({ user }) => {
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}>
                       <input ref={fileInputRef} type="file"
-                        accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                        accept=".pdf,.docx,.pptx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain"
                         onChange={handleFileChange} style={{ display: 'none' }} />
                       {file ? (
                         <div className="file-preview">
@@ -301,7 +301,7 @@ const TrainerAIQuiz = ({ user }) => {
                         <div className="upload-placeholder">
                           <span className="upload-icon">☁️</span>
                           <p>Drag & drop your file here, or click to browse</p>
-                          <p className="upload-hint">PDF, DOCX, or TXT · Max 10 MB</p>
+                          <p className="upload-hint">PDF, DOCX, PPTX, or TXT · Max 25 MB</p>
                         </div>
                       )}
                     </div>

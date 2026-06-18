@@ -5,6 +5,8 @@ const { Training, User, Enrollment, Feedback, TrainerProfile } = require('../mod
 const authenticateToken = require('../middleware/auth');
 const roleMiddleware = require('../middleware/roles');
 const upload = require('../middleware/upload');
+const { uploadAIQuizMaterial } = require('../middleware/uploadAIQuizMaterial');
+const { generateAIQuiz } = require('../controllers/aiQuizGenerationController');
 
 const router = express.Router();
 
@@ -774,6 +776,16 @@ const reportController = require('../controllers/reportController');
 const participantCourseController = require('../controllers/participantCourseController');
 router.get('/reports', authenticateToken, roleMiddleware('TRAINER', 'ADMIN'), reportController.getTrainerReport);
 router.post('/certificates/regenerate', authenticateToken, roleMiddleware('TRAINER', 'ADMIN'), participantCourseController.forceRegenerateCertificate);
+
+// POST /api/trainer/generate-ai-quiz
+// Multipart request: training_id/trainingId, difficulty, numberOfQuestions, questionType, file or url
+router.post(
+  '/generate-ai-quiz',
+  authenticateToken,
+  roleMiddleware('TRAINER'),
+  uploadAIQuizMaterial.single('file'),
+  generateAIQuiz
+);
 
 // POST /api/trainer/quiz/generate-from-prompt
 // Request: { trainingId, prompt, questionCount, difficulty }
