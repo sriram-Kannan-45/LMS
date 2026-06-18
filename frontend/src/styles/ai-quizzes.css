@@ -9,7 +9,7 @@
   --ai-text-secondary: #64748b;
   --ai-text-muted: #94a3b8;
   --ai-surface: #ffffff;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', system-ui, sans-serif;
   color: var(--ai-text);
 }
 
@@ -63,7 +63,7 @@
 
 .ai-quiz-page-header__title {
   margin: 0;
-  font-family: 'Outfit', 'Inter', sans-serif;
+  font-family: 'Poppins', 'Poppins', sans-serif;
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -103,7 +103,7 @@
 }
 
 .ai-quiz-metric__value {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--ai-text);
@@ -176,7 +176,7 @@
 
 .ai-quiz-stat__value {
   margin: 0.2rem 0 0;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--ai-text);
@@ -396,7 +396,7 @@
 
 .ai-quiz-card__title {
   margin: 0 0 0.875rem;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.95rem;
   font-weight: 600;
   line-height: 1.4;
@@ -635,7 +635,7 @@
 
 .ai-quiz-empty__title {
   margin: 0 0 0.5rem;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--ai-text);
@@ -688,7 +688,7 @@
   border-radius: 10px;
   background: linear-gradient(135deg, #6366f1, #7c3aed);
   color: #fff;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: 800;
   font-size: 0.9rem;
   box-shadow: 0 4px 12px rgba(99,102,241,0.3);
@@ -696,7 +696,7 @@
 
 .ai-quiz-standalone-nav__name {
   margin: 0;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.875rem;
   font-weight: 700;
   color: var(--ai-text);

@@ -34,6 +34,8 @@ const {
   User,
 } = require('../models');
 
+const { gradeAnswer } = require('../utils/gradeAnswer');
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -892,35 +894,37 @@ async function submitQuiz(req, res) {
 
       // Index lookup so we can store both the raw answer text and the
       // option index (helpful for the review screen).
-      const optionsByQ = Object.fromEntries(questions.map(q => [String(q.id), Array.isArray(q.options) ? q.options : []]));
+      const questionsMap = Object.fromEntries(questions.map(q => [String(q.id), q]));
 
       for (const a of answers) {
         const qid = String(a.questionId);
+        const question = questionsMap[qid];
+        if (!question) continue;
+
         const submittedText = String(a.answer ?? '').trim();
-        
-        let isCorrect = false;
-        if (expected != null) {
-          const expectedStr = String(expected).trim();
-          if (submittedText.toLowerCase() === expectedStr.toLowerCase()) {
-            isCorrect = true;
-          } else if (['0', '1', '2', '3'].includes(expectedStr)) {
-            const idx = parseInt(expectedStr, 10);
-            const opts = optionsByQ[qid] || [];
-            if (opts[idx] && String(opts[idx]).trim().toLowerCase() === submittedText.toLowerCase()) {
-              isCorrect = true;
-            }
-          }
+        const submittedAnswer = {
+          selectedOption: a.selectedOption !== undefined ? a.selectedOption : null,
+          answer: a.answer,
+          answerText: a.answer,
+          matches: a.matches
+        };
+
+        const { isCorrect, score: gradeScore } = gradeAnswer(question, submittedAnswer);
+        const earnedScore = gradeScore / 100; // 0.0 to 1.0
+        correct += earnedScore;
+
+        let optionIdx = -1;
+        if (Array.isArray(question.options)) {
+          optionIdx = question.options.findIndex(o => String(o).trim() === submittedText);
         }
-        
-        if (isCorrect) correct++;
-        const optionIdx = optionsByQ[qid] ? optionsByQ[qid].findIndex(o => String(o).trim() === submittedText) : -1;
+
         await QuizAnswer.create({
           attemptId:      attempt.id,
           questionId:     a.questionId,
           answerText:     submittedText,
-          selectedOption: optionIdx >= 0 ? optionIdx : null,
+          selectedOption: optionIdx >= 0 ? optionIdx : (a.selectedOption !== undefined ? a.selectedOption : null),
           isCorrect,
-          score:          isCorrect ? 1 : 0,
+          score:          earnedScore,
         }, { transaction: t });
       }
 

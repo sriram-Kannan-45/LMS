@@ -16,20 +16,42 @@ router.get(
   async (req, res) => {
     try {
       const trainerId = req.user.id;
-      const { TrainingTrainerAssignment } = require('../models');
+      const { TrainingTrainerAssignment, Course, CourseTrainerAssignment } = require('../models');
       const { Op } = require('sequelize');
 
+      // 1. Get training IDs from TrainingTrainerAssignment
       const assignments = await TrainingTrainerAssignment.findAll({
         where: { trainerId },
         attributes: ['trainingId']
       });
       const assignedTrainingIds = assignments.map(a => a.trainingId);
 
+      // 2. Get training IDs from CourseTrainerAssignment
+      const courseAssignments = await CourseTrainerAssignment.findAll({
+        where: { trainerId },
+        attributes: ['courseId']
+      });
+      const assignedCourseIds = courseAssignments.map(a => a.courseId);
+
+      const courses = await Course.findAll({
+        where: {
+          [Op.or]: [
+            { trainerId },
+            { id: { [Op.in]: assignedCourseIds } }
+          ]
+        },
+        attributes: ['trainingProgramId']
+      });
+      const courseTrainingIds = courses.map(c => c.trainingProgramId);
+
+      // Combine all assigned training IDs
+      const allTrainingIds = Array.from(new Set([...assignedTrainingIds, ...courseTrainingIds]));
+
       const trainings = await Training.findAll({
         where: {
           [Op.or]: [
             { trainerId },
-            { id: { [Op.in]: assignedTrainingIds } }
+            { id: { [Op.in]: allTrainingIds } }
           ]
         },
         order: [['startDate', 'ASC']]
@@ -58,7 +80,7 @@ router.get(
   }
 );
 
-// GET /api/trainer/enrollment-requests - list pending requests
+// GET /api/trainer/enrollment-requests - trainer views requests for their trainings/courses
 router.get(
   '/enrollment-requests',
   authenticateToken,
@@ -66,31 +88,47 @@ router.get(
   async (req, res) => {
     try {
       const trainerId = req.user.id;
-      const { TrainingTrainerAssignment, Course } = require('../models');
+      const { TrainingTrainerAssignment, Course, CourseTrainerAssignment } = require('../models');
       const { Op } = require('sequelize');
 
+      // Resolve Course IDs
+      const courseAssignments = await CourseTrainerAssignment.findAll({
+        where: { trainerId },
+        attributes: ['courseId']
+      });
+      const assignedCourseIds = courseAssignments.map(a => a.courseId);
+
+      const courses = await Course.findAll({
+        where: {
+          [Op.or]: [
+            { trainerId },
+            { id: { [Op.in]: assignedCourseIds } }
+          ]
+        },
+        attributes: ['id', 'trainingProgramId']
+      });
+      const courseIds = courses.map(c => c.id);
+      const courseTrainingIds = courses.map(c => c.trainingProgramId);
+
+      // Resolve Training IDs
       const assignments = await TrainingTrainerAssignment.findAll({
         where: { trainerId },
         attributes: ['trainingId']
       });
       const assignedTrainingIds = assignments.map(a => a.trainingId);
 
+      const allTrainingIds = Array.from(new Set([...assignedTrainingIds, ...courseTrainingIds]));
+
       const trainings = await Training.findAll({
         where: {
           [Op.or]: [
             { trainerId },
-            { id: { [Op.in]: assignedTrainingIds } }
+            { id: { [Op.in]: allTrainingIds } }
           ]
         },
         attributes: ['id']
       });
       const trainingIds = trainings.map(t => t.id);
-
-      const courses = await Course.findAll({
-        where: { trainerId },
-        attributes: ['id']
-      });
-      const courseIds = courses.map(c => c.id);
 
       const pendingEnrollments = await Enrollment.findAll({
         where: {
@@ -209,20 +247,41 @@ router.get(
   async (req, res) => {
     try {
       const trainerId = req.user.id;
-      const { TrainingTrainerAssignment } = require('../models');
+      const { TrainingTrainerAssignment, Course, CourseTrainerAssignment } = require('../models');
       const { Op } = require('sequelize');
 
+      // Resolve Course assignments to find training program IDs
+      const courseAssignments = await CourseTrainerAssignment.findAll({
+        where: { trainerId },
+        attributes: ['courseId']
+      });
+      const assignedCourseIds = courseAssignments.map(a => a.courseId);
+
+      const courses = await Course.findAll({
+        where: {
+          [Op.or]: [
+            { trainerId },
+            { id: { [Op.in]: assignedCourseIds } }
+          ]
+        },
+        attributes: ['trainingProgramId']
+      });
+      const courseTrainingIds = courses.map(c => c.trainingProgramId);
+
+      // Resolve Training assignments
       const assignments = await TrainingTrainerAssignment.findAll({
         where: { trainerId },
         attributes: ['trainingId']
       });
       const assignedTrainingIds = assignments.map(a => a.trainingId);
 
+      const allTrainingIds = Array.from(new Set([...assignedTrainingIds, ...courseTrainingIds]));
+
       const trainings = await Training.findAll({
         where: {
           [Op.or]: [
             { trainerId },
-            { id: { [Op.in]: assignedTrainingIds } }
+            { id: { [Op.in]: allTrainingIds } }
           ]
         },
         attributes: ['id']
@@ -715,5 +774,53 @@ const reportController = require('../controllers/reportController');
 const participantCourseController = require('../controllers/participantCourseController');
 router.get('/reports', authenticateToken, roleMiddleware('TRAINER', 'ADMIN'), reportController.getTrainerReport);
 router.post('/certificates/regenerate', authenticateToken, roleMiddleware('TRAINER', 'ADMIN'), participantCourseController.forceRegenerateCertificate);
+
+// POST /api/trainer/quiz/generate-from-prompt
+// Request: { trainingId, prompt, questionCount, difficulty }
+router.post(
+  '/quiz/generate-from-prompt',
+  authenticateToken,
+  roleMiddleware('TRAINER', 'ADMIN'),
+  async (req, res) => {
+    try {
+      const { prompt, questionCount, difficulty } = req.body;
+
+      // 1. Validation
+      if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+        return res.status(422).json({ error: 'Prompt/Topic cannot be empty.' });
+      }
+
+      const count = parseInt(questionCount, 10);
+      if (isNaN(count) || count < 1 || count > 50) {
+        return res.status(422).json({ error: 'Number of questions must be between 1 and 50.' });
+      }
+
+      if (!difficulty || typeof difficulty !== 'string') {
+        return res.status(422).json({ error: 'Difficulty is required.' });
+      }
+
+      // Convert difficulty to Title Case (Easy, Medium, Hard)
+      const diffCoerced = difficulty.charAt(0).toUpperCase() + difficulty.slice(1).toLowerCase();
+      if (!['Easy', 'Medium', 'Hard'].includes(diffCoerced)) {
+        return res.status(422).json({ error: 'Difficulty must be Easy, Medium, or Hard.' });
+      }
+
+      const aiService = require('../services/aiService');
+      console.log(`[trainerRoutes] Requesting prompt-quiz generation from AI for: "${prompt}"`);
+      const questions = await aiService.generateQuizFromPrompt(prompt.trim(), count, diffCoerced);
+
+      return res.json({
+        success: true,
+        questions: questions
+      });
+
+    } catch (error) {
+      console.error('❌ [POST /trainer/quiz/generate-from-prompt] ERROR:', error.message);
+      return res.status(500).json({
+        error: error.message || 'Failed to generate quiz from prompt'
+      });
+    }
+  }
+);
 
 module.exports = router;

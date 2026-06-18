@@ -9,6 +9,8 @@ const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
 const fs = require('fs');
 
+const { gradeAnswer } = require('../utils/gradeAnswer');
+
 const router = express.Router();
 
   // Absolute path for uploads directory
@@ -572,22 +574,20 @@ router.post('/participant/submit/:attemptId',
         let feedback = '';
         let isCorrect = false;
 
-        if (question.questionType === 'MCQ') {
-          isCorrect = false;
-          const expectedStr = String(question.correctAnswer || '').trim();
-          const selectedOptIdx = ans.selectedOption !== undefined ? parseInt(ans.selectedOption, 10) : -1;
-          
-          if (expectedStr === String(selectedOptIdx)) {
-            isCorrect = true;
-          } else if (Array.isArray(question.options) && selectedOptIdx >= 0 && selectedOptIdx < question.options.length) {
-            const selectedText = String(question.options[selectedOptIdx]).trim().toLowerCase();
-            if (expectedStr.toLowerCase() === selectedText) {
-              isCorrect = true;
-            }
+        if (['MCQ', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING'].includes(question.questionType)) {
+          const result = gradeAnswer(question, {
+            selectedOption: ans.selectedOption !== undefined ? ans.selectedOption : null,
+            answer: ans.answerText || ans.answer || '',
+            answerText: ans.answerText || ans.answer || '',
+            matches: ans.matches
+          });
+          isCorrect = result.isCorrect;
+          score = result.score;
+          if (question.questionType === 'MATCHING') {
+            feedback = `Score: ${score}%. Matched ${result.correctCount} of ${result.total} correctly.`;
+          } else {
+            feedback = isCorrect ? 'Correct!' : `Incorrect. Correct answer: ${question.correctAnswer}`;
           }
-          
-          score = isCorrect ? 100 : 0;
-          feedback = isCorrect ? 'Correct!' : `Incorrect. Correct answer: ${question.correctAnswer}`;
         } else {
           const evaluation = await aiService.evaluateShortAnswer(
             question.questionText,

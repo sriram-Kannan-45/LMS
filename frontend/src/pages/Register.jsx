@@ -236,7 +236,7 @@ function Register() {
           justify-content: center;
           background-color: #f0f2f5;
           padding: 24px;
-          font-family: 'Inter', -apple-system, sans-serif;
+          font-family: 'Poppins', -apple-system, sans-serif;
           position: relative;
           overflow: hidden;
         }
@@ -314,7 +314,7 @@ function Register() {
           justify-content: center;
           font-size: 20px;
           font-weight: 800;
-          font-family: 'Outfit', sans-serif;
+          font-family: 'Poppins', sans-serif;
           box-shadow: 0 4px 10px rgba(99, 102, 241, 0.25);
         }
 
@@ -324,7 +324,7 @@ function Register() {
           color: #0f172a;
           letter-spacing: -0.03em;
           margin: 0 0 4px;
-          font-family: 'Outfit', sans-serif;
+          font-family: 'Poppins', sans-serif;
         }
 
         .classic-subtitle {

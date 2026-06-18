@@ -9,6 +9,8 @@ const { ExamSession, AIQuiz, AIQuestion, QuizAnswer, QuizAttempt, QuizResult, Us
 const aiService = require('../services/aiService');
 const logger = require('../utils/logger');
 
+const { gradeAnswer } = require('../utils/gradeAnswer');
+
 function ok(res, data) { return res.json({ success: true, data }); }
 function fail(res, status, message) { return res.status(status).json({ success: false, message }); }
 
@@ -400,22 +402,20 @@ exports.finalize = async (req, res, next) => {
       let isCorrect = false;
       let feedback = '';
 
-      if (q.questionType === 'MCQ') {
-        isCorrect = false;
-        const expectedStr = String(q.correctAnswer || '').trim();
-        const selectedOptIdx = row.selectedOption !== undefined && row.selectedOption !== null ? parseInt(row.selectedOption, 10) : -1;
-        
-        if (expectedStr === String(selectedOptIdx)) {
-          isCorrect = true;
-        } else if (Array.isArray(q.options) && selectedOptIdx >= 0 && selectedOptIdx < q.options.length) {
-          const selectedText = String(q.options[selectedOptIdx]).trim().toLowerCase();
-          if (expectedStr.toLowerCase() === selectedText) {
-            isCorrect = true;
-          }
+      if (['MCQ', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING'].includes(q.questionType)) {
+        const result = gradeAnswer(q, {
+          selectedOption: row.selectedOption !== undefined && row.selectedOption !== null ? row.selectedOption : null,
+          answer: row.answerText || '',
+          answerText: row.answerText || '',
+          matches: null // will be parsed from answerText automatically inside gradeAnswer
+        });
+        isCorrect = result.isCorrect;
+        score = result.score;
+        if (q.questionType === 'MATCHING') {
+          feedback = `Score: ${score}%. Matched ${result.correctCount} of ${result.total} correctly.`;
+        } else {
+          feedback = isCorrect ? 'Correct!' : 'Incorrect';
         }
-        
-        score = isCorrect ? 100 : 0;
-        feedback = isCorrect ? 'Correct!' : 'Incorrect';
       } else {
         try {
           const evalResult = await aiService.evaluateShortAnswer(

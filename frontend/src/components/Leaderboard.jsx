@@ -98,7 +98,7 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
       className="w-full"
-      style={{ fontFamily: "'Inter', 'Outfit', sans-serif" }}
+      style={{ fontFamily: "'Inter', 'Poppins', sans-serif" }}
     >
 
       {/* ═══════════════════ HEADER ═══════════════════ */}

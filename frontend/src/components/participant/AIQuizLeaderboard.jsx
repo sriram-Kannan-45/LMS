@@ -235,7 +235,7 @@ export default function AIQuizLeaderboard() {
             fontSize: 18,
             fontWeight: 700,
             color: '#f1f5f9',
-            fontFamily: "'Outfit', 'Inter', sans-serif",
+            fontFamily: "'Outfit', 'Poppins', sans-serif",
             letterSpacing: '-0.02em',
           }}>AI Quiz Leaderboard</h2>
         </div>
@@ -442,17 +442,17 @@ export default function AIQuizLeaderboard() {
                       margin: '0 auto 8px',
                       fontSize: 16, fontWeight: 700, color: '#fff',
                       boxShadow: `0 0 20px ${colors[idx]}40`,
-                      fontFamily: "'Outfit', sans-serif",
+                      fontFamily: "'Poppins', sans-serif",
                     }}>
                       {p.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                     </div>
                     <div style={{
                       fontSize: 13, fontWeight: 700, color: '#f1f5f9',
-                      marginBottom: 2, fontFamily: "'Outfit', sans-serif",
+                      marginBottom: 2, fontFamily: "'Poppins', sans-serif",
                     }}>
                       {p.name}
                     </div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: colors[idx], fontFamily: "'Outfit', sans-serif" }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: colors[idx], fontFamily: "'Poppins', sans-serif" }}>
                       {p.score}
                     </div>
                     <div style={{ fontSize: 10, color: '#64748b', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -493,7 +493,7 @@ export default function AIQuizLeaderboard() {
                     border: '1px solid rgba(255,255,255,0.05)',
                   }}>
                     <div style={{ fontSize: 10, color: '#64748b', fontWeight: 500, marginBottom: 2 }}>{s.label}</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: '#a78bfa', fontFamily: "'Outfit', sans-serif" }}>{s.value}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#a78bfa', fontFamily: "'Poppins', sans-serif" }}>{s.value}</div>
                   </div>
                 ))}
               </div>
@@ -576,14 +576,14 @@ export default function AIQuizLeaderboard() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 10, fontWeight: 700, color: p.isYou ? '#fff' : '#64748b',
                       flexShrink: 0,
-                      fontFamily: "'Outfit', sans-serif",
+                      fontFamily: "'Poppins', sans-serif",
                     }}>
                       {p.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                     </div>
                     <div>
                       <div style={{
                         fontSize: 13, fontWeight: 600, color: '#f1f5f9',
-                        fontFamily: "'Outfit', sans-serif",
+                        fontFamily: "'Poppins', sans-serif",
                       }}>
                         {p.name}
                         {p.isYou && (
@@ -604,7 +604,7 @@ export default function AIQuizLeaderboard() {
                   {/* Score */}
                   <div style={{
                     fontSize: 14, fontWeight: 700, color: isTop3 ? '#f59e0b' : '#e2e8f0',
-                    fontFamily: "'Outfit', sans-serif",
+                    fontFamily: "'Poppins', sans-serif",
                   }}>
                     {p.score}
                   </div>
@@ -623,7 +623,7 @@ export default function AIQuizLeaderboard() {
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 4,
                     fontSize: 13, fontWeight: 600, color: '#f59e0b',
-                    fontFamily: "'Outfit', sans-serif",
+                    fontFamily: "'Poppins', sans-serif",
                   }}>
                     🔥{p.streak}
                   </div>

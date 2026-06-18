@@ -12,7 +12,6 @@ const iconMap = {
   Feedback: <MessageSquare size={18} />,
   Surveys: <ClipboardList size={18} />,
   'Add Trainer': <UserPlus size={18} />,
-  'Add Training': <BookPlus size={18} />,
   'My Trainings': <BookOpen size={18} />,
   'My Courses': <GraduationCap size={18} />,
   'My Profile': <User size={18} />,
@@ -43,7 +42,6 @@ const navItems = {
     { key: 'notes', label: 'Notes', icon: 'Lessons' },
     { key: 'feedback', label: 'Feedback', icon: 'Feedback' },
     { key: 'surveys', label: 'Surveys', icon: 'Surveys' },
-    { key: 'createTraining', label: 'Add Training', icon: 'Add Training' },
   ],
   TRAINER: [
     { key: 'courses', label: 'Trainings', icon: 'Trainings' },

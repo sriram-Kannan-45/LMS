@@ -106,7 +106,7 @@ export default function LessonViewer({ lesson, onClose }) {
                 <h2
                   id="lesson-title"
                   style={{
-                    fontFamily: "'Outfit', sans-serif",
+                    fontFamily: "'Poppins', sans-serif",
                     fontSize: 16, fontWeight: 700,
                     color: 'var(--academic-text)',
                     margin: 0,

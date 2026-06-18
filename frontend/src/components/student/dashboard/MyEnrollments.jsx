@@ -76,7 +76,7 @@ export default function MyEnrollments({ enrollments = [], loading = false, onCan
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <h3 style={{
-                      fontFamily: "'Outfit', sans-serif", fontSize: 16, fontWeight: 700,
+                      fontFamily: "'Poppins', sans-serif", fontSize: 16, fontWeight: 700,
                       lineHeight: 1.3, color: 'var(--academic-text)',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}>
@@ -143,7 +143,7 @@ export default function MyEnrollments({ enrollments = [], loading = false, onCan
                 boxShadow: 'var(--academic-shadow-pop)',
               }}
             >
-              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+              <h3 style={{ fontFamily: "'Poppins', sans-serif", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
                 Leave this course?
               </h3>
               <p style={{ fontSize: 13.5, color: 'var(--academic-text-secondary)', marginBottom: 20 }}>

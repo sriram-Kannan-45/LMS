@@ -36,6 +36,23 @@ const fadeVariant = {
  */
 function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
   const { success, error: showError } = useToast()
+  const tab = activeTab || 'overview'
+  const handleTabChange = (next) => onTabChange?.(next)
+
+  const auth = useCallback(
+    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${user?.token || ''}` }),
+    [user]
+  )
+
+  const handleResponse = useCallback(async (res) => {
+    if (res.status === 401) {
+      onLogout?.()
+      throw new Error('Session expired. Please log in again.')
+    }
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Request failed')
+    return data
+  }, [onLogout])
 
   const [trainings, setTrainings] = useState([])
   const [enrollments, setEnrollments] = useState([])
@@ -56,21 +73,6 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
     }
   }, [auth, handleResponse])
   const { track } = useContinueLearning()
-
-  const auth = useCallback(
-    () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${user?.token || ''}` }),
-    [user]
-  )
-
-  const handleResponse = useCallback(async (res) => {
-    if (res.status === 401) {
-      onLogout?.()
-      throw new Error('Session expired. Please log in again.')
-    }
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Request failed')
-    return data
-  }, [onLogout])
 
   // ─── Fetchers ─────────────────────────────────────────────────────────────
   const fetchTrainings = useCallback(async () => {
@@ -139,16 +141,13 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
         alignItems: 'center',
         justifyContent: 'center',
         background: '#f8fafc',
-        fontFamily: "'Manrope', 'Inter', sans-serif"
+        fontFamily: "'Manrope', 'Poppins', sans-serif"
       }}>
         <Loader2 style={{ animation: 'spin 1s linear infinite', color: '#2563eb' }} size={36} />
         <span style={{ marginTop: '12px', fontSize: '13px', color: '#64748b' }}>Verifying session...</span>
       </div>
     )
   }
-
-  const tab = activeTab || 'overview'
-  const handleTabChange = (next) => onTabChange?.(next)
 
   // ─── Mutations ────────────────────────────────────────────────────────────
   const handleEnroll = async (trainingId) => {
@@ -296,7 +295,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
         <motion.div key="reports" {...fadeVariant} transition={{ duration: 0.25 }} style={{ padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <div>
-              <h2 style={{ margin: 0, fontFamily: "'Outfit', sans-serif" }}>My Learning Reports</h2>
+              <h2 style={{ margin: 0, fontFamily: "'Poppins', sans-serif" }}>My Learning Reports</h2>
               <p style={{ color: 'var(--academic-text-muted)', fontSize: 13, margin: '4px 0 0' }}>Detailed overview of your academic progress, quiz history, and assessment scores.</p>
             </div>
             <button className="ac-btn ac-btn-secondary" onClick={fetchParticipantReport}>Refresh Report</button>
@@ -447,7 +446,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
         <motion.div key="certificates" {...fadeVariant} transition={{ duration: 0.25 }} style={{ padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <div>
-              <h2 style={{ margin: 0, fontFamily: "'Outfit', sans-serif" }}>My Certificates</h2>
+              <h2 style={{ margin: 0, fontFamily: "'Poppins', sans-serif" }}>My Certificates</h2>
               <p style={{ color: 'var(--academic-text-muted)', fontSize: 13, margin: '4px 0 0' }}>View and download your official completion certificates.</p>
             </div>
             <button className="ac-btn ac-btn-secondary" onClick={fetchParticipantReport}>Refresh</button>
@@ -481,13 +480,13 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
                     <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--academic-primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
                       Wave Init LMS Certificate
                     </div>
-                    <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Outfit', sans-serif", color: 'var(--academic-text)', marginBottom: 8 }}>
+                    <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Poppins', sans-serif", color: 'var(--academic-text)', marginBottom: 8 }}>
                       Certificate of Completion
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--academic-text-secondary)', marginBottom: 16 }}>
                       This is proudly presented to
                     </div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--academic-text)', textDecoration: 'underline', marginBottom: 16, fontFamily: "'Outfit', sans-serif" }}>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--academic-text)', textDecoration: 'underline', marginBottom: 16, fontFamily: "'Poppins', sans-serif" }}>
                       {user.name}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--academic-text-secondary)', marginBottom: 8 }}>
@@ -514,7 +513,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
                           <head>
                             <title>Certificate - ${cert.title}</title>
                             <style>
-                              body { font-family: 'Outfit', 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #fff; color: #000; }
+                              body { font-family: 'Poppins', 'Poppins', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #fff; color: #000; }
                               .cert-container { border: 15px double #4f46e5; padding: 50px; width: 650px; text-align: center; border-radius: 4px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
                               .title { font-size: 32px; font-weight: 700; color: #1e1b4b; margin-bottom: 10px; }
                               .subtitle { font-size: 16px; color: #4b5563; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 2px; }

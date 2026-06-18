@@ -171,7 +171,7 @@ export default function AvailableCourses({
                 </div>
 
                 <h3 style={{
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "'Poppins', sans-serif",
                   fontSize: 17, fontWeight: 700, lineHeight: 1.3,
                   color: 'var(--academic-text)', marginBottom: 8,
                 }}>

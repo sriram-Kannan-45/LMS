@@ -351,10 +351,11 @@ const startServer = async () => {
     // Add course-centric indexes that were intentionally omitted from the
     // model definitions (to avoid racing the global sync). Idempotent.
     try {
-      const { bootstrapCourseIndexes } = require('./config/bootstrapCourseSchema');
+      const { bootstrapCourseIndexes, syncMissingCourses } = require('./config/bootstrapCourseSchema');
       await bootstrapCourseIndexes(logger);
+      await syncMissingCourses(logger);
     } catch (e) {
-      logger.warn('Could not finalize course-centric indexes', { error: e.message });
+      logger.warn('Could not finalize course-centric indexes or sync missing courses', { error: e.message });
     }
 
     // Assessment session expiry job — runs every 5 min

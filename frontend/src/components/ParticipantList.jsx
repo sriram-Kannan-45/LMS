@@ -39,7 +39,7 @@ class ErrorBoundary extends React.Component {
           border: '1px solid rgba(239,68,68,0.2)',
           borderRadius: 12, color: '#dc2626'
         }} role="alert">
-          <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Error Loading Participants</h3>
+          <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Error Loading Participants</h3>
           <p style={{ fontSize: 13 }}>{this.state.error?.message || 'An unexpected error occurred'}</p>
         </div>
       )
@@ -142,7 +142,7 @@ function ParticipantList({
   if (!participants || participants.length === 0) {
     return (
       <div className="empty-state" role="status" aria-live="polite">
-        <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 16, fontWeight: 700, color: '#111827', marginBottom: 4 }}>No Participants Yet</h3>
+        <h3 style={{ fontFamily: "'Poppins', sans-serif", fontSize: 16, fontWeight: 700, color: '#111827', marginBottom: 4 }}>No Participants Yet</h3>
         <p style={{ fontSize: 14, color: '#6B7280', marginBottom: 16 }}>Participants will appear here once they register.</p>
         {onRefresh && (
           <button 
@@ -178,7 +178,7 @@ function ParticipantList({
             onChange={handleSearchChange}
             style={{
               width: '100%', padding: '9px 14px 9px 40px', fontSize: 13.5, height: 40,
-              fontFamily: "'Inter', sans-serif", background: '#FFFFFF',
+              fontFamily: "'Poppins', sans-serif", background: '#FFFFFF',
               border: '1.5px solid #ECECEC', borderRadius: 10,
               color: '#111827', outline: 'none',
               transition: 'border-color 200ms ease, box-shadow 200ms ease'
@@ -205,7 +205,7 @@ function ParticipantList({
               onClick={() => { setStatusFilter(chip.key); setCurrentPage(1) }}
               style={{
                 padding: '6px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: 600,
-                cursor: 'pointer', fontFamily: "'Inter', sans-serif", border: 'none',
+                cursor: 'pointer', fontFamily: "'Poppins', sans-serif", border: 'none',
                 transition: 'all 180ms ease',
                 background: statusFilter === chip.key ? '#FFFFFF' : 'transparent',
                 color: statusFilter === chip.key ? '#111827' : '#6B7280',
@@ -218,7 +218,7 @@ function ParticipantList({
         </div>
       </div>
 
-      <div style={{ fontSize: 12.5, color: '#9CA3AF', fontWeight: 500, fontFamily: "'Inter', sans-serif" }} role="status" aria-live="polite" aria-atomic="true">
+      <div style={{ fontSize: 12.5, color: '#9CA3AF', fontWeight: 500, fontFamily: "'Poppins', sans-serif" }} role="status" aria-live="polite" aria-atomic="true">
         {resultsMessage}
       </div>
 
@@ -227,13 +227,13 @@ function ParticipantList({
         <table className="table">
           <thead>
             <tr>
-              <th style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>Avatar</th>
-              <th style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>Name</th>
-              <th style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>Email</th>
-              <th style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>Phone</th>
-              <th style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>Registration Date</th>
-              <th style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600 }}>Status</th>
-              <th style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600, textAlign: 'right' }}>Actions</th>
+              <th style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 600 }}>Avatar</th>
+              <th style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 600 }}>Name</th>
+              <th style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 600 }}>Email</th>
+              <th style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 600 }}>Phone</th>
+              <th style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 600 }}>Registration Date</th>
+              <th style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 600 }}>Status</th>
+              <th style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 600, textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -248,16 +248,16 @@ function ParticipantList({
                     width: 30, height: 30, borderRadius: 9999,
                     background: 'rgba(124,58,237,0.10)', color: '#7C3AED',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 700, fontFamily: "'Outfit', sans-serif",
+                    fontSize: 11, fontWeight: 700, fontFamily: "'Poppins', sans-serif",
                     flexShrink: 0
                   }}>
                     {getInitials(p.name)}
                   </div>
                 </td>
-                <td style={{ fontWeight: 600, color: '#111827', fontFamily: "'Inter', sans-serif" }}>{p.name || '-'}</td>
-                <td style={{ color: '#6B7280', fontFamily: "'Inter', sans-serif" }}>{p.email}</td>
-                <td style={{ color: '#6B7280', fontFamily: "'Inter', sans-serif" }}>{p.phone || '-'}</td>
-                <td style={{ color: '#6B7280', fontFamily: "'Inter', sans-serif", fontSize: 13 }}>
+                <td style={{ fontWeight: 600, color: '#111827', fontFamily: "'Poppins', sans-serif" }}>{p.name || '-'}</td>
+                <td style={{ color: '#6B7280', fontFamily: "'Poppins', sans-serif" }}>{p.email}</td>
+                <td style={{ color: '#6B7280', fontFamily: "'Poppins', sans-serif" }}>{p.phone || '-'}</td>
+                <td style={{ color: '#6B7280', fontFamily: "'Poppins', sans-serif", fontSize: 13 }}>
                   {new Date(p.created_at || p.joinedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </td>
                 <td>
@@ -336,7 +336,7 @@ function ParticipantList({
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '8px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600,
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: "'Poppins', sans-serif",
               border: '1px solid #ECECEC', background: '#FFFFFF',
               color: currentPage === 1 ? '#9CA3AF' : '#111827',
               cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
@@ -350,7 +350,7 @@ function ParticipantList({
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
             padding: '4px 12px', background: '#F1F3F6', borderRadius: 8,
-            fontSize: 13, fontWeight: 600, fontFamily: "'Inter', sans-serif",
+            fontSize: 13, fontWeight: 600, fontFamily: "'Poppins', sans-serif",
             color: '#6B7280'
           }}>
             {currentPage} <span style={{ color: '#9CA3AF', fontWeight: 400 }}>of</span> {totalPages}
@@ -364,7 +364,7 @@ function ParticipantList({
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '8px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600,
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: "'Poppins', sans-serif",
               border: '1px solid #ECECEC', background: '#FFFFFF',
               color: currentPage === totalPages ? '#9CA3AF' : '#111827',
               cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
@@ -410,18 +410,18 @@ function ParticipantList({
                     width: 38, height: 38, borderRadius: 10,
                     background: 'rgba(124,58,237,0.10)', color: '#7C3AED',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontWeight: 700, fontSize: 14, fontFamily: "'Outfit', sans-serif"
+                    fontWeight: 700, fontSize: 14, fontFamily: "'Poppins', sans-serif"
                   }}>
                     {getInitials(editingParticipant.name)}
                   </div>
                   <div>
-                    <h4 style={{ fontWeight: 600, fontSize: 14, color: '#111827', fontFamily: "'Outfit', sans-serif" }}>{editingParticipant.name}</h4>
-                    <p style={{ fontSize: 12.5, color: '#6B7280', fontFamily: "'Inter', sans-serif" }}>{editingParticipant.email}</p>
+                    <h4 style={{ fontWeight: 600, fontSize: 14, color: '#111827', fontFamily: "'Poppins', sans-serif" }}>{editingParticipant.name}</h4>
+                    <p style={{ fontSize: 12.5, color: '#6B7280', fontFamily: "'Poppins', sans-serif" }}>{editingParticipant.email}</p>
                   </div>
                 </div>
 
                 <div className="form-group" style={{ marginTop: 20 }}>
-                  <label className="form-label" style={{ fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 500, color: '#6B7280' }}>Account Status</label>
+                  <label className="form-label" style={{ fontFamily: "'Poppins', sans-serif", fontSize: 13, fontWeight: 500, color: '#6B7280' }}>Account Status</label>
                   <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
                     <motion.button
                       type="button"
@@ -430,7 +430,7 @@ function ParticipantList({
                       whileTap={{ scale: 0.98 }}
                       style={{
                         flex: 1, padding: '10px 16px', borderRadius: 10, border: '1px solid',
-                        fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif",
+                        fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'Poppins', sans-serif",
                         transition: 'all 180ms ease',
                         background: editStatus === 'APPROVED' ? 'rgba(16,185,129,0.08)' : 'transparent',
                         color: editStatus === 'APPROVED' ? '#059669' : '#6B7280',
@@ -446,7 +446,7 @@ function ParticipantList({
                       whileTap={{ scale: 0.98 }}
                       style={{
                         flex: 1, padding: '10px 16px', borderRadius: 10, border: '1px solid',
-                        fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif",
+                        fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'Poppins', sans-serif",
                         transition: 'all 180ms ease',
                         background: editStatus === 'REJECTED' ? 'rgba(239,68,68,0.08)' : 'transparent',
                         color: editStatus === 'REJECTED' ? '#dc2626' : '#6B7280',

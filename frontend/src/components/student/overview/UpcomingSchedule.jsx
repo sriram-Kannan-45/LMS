@@ -112,7 +112,7 @@ export default function UpcomingSchedule({ enrollments = [], quizzes = [], onCli
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 700,
+                    fontFamily: "'Poppins', sans-serif", fontSize: 14, fontWeight: 700,
                     color: 'var(--academic-text)',
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>

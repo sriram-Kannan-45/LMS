@@ -116,7 +116,7 @@ export default function NotificationsPanel({ placement = 'bottom' }) {
               }}
             >
               <div>
-                <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 15, fontWeight: 700, margin: 0 }}>
+                <h3 style={{ fontFamily: "'Poppins', sans-serif", fontSize: 15, fontWeight: 700, margin: 0 }}>
                   Notifications
                 </h3>
                 <p style={{ fontSize: 11.5, color: 'var(--academic-text-muted)', margin: 0 }}>

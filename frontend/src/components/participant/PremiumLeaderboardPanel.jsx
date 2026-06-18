@@ -215,7 +215,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                 <Trophy size={18} className="text-white" />
               </div>
               <div>
-                <h2 className="text-[15px] font-bold text-white" style={{ fontFamily: "'Outfit', sans-serif" }}>Leaderboard</h2>
+                <h2 className="text-[15px] font-bold text-white" style={{ fontFamily: "'Poppins', sans-serif" }}>Leaderboard</h2>
                 <p className="text-[11px] text-white/40 font-medium">AI Quiz Rankings</p>
               </div>
             </div>
@@ -281,7 +281,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                 >
                   <Trophy size={36} className="text-white/20" />
                 </motion.div>
-                <h3 className="text-[17px] font-bold text-white/80 mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                <h3 className="text-[17px] font-bold text-white/80 mb-2" style={{ fontFamily: "'Poppins', sans-serif" }}>
                   No Rankings Available
                 </h3>
                 <p className="text-[13px] text-white/40 max-w-xs leading-relaxed">
@@ -322,7 +322,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                         <div className="text-[11px] font-bold uppercase tracking-widest text-white/40 mb-2">{pc.label}</div>
                         <AvatarCircle name={p.name} rank={idx + 1} size={40} />
                         <div className="mt-2 text-[12px] font-bold text-white truncate">{p.name}</div>
-                        <div className="text-[20px] font-black mt-1" style={{ color: pc.text, fontFamily: "'Outfit', sans-serif" }}>{p.score}</div>
+                        <div className="text-[20px] font-black mt-1" style={{ color: pc.text, fontFamily: "'Poppins', sans-serif" }}>{p.score}</div>
                         <div className="text-[10px] text-white/30">pts</div>
                       </motion.div>
                     )
@@ -352,7 +352,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                           </div>
                           <ScoreBar score={p.score} maxScore={maxScore} color="linear-gradient(90deg, #7c3aed, #a78bfa)" />
                         </div>
-                        <span className="text-[14px] font-bold text-white/70" style={{ fontFamily: "'Outfit', sans-serif" }}>{p.score}</span>
+                        <span className="text-[14px] font-bold text-white/70" style={{ fontFamily: "'Poppins', sans-serif" }}>{p.score}</span>
                         <span className="text-[11px] text-white/30 w-10 text-right">{p.accuracy}%</span>
                         <span className="text-[11px] text-white/30 w-12 text-right font-mono">{p.time}</span>
                       </motion.div>
@@ -417,7 +417,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                             <AvatarCircle name={p.name} rank={idx + 1} size={44} />
                           </div>
                           <div className="mt-2 text-[13px] font-bold text-white truncate">{p.name}</div>
-                          <div className="text-[26px] font-black mt-1" style={{ color: pc.text, fontFamily: "'Outfit', sans-serif" }}>{p.score}</div>
+                          <div className="text-[26px] font-black mt-1" style={{ color: pc.text, fontFamily: "'Poppins', sans-serif" }}>{p.score}</div>
                           <div className="text-[10px] text-white/40">points · {p.accuracy}% acc</div>
                           <div className="mt-2 flex justify-center gap-2 text-[10px] text-white/30">
                             <span>⏱ {p.time}</span>
@@ -467,7 +467,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className={`text-[13px] font-semibold truncate ${p.isYou ? 'text-[#a78bfa]' : 'text-white/80'}`}
-                                style={{ fontFamily: "'Outfit', sans-serif" }}
+                                style={{ fontFamily: "'Poppins', sans-serif" }}
                               >
                                 {p.name}
                               </span>
@@ -481,7 +481,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
 
                         {/* Score */}
                         <div className={`text-[14px] font-bold ${isTop3 ? 'text-[#f59e0b]' : 'text-white/70'}`}
-                          style={{ fontFamily: "'Outfit', sans-serif" }}
+                          style={{ fontFamily: "'Poppins', sans-serif" }}
                         >
                           {p.score}
                         </div>
@@ -516,7 +516,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                   ].map(s => (
                     <div key={s.label} className="rounded-lg bg-white/[0.03] border border-white/5 p-3 text-center">
                       <div className="text-[10px] text-white/30 font-medium uppercase tracking-wider">{s.label}</div>
-                      <div className="text-[18px] font-black mt-0.5" style={{ color: s.color, fontFamily: "'Outfit', sans-serif" }}>{s.value}</div>
+                      <div className="text-[18px] font-black mt-0.5" style={{ color: s.color, fontFamily: "'Poppins', sans-serif" }}>{s.value}</div>
                     </div>
                   ))}
                 </motion.div>

@@ -131,16 +131,20 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
     try {
       const r = await fetch(`${API}/trainer/trainings`, { headers: auth() })
       const d = await r.json()
+      console.log('DEBUG - API Response (/trainer/trainings):', d)
       const list = d.trainings || []
       setTrainings(list)
       setStats(p => ({ ...p, totalTrainings: list.length }))
-    } catch {}
+    } catch (e) {
+      console.error('DEBUG - fetchTrainings error:', e.message)
+    }
   }
 
   const fetchFeedbacks = async () => {
     try {
       const r = await fetch(`${API}/trainer/feedbacks`, { headers: auth() })
       const d = await r.json()
+      console.log('DEBUG - API Response (/trainer/feedbacks):', d)
       const list = d.feedbacks || []
       setFeedbacks(list)
       setStats(p => ({
@@ -149,7 +153,9 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
         avgSubjectRating: d.averageSubjectRating || 0,
         totalFeedbacks: list.length
       }))
-    } catch {}
+    } catch (e) {
+      console.error('DEBUG - fetchFeedbacks error:', e.message)
+    }
   }
 
   const handleReply = async (e) => {
@@ -426,7 +432,7 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
-              <h3 style={{ margin: 0, fontFamily: "'Outfit', sans-serif" }}>Trainer Reports &amp; Analytics</h3>
+              <h3 style={{ margin: 0, fontFamily: "'Poppins', sans-serif" }}>Trainer Reports &amp; Analytics</h3>
               <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>View participant progress, quiz results, and review submissions</span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -447,7 +453,7 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
                   <TrendingUp style={{ color: '#4f46e5' }} />
                   <div>
                     <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 550 }}>Average Progress Rate</div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>{trainerReport.averageCompletion}%</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Poppins', sans-serif" }}>{trainerReport.averageCompletion}%</div>
                   </div>
                 </div>
               </div>

@@ -131,6 +131,7 @@ export const API = {
     REORDER_MATERIALS:(lessonId)       => `${API_BASE}/trainer/lessons/${lessonId}/materials/reorder`,
 
     QUIZ_MANUAL:   (courseId)          => `${API_BASE}/trainer/courses/${courseId}/quiz/manual`,
+    GENERATE_FROM_PROMPT:              `${API_BASE}/trainer/quiz/generate-from-prompt`,
     QUIZZES:       (courseId)          => `${API_BASE}/trainer/courses/${courseId}/quizzes`,
     QUIZ:          (courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}`,
     PUBLISH_QUIZ:  (courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}/publish`,

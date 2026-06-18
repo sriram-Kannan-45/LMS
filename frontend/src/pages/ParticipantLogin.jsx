@@ -157,6 +157,7 @@ function ParticipantLogin({ onLogin }) {
             <p>Sign in to your Participant Portal</p>
           </div>
 
+
           {error && (
             <div className="trainer-alert trainer-alert-error">
               <AlertCircle size={16} />

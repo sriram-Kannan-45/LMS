@@ -56,8 +56,14 @@ async function loadOwnedCourse(req, res, courseId) {
   const course = await Course.findByPk(id);
   if (!course) { res.status(404).json({ error: 'Course not found' }); return null; }
   if (!isAdmin(req.user) && course.trainerId !== req.user.id) {
-    res.status(403).json({ error: 'You are not assigned to this course' });
-    return null;
+    // Check many-to-many assignment
+    const assigned = await CourseTrainerAssignment.findOne({
+      where: { courseId: course.id, trainerId: req.user.id }
+    });
+    if (!assigned) {
+      res.status(403).json({ error: 'You are not assigned to this course' });
+      return null;
+    }
   }
   return course;
 }
@@ -70,9 +76,18 @@ async function loadOwnedLesson(req, res, lessonId) {
   // Lesson is course-scoped now; if no course_id, fall back to legacy training_id check.
   if (lesson.courseId) {
     const course = await Course.findByPk(lesson.courseId);
-    if (!course || (!isAdmin(req.user) && course.trainerId !== req.user.id)) {
+    if (!course) {
       res.status(403).json({ error: 'You do not own the parent course' });
       return null;
+    }
+    if (!isAdmin(req.user) && course.trainerId !== req.user.id) {
+      const assigned = await CourseTrainerAssignment.findOne({
+        where: { courseId: course.id, trainerId: req.user.id }
+      });
+      if (!assigned) {
+        res.status(403).json({ error: 'You do not own the parent course' });
+        return null;
+      }
     }
   } else if (!isAdmin(req.user) && lesson.trainerId !== req.user.id) {
     res.status(403).json({ error: 'You do not own this lesson' });
@@ -97,7 +112,20 @@ async function courseParticipantIds(courseId) {
 // GET /api/trainer/courses
 async function listMyCourses(req, res) {
   try {
-    const where = isAdmin(req.user) ? {} : { trainerId: req.user.id };
+    let where = {};
+    if (!isAdmin(req.user)) {
+      const assignments = await CourseTrainerAssignment.findAll({
+        where: { trainerId: req.user.id },
+        attributes: ['courseId']
+      });
+      const assignedCourseIds = assignments.map(a => a.courseId);
+      where = {
+        [Op.or]: [
+          { trainerId: req.user.id },
+          { id: { [Op.in]: assignedCourseIds } }
+        ]
+      };
+    }
     const courses = await Course.findAll({
       where,
       include: [
@@ -616,6 +644,7 @@ async function createManualQuiz(req, res) {
           questionType:  'MCQ',
           options:       qd.options,
           correctAnswer: qd.options[correctIdx],
+          explanation:   qd.explanation || '',
           difficulty:    qd.difficulty || 'MEDIUM',
           order:         i,
         }, { transaction: t });
@@ -720,6 +749,7 @@ async function updateCourseQuiz(req, res) {
             questionType:  'MCQ',
             options:       qd.options,
             correctAnswer: qd.options[correctIdx],
+            explanation:   qd.explanation || '',
             difficulty:    qd.difficulty || 'MEDIUM',
             order:         i,
           }, { transaction: t });

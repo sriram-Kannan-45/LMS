@@ -5,7 +5,7 @@
    ========================================================================== */
 
 .as-panel {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', system-ui, sans-serif;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -56,7 +56,7 @@
   font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   letter-spacing: -0.02em;
 }
 .as-header__actions {
@@ -311,7 +311,7 @@
   font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
 }
 .as-modal__lead {
   margin: 0 0 16px;

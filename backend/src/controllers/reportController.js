@@ -1,7 +1,7 @@
 const {
   User, Training, Lesson, Enrollment, Feedback, AIQuiz, QuizResult,
   AssessmentSubmission, LessonProgress, Certificate, ParticipantTracking,
-  LessonAssessment, Course, TrainingTrainerAssignment
+  LessonAssessment, Course, TrainingTrainerAssignment, CourseTrainerAssignment
 } = require('../models');
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/db');
@@ -102,29 +102,43 @@ const getTrainerReport = async (req, res) => {
 
     const trainerId = req.user.id;
 
-    // Get trainer's trainings and courses
+    // Resolve course IDs from CourseTrainerAssignment + primary trainerId
+    const courseAssignments = await CourseTrainerAssignment.findAll({
+      where: { trainerId },
+      attributes: ['courseId']
+    });
+    const assignedCourseIds = courseAssignments.map(a => a.courseId);
+    const courses = await Course.findAll({
+      where: {
+        [Op.or]: [
+          { trainerId },
+          { id: { [Op.in]: assignedCourseIds } }
+        ]
+      },
+      attributes: ['id', 'title', 'trainingProgramId']
+    });
+    const courseIds = courses.map(c => c.id);
+    const courseTrainingIds = courses.map(c => c.trainingProgramId);
+
+    // Resolve training IDs from TrainingTrainerAssignment + primary trainerId + courseTrainingIds
     const assignments = await TrainingTrainerAssignment.findAll({
       where: { trainerId },
       attributes: ['trainingId']
     });
     const assignedTrainingIds = assignments.map(a => a.trainingId);
 
+    const allTrainingIds = Array.from(new Set([...assignedTrainingIds, ...courseTrainingIds]));
+
     const trainings = await Training.findAll({
       where: {
         [Op.or]: [
           { trainerId },
-          { id: { [Op.in]: assignedTrainingIds } }
+          { id: { [Op.in]: allTrainingIds } }
         ]
       },
       attributes: ['id']
     });
     const trainingIds = trainings.map(t => t.id);
-
-    const courses = await Course.findAll({
-      where: { trainerId },
-      attributes: ['id', 'title']
-    });
-    const courseIds = courses.map(c => c.id);
 
     // 1. Participant Progress
     const enrollments = await Enrollment.findAll({

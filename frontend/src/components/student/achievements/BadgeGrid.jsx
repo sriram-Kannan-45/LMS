@@ -185,7 +185,7 @@ function BadgeTile({ badge, index }) {
         {earned ? <Icon size={28} /> : <Lock size={22} style={{ color: 'var(--academic-text-muted)' }} />}
       </motion.div>
       <h4 style={{
-        fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 700,
+        fontFamily: "'Poppins', sans-serif", fontSize: 14, fontWeight: 700,
         color: earned ? 'var(--academic-text)' : 'var(--academic-text-secondary)',
         marginBottom: 4,
       }}>

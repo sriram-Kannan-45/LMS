@@ -229,7 +229,7 @@
 
 /* â”€â”€â”€ Section heading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .theme-academic .ac-section-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -283,7 +283,7 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--academic-radius-full);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: 700;
   letter-spacing: 0.01em;
   background: var(--academic-gradient-primary);
@@ -334,7 +334,7 @@
   color: var(--academic-text-muted);
 }
 .theme-academic .ac-stat__value {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -513,7 +513,7 @@
 }
 
 .theme-academic .ov-hero__title {
-  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', 'Inter', system-ui, sans-serif;
   font-size: 32px;
   font-weight: 700;
   line-height: 1.1;
@@ -581,7 +581,7 @@
   border-radius: 12px;
   background: var(--academic-gradient-primary);
   color: #fff;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: 700;
   font-size: 16px;
   display: inline-flex;
@@ -683,7 +683,7 @@
 }
 
 .theme-academic .ov-stat__value {
-  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', 'Inter', system-ui, sans-serif;
   font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.025em;
@@ -822,7 +822,7 @@
   border-radius: 999px;
 }
 .theme-academic .ls-hero__title {
-  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', 'Inter', system-ui, sans-serif;
   font-size: 32px;
   font-weight: 700;
   line-height: 1.1;
@@ -887,7 +887,7 @@
   padding: 0 4px;
 }
 .theme-academic .ls-rail__title {
-  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', 'Inter', system-ui, sans-serif;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.015em;
@@ -947,7 +947,7 @@
   gap: 2px;
 }
 .theme-academic .ls-rail-card__title {
-  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', 'Inter', system-ui, sans-serif;
   font-size: 13.5px;
   font-weight: 600;
   color: var(--academic-text);
@@ -1249,7 +1249,7 @@
 }
 
 .theme-academic .ls-card__title {
-  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', 'Inter', system-ui, sans-serif;
   font-size: 17px;
   font-weight: 700;
   line-height: 1.35;
@@ -1368,7 +1368,7 @@
   border: 1px solid var(--academic-primary-100);
 }
 .theme-academic .ls-empty__title {
-  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', 'Inter', system-ui, sans-serif;
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -1470,7 +1470,7 @@
 }
 
 .theme-academic .lb-hero__title {
-  font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  font-family: 'Poppins', 'Inter', system-ui, sans-serif;
   font-size: 32px;
   font-weight: 700;
   line-height: 1.1;
@@ -1642,7 +1642,7 @@
   border-radius: 12px;
   background: var(--academic-gradient-primary);
   color: #fff;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: 700;
   font-size: 16px;
   display: inline-flex;
@@ -1664,7 +1664,7 @@
   color: var(--academic-primary-700);
 }
 .theme-academic .lb-mestat__id-name {
-  font-family: 'Outfit', 'Inter', sans-serif;
+  font-family: 'Poppins', 'Poppins', sans-serif;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -1701,7 +1701,7 @@
   align-items: baseline;
   gap: 3px;
   margin-top: 4px;
-  font-family: 'Outfit', 'Inter', sans-serif;
+  font-family: 'Poppins', 'Poppins', sans-serif;
   font-size: 20px;
   font-weight: 700;
   color: var(--academic-text);
@@ -1753,7 +1753,7 @@
   margin-bottom: 12px;
 }
 .theme-academic .lb-podium-title {
-  font-family: 'Outfit', 'Inter', sans-serif;
+  font-family: 'Poppins', 'Poppins', sans-serif;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.015em;
@@ -1800,7 +1800,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: 800;
   color: #fff;
   user-select: none;
@@ -1817,7 +1817,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 13px;
   font-weight: 800;
   border: 3px solid #fff;
@@ -1841,7 +1841,7 @@
 }
 
 .theme-academic .lb-podium-card__name {
-  font-family: 'Outfit', 'Inter', sans-serif;
+  font-family: 'Poppins', 'Poppins', sans-serif;
   font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -1855,7 +1855,7 @@
 }
 
 .theme-academic .lb-podium-card__score {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.025em;
@@ -2053,7 +2053,7 @@
   align-items: center;
   gap: 1px;
   color: var(--academic-text-muted);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
 }
 .theme-academic .lb-row__rank-hash {
   display: inline-flex;
@@ -2084,7 +2084,7 @@
   border-radius: 10px;
   background: var(--academic-gradient-primary);
   color: #fff;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: 700;
   font-size: 13px;
   display: inline-flex;
@@ -2106,7 +2106,7 @@
   gap: 8px;
 }
 .theme-academic .lb-row__name {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -2212,7 +2212,7 @@
   box-shadow: 0 8px 20px -4px rgba(245,158,11,0.30);
 }
 .theme-academic .lb-empty__title {
-  font-family: 'Outfit', 'Inter', sans-serif;
+  font-family: 'Poppins', 'Poppins', sans-serif;
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -2313,7 +2313,7 @@
 .theme-academic .ls-card__status-pill,
 .theme-academic .pf-mini__label,
 .theme-academic .lb-podium-card__plate-label {
-  font-family: 'DM Sans', 'Inter', sans-serif;
+  font-family: 'DM Sans', 'Poppins', sans-serif;
   letter-spacing: 0.08em;
 }
 
@@ -2342,13 +2342,13 @@
   border-radius: var(--academic-radius-md);
   background: var(--academic-primary);
   color: #ffffff;
-  font-family: 'DM Sans', 'Inter', sans-serif;
+  font-family: 'DM Sans', 'Poppins', sans-serif;
   font-weight: 700;
   font-size: 16px;
   box-shadow: 0 2px 6px rgba(124, 58, 237, 0.25);
 }
 .theme-academic .sidebar-brand-name {
-  font-family: 'DM Sans', 'Inter', sans-serif;
+  font-family: 'DM Sans', 'Poppins', sans-serif;
   font-weight: 700;
   font-size: 14px;
   letter-spacing: -0.01em;
@@ -4611,7 +4611,7 @@
   padding: 10px 14px !important;
   height: 44px !important;
   font-size: 14px !important;
-  font-family: 'Inter', sans-serif !important;
+  font-family: 'Poppins', sans-serif !important;
   font-weight: 500 !important;
   background: var(--academic-surface) !important;
   border: 1.5px solid var(--academic-border) !important;
@@ -4658,7 +4658,7 @@ textarea.theme-academic .form-control,
   height: 44px !important;
   padding: 10px 14px !important;
   font-size: 14px !important;
-  font-family: 'Inter', sans-serif !important;
+  font-family: 'Poppins', sans-serif !important;
   font-weight: 500 !important;
   background: var(--academic-surface) !important;
   border: 1.5px solid var(--academic-border) !important;
@@ -4721,7 +4721,7 @@ textarea.theme-academic .form-control,
   width: 100% !important;
   padding: 10px 12px !important;
   font-size: 13.5px !important;
-  font-family: 'Inter', sans-serif !important;
+  font-family: 'Poppins', sans-serif !important;
   font-weight: 500 !important;
   color: var(--academic-text-secondary) !important;
   border: none !important;

@@ -88,6 +88,38 @@ const connectDB = async () => {
     });
     console.log('✅ Database schema verified');
     
+    // Manual database migration for ai_questions to support new quiz question formats
+    try {
+      const [columns] = await sequelize.query("SHOW COLUMNS FROM `ai_questions`");
+      const columnNames = columns.map(c => c.Field);
+      
+      // Check and add acceptable_answers column
+      if (!columnNames.includes('acceptable_answers')) {
+        console.log('➕ Adding acceptable_answers column to ai_questions...');
+        await sequelize.query("ALTER TABLE `ai_questions` ADD COLUMN `acceptable_answers` JSON NULL COMMENT 'Acceptable answers for FILL_BLANK'");
+      }
+      
+      // Check and add pairs column
+      if (!columnNames.includes('pairs')) {
+        console.log('➕ Adding pairs column to ai_questions...');
+        await sequelize.query("ALTER TABLE `ai_questions` ADD COLUMN `pairs` JSON NULL COMMENT 'Pairs for MATCHING question type'");
+      }
+      
+      // Check and update question_type enum column
+      const questionTypeCol = columns.find(c => c.Field === 'question_type');
+      if (questionTypeCol) {
+        const typeStr = String(questionTypeCol.Type).toUpperCase();
+        if (!typeStr.includes('TRUE_FALSE') || !typeStr.includes('FILL_BLANK') || !typeStr.includes('MATCHING')) {
+          console.log('🔄 Updating question_type ENUM values in ai_questions...');
+          await sequelize.query("ALTER TABLE `ai_questions` MODIFY COLUMN `question_type` ENUM('MCQ', 'SHORT_ANSWER', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING') NOT NULL");
+        }
+      }
+      console.log('✅ Manual schema migration checks completed successfully');
+    } catch (migError) {
+      console.error('⚠️ Error applying manual schema migrations to ai_questions:', migError.message);
+    }
+    
+    
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
     

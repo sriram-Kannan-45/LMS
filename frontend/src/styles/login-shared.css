@@ -31,7 +31,7 @@
   overflow: hidden;
   box-sizing: border-box;
   background: linear-gradient(135deg, var(--brand-50) 0%, var(--brand-100) 50%, #ffffff 100%);
-  font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Poppins', 'Inter', system-ui, -apple-system, sans-serif;
   font-feature-settings: "cv02","cv03","cv04","cv11";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

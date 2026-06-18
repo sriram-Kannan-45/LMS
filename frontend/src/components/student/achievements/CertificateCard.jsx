@@ -144,7 +144,7 @@ export default function CertificateCard({ certificate, studentName, index = 0 })
       </div>
 
       <h4 style={{
-        fontFamily: "'Outfit', sans-serif",
+        fontFamily: "'Poppins', sans-serif",
         fontSize: 16, fontWeight: 700,
         color: 'var(--academic-text)',
         marginBottom: 6, lineHeight: 1.3,
@@ -161,7 +161,7 @@ export default function CertificateCard({ certificate, studentName, index = 0 })
             Best score
           </div>
           <div style={{
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "'Poppins', sans-serif",
             fontSize: 28, fontWeight: 800, color: 'var(--academic-primary-700)',
             letterSpacing: '-0.02em',
           }}>
@@ -174,7 +174,7 @@ export default function CertificateCard({ certificate, studentName, index = 0 })
               Rank
             </div>
             <div style={{
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "'Poppins', sans-serif",
               fontSize: 22, fontWeight: 800, color: 'var(--academic-secondary-600)',
             }}>
               #{certificate.rank}

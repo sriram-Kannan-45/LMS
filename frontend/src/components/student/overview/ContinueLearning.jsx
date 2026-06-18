@@ -108,7 +108,7 @@ export default function ContinueLearning({ items = [], onResume }) {
                   </span>
                 </div>
                 <div style={{
-                  fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 700,
+                  fontFamily: "'Poppins', sans-serif", fontSize: 14, fontWeight: 700,
                   color: 'var(--academic-text)',
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 }}>

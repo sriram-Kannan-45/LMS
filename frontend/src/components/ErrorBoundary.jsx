@@ -63,7 +63,7 @@ ${this.state.errorInfo?.componentStack || 'No stack trace available'}`
           justifyContent: 'center',
           background: 'linear-gradient(135deg, #f5f8ff 0%, #eef3ff 50%, #f8faff 100%)',
           padding: '24px',
-          fontFamily: "'Manrope', 'Inter', sans-serif",
+          fontFamily: "'Manrope', 'Poppins', sans-serif",
           color: '#1e293b',
           textAlign: 'center',
           boxSizing: 'border-box'

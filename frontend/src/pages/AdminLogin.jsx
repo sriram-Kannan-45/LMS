@@ -162,6 +162,7 @@ function AdminLogin({ onLogin }) {
             <p>Sign in to your Admin Portal</p>
           </div>
 
+
           {error && (
             <div className="trainer-alert trainer-alert-error">
               <AlertCircle size={16} />

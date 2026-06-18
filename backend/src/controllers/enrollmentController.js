@@ -57,11 +57,17 @@ const enrollInTraining = async (req, res) => {
     const io = req.app.get('io');
     const user = await User.findByPk(participantId);
 
-    // Get all trainers for this training
-    const { TrainingTrainerAssignment } = require('../models');
+    // Get all trainers for this training/course
+    const { TrainingTrainerAssignment, CourseTrainerAssignment } = require('../models');
     const assignments = await TrainingTrainerAssignment.findAll({ where: { trainingId } });
     const trainerIds = new Set(assignments.map(a => a.trainerId));
     if (training.trainerId) trainerIds.add(training.trainerId);
+
+    // Also include trainers assigned to the corresponding course
+    const courseAssignments = await CourseTrainerAssignment.findAll({ where: { courseId: course.id } });
+    for (const ca of courseAssignments) {
+      trainerIds.add(ca.trainerId);
+    }
 
     const NotificationService = require('../services/notificationService');
 

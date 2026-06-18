@@ -117,7 +117,7 @@ export default function FeedbackSection({
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 14,
+                    fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 14,
                     color: 'var(--academic-text)', marginBottom: 2,
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
@@ -173,7 +173,7 @@ export default function FeedbackSection({
             >
               <div className="flex items-center justify-between" style={{ padding: '18px 24px', borderBottom: '1px solid var(--academic-border-soft)' }}>
                 <div>
-                  <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 17, fontWeight: 700 }}>Course feedback</h3>
+                  <h3 style={{ fontFamily: "'Poppins', sans-serif", fontSize: 17, fontWeight: 700 }}>Course feedback</h3>
                   <p style={{ fontSize: 13, color: 'var(--academic-text-muted)' }}>{modal.trainingTitle}</p>
                 </div>
                 <button type="button" onClick={closeModal} className="ac-btn ac-btn-ghost ac-focus-ring" aria-label="Close">

@@ -134,6 +134,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
         questionId: parseInt(questionId),
         selectedOption: val.selectedOption !== undefined ? val.selectedOption : null,
         answerText: val.answerText || null,
+        matches: val.matches || null
       }))
       try {
         // Pull token from prop first, fall back to sessionStorage so a
@@ -270,6 +271,25 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
 
   const optionLetters = useMemo(() => ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'], [])
 
+  const pairsList = useMemo(() => {
+    if (!q?.pairs) return [];
+    if (Array.isArray(q.pairs)) return q.pairs;
+    if (typeof q.pairs === 'string') {
+      try {
+        return JSON.parse(q.pairs);
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  }, [q?.pairs]);
+
+  const matchingRightOptions = useMemo(() => {
+    if (q?.questionType !== 'MATCHING') return [];
+    const uniqueRights = [...new Set(pairsList.map(p => p.right).filter(Boolean))];
+    return uniqueRights.sort();
+  }, [q?.id, q?.questionType, pairsList]);
+
   const reEnterFullscreen = async () => {
     try {
       await fsApi.request()
@@ -361,11 +381,15 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
             >
               <div className="qt-qcard__label">
                 QUESTION {currentQ + 1} <span aria-hidden> · </span>
-                {q.questionType === 'MCQ' ? 'MULTIPLE CHOICE' : 'WRITTEN ANSWER'}
+                {q.questionType === 'MCQ' && 'MULTIPLE CHOICE'}
+                {q.questionType === 'TRUE_FALSE' && 'TRUE / FALSE'}
+                {q.questionType === 'FILL_BLANK' && 'FILL IN THE BLANK'}
+                {q.questionType === 'MATCHING' && 'MATCHING QUESTION'}
+                {(!q.questionType || q.questionType === 'SHORT_ANSWER') && 'WRITTEN ANSWER'}
               </div>
               <h2 className="qt-qcard__text">{q.questionText}</h2>
 
-              {q.questionType === 'MCQ' ? (
+              {['MCQ', 'TRUE_FALSE'].includes(q.questionType) ? (
                 <ul className="qt-options" role="radiogroup" aria-label="Answer options">
                   {q.options?.map((opt, idx) => {
                     const selected = answers[q.id]?.selectedOption === idx
@@ -388,6 +412,68 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
                     )
                   })}
                 </ul>
+              ) : q.questionType === 'FILL_BLANK' ? (
+                <div className="qt-fillblank-container">
+                  <input
+                    type="text"
+                    className="qt-textarea"
+                    style={{ height: '48px', padding: '12px 16px', resize: 'none' }}
+                    placeholder="Type the word that fits the blank..."
+                    value={answers[q.id]?.answerText || ''}
+                    onChange={(e) => handleAnswer(q.id, { answerText: e.target.value })}
+                  />
+                </div>
+              ) : q.questionType === 'MATCHING' ? (
+                <div className="qt-matching">
+                  <p className="qt-matching__instructions" style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
+                    Match each term on the left with its definition on the right:
+                  </p>
+                  <div className="qt-matching__list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {pairsList.map((pair, idx) => {
+                      const leftVal = pair.left;
+                      const selectedRight = answers[q.id]?.matches?.[leftVal] || '';
+                      return (
+                        <div key={idx} className="qt-matching-row" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div className="qt-matching-row__left" style={{ flex: '1', fontWeight: '500', fontSize: '14px', color: '#1e293b' }}>
+                            {leftVal}
+                          </div>
+                          <div className="qt-matching-row__arrow" style={{ color: '#94a3b8' }}>→</div>
+                          <div className="qt-matching-row__right" style={{ flex: '1.5' }}>
+                            <select
+                              value={selectedRight}
+                              onChange={(e) => {
+                                const currentMatches = answers[q.id]?.matches || {};
+                                const updatedMatches = { ...currentMatches, [leftVal]: e.target.value };
+                                handleAnswer(q.id, {
+                                  matches: updatedMatches,
+                                  answerText: JSON.stringify(updatedMatches)
+                                });
+                              }}
+                              style={{
+                                width: '100%',
+                                height: '40px',
+                                padding: '0 12px',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '8px',
+                                background: '#fff',
+                                fontSize: '13px',
+                                outline: 'none',
+                                color: '#334155'
+                              }}
+                            >
+                              <option value="">-- Choose matching definition --</option>
+                              {matchingRightOptions.map((rightOpt, oIdx) => (
+                                <option key={oIdx} value={rightOpt}>
+                                  {rightOpt}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               ) : (
                 <textarea
                   className="qt-textarea"

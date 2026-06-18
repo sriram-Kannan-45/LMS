@@ -278,4 +278,66 @@ async function bootstrapCourseIndexes(logger = console) {
   }
 }
 
-module.exports = { bootstrapCourseSchema, bootstrapCourseIndexes, relaxLegacyTrainingIdColumns };
+async function syncMissingCourses(logger = console) {
+  try {
+    const { Training, Course, CourseTrainerAssignment, TrainingTrainerAssignment } = require('../models');
+    
+    // Find all training programs (Training)
+    const trainings = await Training.findAll();
+    logger.info(`[course-schema] Syncing courses: found ${trainings.length} training programs`);
+
+    for (const training of trainings) {
+      // Check if corresponding Course exists
+      const courseExists = await Course.findOne({ where: { trainingProgramId: training.id } });
+      if (!courseExists) {
+        logger.info(`[course-schema] Auto-creating missing course for training ID ${training.id} ("${training.title}")`);
+        
+        // Find assigned trainer IDs from TrainingTrainerAssignment
+        const assignments = await TrainingTrainerAssignment.findAll({
+          where: { trainingId: training.id }
+        });
+        const trainerIds = assignments.map(a => a.trainerId);
+        
+        // Primary trainer ID
+        const primaryTrainerId = training.trainerId || trainerIds[0] || 1; // fallback to admin/user 1 if none
+        
+        const course = await Course.create({
+          trainingProgramId: training.id,
+          trainerId: primaryTrainerId,
+          title: training.title,
+          description: training.description || null,
+          status: 'PUBLISHED'
+        });
+        
+        logger.info(`[course-schema] Course created (ID: ${course.id}) for training ID ${training.id}`);
+
+        // Sync trainer assignments in CourseTrainerAssignment
+        const allTrainerIds = Array.from(new Set([primaryTrainerId, ...trainerIds]));
+        const courseAssignments = allTrainerIds.map(tId => ({
+          courseId: course.id,
+          trainerId: tId
+        }));
+        
+        await CourseTrainerAssignment.bulkCreate(courseAssignments, { ignoreDuplicates: true });
+        logger.info(`[course-schema] Synced ${courseAssignments.length} trainer assignments for course ID ${course.id}`);
+      } else {
+        // Even if course exists, make sure trainer assignments are synced!
+        const assignments = await TrainingTrainerAssignment.findAll({
+          where: { trainingId: training.id }
+        });
+        const trainerIds = assignments.map(a => a.trainerId);
+        const allTrainerIds = Array.from(new Set([courseExists.trainerId, ...trainerIds]));
+        const courseAssignments = allTrainerIds.map(tId => ({
+          courseId: courseExists.id,
+          trainerId: tId
+        }));
+        await CourseTrainerAssignment.bulkCreate(courseAssignments, { ignoreDuplicates: true });
+      }
+    }
+  } catch (error) {
+    logger.error('[course-schema] Error syncing missing courses:', error.message);
+  }
+}
+
+module.exports = { bootstrapCourseSchema, bootstrapCourseIndexes, relaxLegacyTrainingIdColumns, syncMissingCourses };
+

@@ -519,7 +519,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
 
   const pageTitle = (title) => (
     <h1 style={{
-      fontFamily: "'Outfit', sans-serif",
+      fontFamily: "'Poppins', sans-serif",
       fontSize: 34,
       fontWeight: 700,
       letterSpacing: '-0.03em',
@@ -558,7 +558,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
           ) : pendingParticipants.length === 0 ? (
             <div className="ac-empty" style={{ maxWidth: 480, margin: '40px auto', padding: '36px 24px' }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>✔️</div>
-              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>All Approved</h3>
+              <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>All Approved</h3>
               <p style={{ color: 'var(--academic-text-secondary)', fontSize: 13.5, margin: 0, lineHeight: 1.5 }}>
                 No participants are currently waiting for registration approval.
               </p>
@@ -603,7 +603,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
           ) : trainings.length === 0 ? (
             <div className="ac-empty" style={{ maxWidth: 480, margin: '40px auto', padding: '36px 24px' }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>📚</div>
-              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>No Trainings Yet</h3>
+              <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>No Trainings Yet</h3>
               <p style={{ color: 'var(--academic-text-secondary)', fontSize: 13.5, margin: '0 0 20px', lineHeight: 1.5 }}>
                 Create your first training session to schedule classes, assign trainers, and track enrollment.
               </p>
@@ -658,7 +658,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
           ) : trainers.length === 0 ? (
             <div className="ac-empty" style={{ maxWidth: 480, margin: '40px auto', padding: '36px 24px' }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>👤</div>
-              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>No Trainers Yet</h3>
+              <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>No Trainers Yet</h3>
               <p style={{ color: 'var(--academic-text-secondary)', fontSize: 13.5, margin: '0 0 20px', lineHeight: 1.5 }}>
                 Add your first trainer to assign them courses and start tracking performance feedback.
               </p>
@@ -692,7 +692,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
           ) : participants.length === 0 ? (
             <div className="ac-empty" style={{ maxWidth: 480, margin: '40px auto', padding: '36px 24px' }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>👥</div>
-              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>No Participants Yet</h3>
+              <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>No Participants Yet</h3>
               <p style={{ color: 'var(--academic-text-secondary)', fontSize: 13.5, margin: '0 0 20px', lineHeight: 1.5 }}>
                 Enrolled students and participants will appear here. Add your first participant to get started.
               </p>
@@ -864,7 +864,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                           <span className={`ac-chip ${isApproved ? 'ac-chip-success' : isPending ? 'ac-chip-warning' : 'ac-chip-danger'}`}>{note.status}</span>
                           <span style={{ fontSize: 12, color: 'var(--academic-text-muted)' }}>{fmtDate(note.created_at)}</span>
                         </div>
-                        <h4 style={{ fontWeight: 600, fontSize: 15, color: 'var(--academic-text)', fontFamily: "'Outfit', sans-serif" }}>{note.title}</h4>
+                        <h4 style={{ fontWeight: 600, fontSize: 15, color: 'var(--academic-text)', fontFamily: "'Poppins', sans-serif" }}>{note.title}</h4>
                         <p style={{ fontSize: 13, color: 'var(--academic-text-muted)', marginTop: 2 }}>{note.trainer?.name || 'Unknown'}</p>
                         <p style={{ fontSize: 14, color: 'var(--academic-text-secondary)', marginTop: 8, lineHeight: 1.6 }}>{note.content}</p>
                       </div>
@@ -1291,7 +1291,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               }}>
                 <div className="ac-card" style={{ padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div style={{ fontSize: 13, color: 'var(--academic-text-muted)', fontWeight: 550, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Users</div>
-                  <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--academic-text)', margin: '8px 0 4px', fontFamily: "'Outfit', sans-serif" }}>{adminReport.totalUsers}</div>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--academic-text)', margin: '8px 0 4px', fontFamily: "'Poppins', sans-serif" }}>{adminReport.totalUsers}</div>
                   <div style={{ fontSize: 12, color: 'var(--academic-text-secondary)' }}>
                     Admins: {adminReport.usersByRole?.admin || 0} | Trainers: {adminReport.usersByRole?.trainer || 0} | Participants: {adminReport.usersByRole?.participant || 0}
                   </div>
@@ -1299,7 +1299,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
 
                 <div className="ac-card" style={{ padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div style={{ fontSize: 13, color: 'var(--academic-text-muted)', fontWeight: 550, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trainings &amp; Lessons</div>
-                  <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--academic-text)', margin: '8px 0 4px', fontFamily: "'Outfit', sans-serif" }}>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--academic-text)', margin: '8px 0 4px', fontFamily: "'Poppins', sans-serif" }}>
                     {adminReport.totalTrainings} <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--academic-text-muted)' }}>Trainings</span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--academic-text-secondary)' }}>
@@ -1309,7 +1309,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
 
                 <div className="ac-card" style={{ padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div style={{ fontSize: 13, color: 'var(--academic-text-muted)', fontWeight: 550, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completion Rate</div>
-                  <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--academic-primary)', margin: '8px 0 4px', fontFamily: "'Outfit', sans-serif" }}>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--academic-primary)', margin: '8px 0 4px', fontFamily: "'Poppins', sans-serif" }}>
                     {adminReport.completionRate}%
                   </div>
                   <div style={{ width: '100%', height: 6, background: 'rgba(255, 255, 255, 0.1)', borderRadius: 3, overflow: 'hidden' }}>
@@ -1319,7 +1319,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
 
                 <div className="ac-card" style={{ padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div style={{ fontSize: 13, color: 'var(--academic-text-muted)', fontWeight: 550, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Users (30 Days)</div>
-                  <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--academic-text)', margin: '8px 0 4px', fontFamily: "'Outfit', sans-serif" }}>{adminReport.activeUsers}</div>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--academic-text)', margin: '8px 0 4px', fontFamily: "'Poppins', sans-serif" }}>{adminReport.activeUsers}</div>
                   <div style={{ fontSize: 12, color: 'var(--academic-text-secondary)' }}>
                     Enrollment Rate: {adminReport.enrollmentRate}%
                   </div>

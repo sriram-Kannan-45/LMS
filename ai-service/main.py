@@ -24,7 +24,14 @@ import json
 import random
 import tempfile
 import time
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, TypedDict
+import difflib
+from services.gemini_client import GeminiClient
+from services.prompt_builder import PromptBuilder
+from services.json_validator import JSONValidator
+from services.duplicate_remover import DuplicateRemover
+from services.option_randomizer import OptionRandomizer
+from services.explanation_generator import ExplanationGenerator
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -159,113 +166,128 @@ DIFFICULTY_CONFIGS = {
     }
 }
 
-STAGE_1_DOCUMENT_UNDERSTANDING_PROMPT = """You are an expert educational content researcher and knowledge engineer.
+TOPIC_EXTRACTION_PROMPT = """You are a senior curriculum designer and subject-matter analyst.
 
-Analyze the following document and extract its core knowledge structure. 
-Your goal is to build a high-quality, structured summary of the educational content, ignoring repeated content, formatting noise, and low-value paragraphs.
+You will be given a piece of source text. This text may be informal — a personal learning journal, notes, or a diary-style entry — describing a person's day-to-day learning activity rather than presenting clean facts.
 
-## UPLOADED DOCUMENT:
+Your job is NOT to summarize what the person did. Your job is to identify the underlying technical subjects, tools, libraries, frameworks, design patterns, and concepts that are MENTIONED in the text, so they can be used as a syllabus/scope for an independent quiz that will be written separately, by someone who will never see this text.
+
+## SOURCE TEXT:
 {text}
 
-## EXTRACTION INSTRUCTIONS:
-Carefully extract and organize:
-1. **Main Topics & Subtopics**: The primary themes of the document.
-2. **Important Concepts & Definitions**: Key technical concepts and their precise, clear definitions.
-3. **Keywords & Terminology**: Crucial industry/domain-specific terms.
-4. **Examples & Scenarios**: Concrete examples or use-cases used to explain concepts.
-5. **Procedures & Steps**: Sequential lists of instructions, processes, or workflows.
-6. **Advantages & Disadvantages**: Comparisons, benefits, drawbacks, trade-offs.
-7. **Programming Syntax (if present)**: Code blocks, functions, parameters, APIs, variables, loops, conditionals, and their expected outcomes.
+## INSTRUCTIONS:
+1. Ignore narrative framing entirely. Phrases like "Yesterday I started", "Today I plan to", "I also learned", "After that I learned" describe the person's timeline, not testable facts — discard them completely.
+2. List every distinct technical subject, tool, library, framework, design pattern, or concept that is named or clearly implied in the text.
+3. For each one, write a one-line description of what it actually IS in the real world, using your own general knowledge of the subject — not a paraphrase of how the text mentioned it.
+4. Rate each topic's depth as BASIC (terminology-level), INTERMEDIATE (usage-level), or ADVANCED (architecture/design-level), based on how thoroughly it's discussed.
+5. Do not invent topics that are not named or clearly implied in the text.
 
-## FORMATTING RULES:
-- Rephrase the content naturally in clear English. Do NOT copy full sentences directly from the document.
-- Do NOT use phrases referring to the document like "According to the document", "The document states", etc.
-- Ignore repeated content or unnecessary filler paragraphs.
-- Keep the output highly structured, concise, and focused on educational/testable concepts.
-- Return the results as a clean, structured JSON object:
+## OUTPUT FORMAT (raw JSON only, no markdown fences, nothing before or after):
 {{
-  "mainTopics": [
+  "subjectDomain": "A short label for the overall domain, e.g. 'Java API Test Automation'",
+  "topics": [
     {{
-      "topic": "Topic Name",
-      "concepts": [
-        {{
-          "name": "Concept/Term",
-          "definition": "Clear explanation of the concept/term",
-          "keywords": ["keyword1", "keyword2"],
-          "examples": ["Example or scenario of this concept"],
-          "procedures": ["Step 1", "Step 2"],
-          "advantages": ["Advantage 1"],
-          "disadvantages": ["Disadvantage 1"],
-          "syntax": "Syntax code or explanation (if applicable)"
-        }}
-      ]
+      "name": "REST Assured",
+      "realWorldDescription": "A Java library used to automate and validate REST API requests and responses.",
+      "depth": "INTERMEDIATE"
     }}
   ]
 }}
 """
 
-STAGE_2_QUIZ_GENERATION_PROMPT = """You are an expert university professor and professional certification exam paper setter (like AWS, Microsoft, Coursera, or Udemy).
+QUESTION_GENERATION_PROMPT = """You are an expert certification exam item-writer, in the style of Oracle Java certification, API-testing certifications, or professional courses on Udemy/Coursera.
 
-Your task is to generate high-quality Multiple-Choice Questions (MCQs) based ONLY on the provided structured knowledge representation from Stage 1.
+You are NOT summarizing a document. You are writing an ORIGINAL quiz that tests real-world knowledge of the subjects listed below. Treat the topic list as a syllabus only. Do not reference, quote, or rephrase any specific source text — there is no document in this conversation, only a syllabus. Write every question, option, and explanation from your own expert knowledge of these subjects.
 
-## STRUCTURED KNOWLEDGE REPRESENTATION:
-{knowledge_representation}
+## SYLLABUS (topics to test — use your own domain knowledge of each):
+{topics_json}
 
 ## DIFFICULTY LEVEL: {difficulty}
-Difficulty Guidelines:
-- EASY: Focus on basic definitions, key terminology, and simple programming syntax.
-- MEDIUM: Focus on core concepts, practical usage, and relationships between concepts.
-- HARD: Focus on complex scenario-based, analytical, and problem-solving questions.
+- EASY: terminology, basic syntax, definitions.
+- MEDIUM: usage, behavior, comparisons between related concepts.
+- HARD: edge cases, design trade-offs, scenario-based reasoning.
 
-## QUESTION DISTRIBUTION:
-Generate exactly {num_questions} questions.
-Try to target the following distribution of question types:
-- 40% Concept questions
-- 20% Definition questions
-- 20% Application questions
-- 20% Scenario questions (where a real-world scenario is given and the correct response/solution must be selected)
-* Note: If the topic is programming-related, generate code output questions and best-practice questions.
+## QUESTION TYPE DISTRIBUTION — MANDATORY EXACT COUNTS, NOT APPROXIMATE
+Generate EXACTLY {num_questions} questions in total, with this EXACT breakdown:
+- Exactly {mcq_count} questions with "questionType": "MCQ"
+- Exactly {true_false_count} questions with "questionType": "TRUE_FALSE"
+- Exactly {fill_blank_count} questions with "questionType": "FILL_BLANK"
+- Exactly {matching_count} questions with "questionType": "MATCHING"
+These counts are non-negotiable. Do not skip a type, substitute one type for another, or default to whichever type feels easiest to write, even if a topic feels better suited to a different format. Spread questions across the different syllabus topics — do not cluster every question on a single topic.
 
-## STRICT QUESTION RULES:
-1. **Never** use phrases like:
-   - "According to the document"
-   - "Based on the document"
-   - "Which statement correctly describes"
-   - "What does the document say"
-2. **Never** copy sentences from the source document. Rephrase everything naturally.
-3. Test understanding instead of memorization.
-4. Each question must be **maximum 20 words**, in clear English, containing exactly **one idea**.
-5. Do NOT include markdown symbols (like bolding **, backticks `, or bullet points).
-6. Do NOT expose internal document wording or jargon that isn't commonly known in the domain.
+## SELF-CHECK BEFORE YOU RESPOND
+Count how many questions you have written for each questionType. If any count does not exactly match the breakdown above, add, remove, or convert questions until every count matches exactly. Only output the JSON once this is true.
 
-## STRICT OPTION RULES:
-1. Generate exactly **4 options** for each question.
-2. Each option must be **maximum 8 words** (short and meaningful, never long paragraphs).
-3. Only **one option** must be correct.
-4. Distractors must be highly believable, relevant, and not obvious.
-5. Randomize the position of the correct answer across the options.
+## ABSOLUTE RULES
+1. NEVER use or imply the words "document", "text", "passage", or "author" — there is no source document in this task, only a syllabus.
+2. NEVER ask about what someone "learned", "did", "plans to do", or any diary/narrative content. Every question must be a standalone, real-world knowledge question about the subject itself, exactly like a textbook or certification exam question.
+3. For FILL_BLANK: compose a brand-new sentence, in your own words, that explains a fact about the concept, then blank exactly ONE key technical term in that new sentence. Never construct a blank from anything resembling a diary sentence.
+4. Write in the neutral voice of an exam writer. Never first person, never past tense narrative.
+5. No markdown symbols (no **, no backticks, no bullet points) anywhere in question, option, or explanation text.
+6. No duplicate questions or duplicate options within a question.
 
-## OTHER RULES:
-1. Provide a **one-line explanation** for every question's correct answer.
-2. Ensure there are no duplicate questions or options.
+## TYPE-SPECIFIC RULES
 
-## JSON OUTPUT FORMAT:
-You MUST return a valid JSON object matching the following structure. Do NOT wrap the JSON in markdown blocks (e.g. do NOT use ```json). Return ONLY the raw JSON string.
+### MCQ
+- Max 20 words for the question, exactly one idea.
+- Exactly 4 options, each max 8 words, only one correct.
+- Distractors must be real, plausible wrong answers a learner might actually pick — not random unrelated text.
 
+### TRUE_FALSE
+- One declarative factual statement, max 20 words.
+- Mix true and false statements roughly evenly across the quiz — do not make every statement true.
+
+### FILL_BLANK
+- One new, original sentence, max 20 words, with exactly one key technical term replaced by "____".
+- correctAnswer = the blanked term.
+- acceptableAnswers = an array containing correctAnswer plus close variants (with/without parentheses, casing, singular/plural).
+
+### MATCHING
+- 3 to 5 pairs of {{left: short term, right: short definition/effect}} from the SAME topic.
+- Each "right" value max 10 words and unique — not guessable by length or grammar alone.
+
+## STYLE CALIBRATION EXAMPLE (match this tone and rigor — write about the actual syllabus topics, not this example):
+  Question: Which method in REST Assured sends the configured HTTP request?
+  Options: A. given()  B. when()  C. then()  D. validate()
+  Correct: B
+  Explanation: when() executes the request after given() sets up parameters, and then() validates the response.
+
+## JSON OUTPUT FORMAT
+Return ONLY raw JSON, no markdown fences, nothing before or after it:
 {{
   "quizTitle": "A concise, appropriate title for the quiz",
+  "subjectDomain": "{{subjectDomain from syllabus}}",
   "difficulty": "{difficulty}",
   "questions": [
     {{
-      "question": "Question text here (max 20 words)",
-      "options": [
-        "Option A text (max 8 words)",
-        "Option B text (max 8 words)",
-        "Option C text (max 8 words)",
-        "Option D text (max 8 words)"
+      "questionType": "MCQ",
+      "question": "...",
+      "options": ["...", "...", "...", "..."],
+      "correctAnswer": "exact text of the correct option",
+      "explanation": "one-line reason"
+    }},
+    {{
+      "questionType": "TRUE_FALSE",
+      "question": "...",
+      "correctAnswer": "True",
+      "explanation": "one-line reason"
+    }},
+    {{
+      "questionType": "FILL_BLANK",
+      "question": "New original sentence with one term replaced by ____.",
+      "correctAnswer": "term",
+      "acceptableAnswers": ["term", "term variant"],
+      "explanation": "one-line reason"
+    }},
+    {{
+      "questionType": "MATCHING",
+      "question": "Match each term to its correct definition.",
+      "pairs": [
+        {{"left": "term1", "right": "definition1"}},
+        {{"left": "term2", "right": "definition2"}},
+        {{"left": "term3", "right": "definition3"}}
       ],
-      "correctAnswer": "The exact string of the correct option (must match one of the options above)",
-      "explanation": "A one-line explanation of why this option is correct."
+      "explanation": "one-line reason"
     }}
   ]
 }}
@@ -753,6 +775,14 @@ if GEMINI_API_KEY and GEMINI_API_KEY not in ("", "your-gemini-api-key-here"):
 if llm is None:
     log.warning("⚠️ No Gemini LLM available (GEMINI_API_KEY not set) — using text-based fallback")
 
+# ── Service Instantiations ─────────────────────────────
+gemini_client = GeminiClient()
+prompt_builder = PromptBuilder()
+json_validator = JSONValidator()
+duplicate_remover = DuplicateRemover()
+option_randomizer = OptionRandomizer()
+explanation_generator = ExplanationGenerator()
+
 # ── Request / Response Models ─────────────────────────
 class QuizRequest(BaseModel):
     text: str
@@ -917,256 +947,222 @@ def filter_grounded_questions(questions: List[Dict], doc_text: str) -> List[Dict
         log.warning("Dropped %d ungrounded LLM question(s) — no document overlap", dropped)
     return grounded
 
-
 def generate_cache_key(text: str, num_questions: int, difficulty: str) -> str:
-    """
-    Generate a cache key based on FULL content hash and parameters.
-    Previously only hashed first 1000 chars, which caused two different
-    documents with similar headers/abstracts to share the same cached quiz.
-    """
-    content_hash = hashlib.md5(text.encode("utf-8", errors="ignore")).hexdigest()
-    return f"quiz:{content_hash}:{num_questions}:{difficulty}"
+    """Generate a stable cache key based on text content, quantity, and difficulty."""
+    hasher = hashlib.md5()
+    hasher.update(text.encode('utf-8', errors='ignore'))
+    text_hash = hasher.hexdigest()
+    return f"quiz_{text_hash}_{num_questions}_{difficulty}"
+
 
 def generate_quiz_with_langchain(text: str, num_questions: int = 10, difficulty: str = "MIXED") -> Any:
     """
-    Generate quiz using a Two-Stage LangChain + Gemini pipeline.
-    
-    Stage 1: Document Understanding (Extract core knowledge structure, rephrase, no copying)
-    Stage 2: Quiz Generation (Generate high quality questions from structured representation)
+    Generate quiz using a direct multi-step REST API Gemini pipeline (No LangChain/LangGraph).
     """
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        log.warning("No Gemini API key found. Using text-based fallback.")
+        fallback_questions = generate_text_based_questions(text, num_questions, difficulty)
+        return fallback_questions, "Fallback Quiz"
+
+    # Cleaning text
+    cleaned_text = clean_text_for_quiz(text)
     
-    if llm is None:
-        log.info("Using text-based question generation (no LLM available)")
-        return generate_text_based_questions(text, num_questions, difficulty)
-    
-    log.info("Generating quiz with %s for %d questions (%s difficulty)...", llm_type, num_questions, difficulty)
-    
-    # Clean the text first
-    text = clean_text_for_quiz(text)
-    log.info("Text cleaned, length: %d characters", len(text))
-    
-    # Check cache first
-    cache_key = generate_cache_key(text, num_questions, difficulty)
+    # Check cache
+    cache_key = generate_cache_key(cleaned_text, num_questions, difficulty)
     cached_result = quiz_cache.get(cache_key)
     if cached_result:
         log.info("✅ Cache hit! Returning cached quiz questions and title")
         return cached_result
-    
-    # Split text if too long
-    from langchain_text_splitters import RecursiveCharacterTextSplitter
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=Config.DEFAULT_CHUNK_SIZE,
-        chunk_overlap=Config.DEFAULT_CHUNK_OVERLAP
-    )
-    chunks = text_splitter.split_text(text)
 
-    # Select chunks SPREAD across the document instead of only the first 3.
-    # This way questions cover the full content, not just the introduction.
-    if len(chunks) <= 5:
-        selected_chunks = chunks
-    else:
-        # Pick first, middle, and last; plus two interpolated chunks for coverage.
-        n = len(chunks)
-        indices = sorted({0, n // 4, n // 2, (3 * n) // 4, n - 1})
-        selected_chunks = [chunks[i] for i in indices]
-
-    combined_text = "\n\n".join(selected_chunks)
-    log.info(
-        "Text split into %d chunks, using %d spread chunks (indices cover entire document) for context",
-        len(chunks), len(selected_chunks)
-    )
-    
-    # --- STAGE 1: DOCUMENT UNDERSTANDING ---
-    log.info("Running Stage 1: Document Understanding...")
-    stage_1_prompt = STAGE_1_DOCUMENT_UNDERSTANDING_PROMPT.format(text=combined_text)
-    
-    knowledge_representation = combined_text  # Default fallback
     try:
-        # We invoke the Chat model to understand the document and output JSON
-        response = llm.invoke(stage_1_prompt)
-        knowledge_representation = response.content
-        log.info("Stage 1 complete. Extract length: %d characters", len(knowledge_representation))
-    except Exception as e:
-        log.error("Stage 1 failed: %s. Falling back to using raw text content.", e)
+        log.info("Starting direct multi-step Gemini quiz generation pipeline...")
+
+        # STEP 1: CHUNKING & TOPIC EXTRACTION
+        # Support large documents (up to 500 pages) by chunking.
+        chunk_size = 150000
+        overlap = 15000
         
-    # --- STAGE 2: QUIZ GENERATION ---
-    log.info("Running Stage 2: Quiz Generation...")
-    stage_2_prompt = STAGE_2_QUIZ_GENERATION_PROMPT.format(
-        knowledge_representation=knowledge_representation,
-        difficulty=difficulty,
-        num_questions=num_questions
-    )
-    
-    last_error = None
-    for attempt in range(1, Config.MAX_RETRIES + 1):
-        try:
-            log.info("Generation attempt %d/%d...", attempt, Config.MAX_RETRIES)
-            response = llm.invoke(stage_2_prompt)
-            result = response.content
+        chunks = []
+        if len(cleaned_text) <= chunk_size:
+            chunks.append(cleaned_text)
+        else:
+            log.info(f"Large document detected ({len(cleaned_text)} chars). Chunking into pieces...")
+            start = 0
+            while start < len(cleaned_text):
+                end = min(start + chunk_size, len(cleaned_text))
+                chunks.append(cleaned_text[start:end])
+                if end == len(cleaned_text):
+                    break
+                start += chunk_size - overlap
+        
+        all_topics = []
+        subject_domain = "General Knowledge"
+        
+        for idx, chunk in enumerate(chunks):
+            log.info(f"Processing chunk {idx + 1}/{len(chunks)} for Topic Extraction...")
+            topic_prompt = prompt_builder.build_topic_prompt(chunk)
+            raw_topics_json = gemini_client.generate_content(topic_prompt, temperature=0.2, response_json=True)
+            parsed_topics = json_validator.validate_and_parse(raw_topics_json)
             
-            # Parse the full JSON structure to retrieve questions list and quizTitle
-            quiz_title = "AI Generated Quiz"
-            try:
-                # Clean markdown fences from result
-                cleaned_result = result.strip()
-                fence_match = re.search(r"```(?:json)?\s*(.*?)```", cleaned_result, re.DOTALL | re.IGNORECASE)
-                if fence_match:
-                    cleaned_result = fence_match.group(1).strip()
-                
-                parsed_full = json.loads(cleaned_result)
-                if isinstance(parsed_full, dict):
-                    quiz_title = parsed_full.get("quizTitle", "AI Generated Quiz")
-            except Exception:
-                # Fallback to trying json-repair
-                try:
-                    import json_repair
-                    parsed_full = json_repair.repair_json(cleaned_result, return_objects=True)
-                    if isinstance(parsed_full, dict):
-                        quiz_title = parsed_full.get("quizTitle", "AI Generated Quiz")
-                except Exception:
-                    pass
+            if isinstance(parsed_topics, dict):
+                subject_domain = parsed_topics.get("subjectDomain", subject_domain)
+                chunk_topics = parsed_topics.get("topics", [])
+                all_topics.extend(chunk_topics)
+            elif isinstance(parsed_topics, list):
+                all_topics.extend(parsed_topics)
 
-            # Parse JSON with auto-repair capabilities
-            questions, warnings = safe_json_parse(result)
-            
-            if warnings:
-                for w in warnings:
-                    log.warning("Parse warning: %s", w)
-            
-            if not questions:
-                raise ValueError("No valid questions could be parsed from response")
-            
-            # Filter duplicates
-            original_count = len(questions)
-            questions = filter_duplicate_questions(questions, Config.SIMILARITY_THRESHOLD)
-            if len(questions) < original_count:
-                log.info("Filtered %d duplicate questions (%d -> %d)", 
-                        original_count - len(questions), original_count, len(questions))
-
-            # Limit to requested number
-            questions = questions[:num_questions]
-            
-            # Format and clean/shuffle for compatibility with existing system
-            formatted = []
-            for i, q in enumerate(questions):
-                # Clean up any potential markdown formatting in question, options, and explanation
-                question_text = q.get("question", f"Question {i+1}")
-                options = q.get("options", ["Option A", "Option B", "Option C", "Option D"])
-                correct_val = q.get("correctAnswer", q.get("correct_answer", ""))
-                explanation = q.get("explanation", "Based on document content.")
-                difficulty_val = q.get("difficulty", difficulty if difficulty != "MIXED" else "MEDIUM")
-                bloom_level = q.get("bloom_level", "Understand")
-
-                # Remove markdown formatting (bold, headers, bullets, backticks)
-                def clean_md(t: str) -> str:
-                    t = re.sub(r"\*\*|##|`", "", t)
-                    t = re.sub(r"^[•\-\*\+]\s*", "", t)
-                    return t.strip()
-
-                question_text = clean_md(question_text)
-                explanation = clean_md(explanation)
-                
-                # Ensure options are a list of exactly 4 strings
-                if not isinstance(options, list) or len(options) != 4:
-                    options = (options + ["Option A", "Option B", "Option C", "Option D"])[:4]
-                options = [str(o) for o in options]
-
-                # Find which option is correct
-                correct_index = 0
-                correct_letter_map = {"A": 0, "B": 1, "C": 2, "D": 3}
-                correct_val_str = str(correct_val).strip()
-                
-                if correct_val_str in correct_letter_map:
-                    correct_index = correct_letter_map[correct_val_str]
-                elif correct_val_str in ("0", "1", "2", "3"):
-                    correct_index = int(correct_val_str)
-                else:
-                    # Search options for matching text
-                    try:
-                        match_idx = [o.lower().strip() for o in options].index(correct_val_str.lower())
-                        correct_index = match_idx
-                    except ValueError:
-                        correct_index = 0
-                
-                if correct_index >= len(options):
-                    correct_index = 0
-                
-                correct_option_text = options[correct_index]
-
-                # Shuffle options
-                options_shuffled = list(options)
-                random.shuffle(options_shuffled)
-
-                # Find correct option index after shuffle
-                try:
-                    new_correct_index = options_shuffled.index(correct_option_text)
-                except ValueError:
-                    new_correct_index = 0
-                    options_shuffled[0] = correct_option_text
-                    random.shuffle(options_shuffled)
-                    new_correct_index = options_shuffled.index(correct_option_text)
-                
-                new_correct_letter = chr(65 + new_correct_index)
-                
-                options_shuffled = [clean_md(o) for o in options_shuffled]
-
-                # Enforce word limits
-                # Question length: Max 20 words
-                q_words = question_text.split()
-                if len(q_words) > 20:
-                    question_text = " ".join(q_words[:20])
-                    if not question_text.endswith("?"):
-                        question_text += "?"
-                
-                # Option length: Max 8 words
-                for idx, opt in enumerate(options_shuffled):
-                    opt_words = opt.split()
-                    if len(opt_words) > 8:
-                        options_shuffled[idx] = " ".join(opt_words[:8])
-                
-                # Also resolve the new correct answer text after word-limit truncation
-                final_correct_answer_text = options_shuffled[new_correct_index]
-
-                formatted.append({
-                    "question": question_text,
-                    "options": options_shuffled,
-                    "correct_answer": new_correct_letter,  # Backwards compatible letter
-                    "correctAnswer": final_correct_answer_text,  # Actual correct option text (per user request)
-                    "explanation": explanation,
-                    "difficulty": difficulty_val,
-                    "bloom_level": bloom_level
-                })
-            
-            # Cache the result as a tuple
-            cache_val = (formatted, quiz_title)
-            quiz_cache.set(cache_key, cache_val)
-            
-            log.info("✅ Generated %d questions successfully on attempt %d", len(formatted), attempt)
-            return formatted, quiz_title
-            
-        except (json.JSONDecodeError, ValueError) as e:
-            last_error = e
-            log.warning("Parse error on attempt %d: %s", attempt, e)
-        except Exception as e:
-            last_error = e
-            error_str = str(e).lower()
-            # Gemini rate limit (429 RESOURCE_EXHAUSTED) — sleep longer
-            if "429" in error_str or "resource_exhausted" in error_str or "quota" in error_str or "rate" in error_str:
-                delay = min(30 * attempt, 120)  # 30s, 60s, 90s
-                log.warning("Gemini rate limit hit on attempt %d — backing off %ds", attempt, delay)
-                time.sleep(delay)
+        # Deduplicate topics by name
+        seen_topics = set()
+        deduped_topics = []
+        for t in all_topics:
+            if not isinstance(t, dict):
                 continue
-            log.warning("Generation error on attempt %d: %s", attempt, e)
+            t_name = str(t.get("name", "")).strip()
+            if t_name and t_name.lower() not in seen_topics:
+                seen_topics.add(t_name.lower())
+                deduped_topics.append(t)
+
+        if not deduped_topics:
+            raise ValueError("Failed to extract any technical topics from the text.")
+
+        log.info(f"Step 1 complete: Extracted {len(deduped_topics)} unique topics.")
+
+        # STEP 2: CONCEPT EXTRACTION
+        topics_json_str = json.dumps(deduped_topics, indent=2)
+        concept_prompt = prompt_builder.build_concept_prompt(topics_json_str)
+        raw_concepts_json = gemini_client.generate_content(concept_prompt, temperature=0.2, response_json=True)
+        parsed_concepts = json_validator.validate_and_parse(raw_concepts_json)
         
-        # Default exponential backoff
-        if attempt < Config.MAX_RETRIES:
-            delay = Config.RETRY_DELAY * attempt
-            log.info("Retrying in %d seconds...", delay)
-            time.sleep(delay)
-    
-    log.error("❌ All %d attempts failed. Last error: %s. Falling back to text-based.", Config.MAX_RETRIES, last_error)
-    fallback_questions = generate_text_based_questions(text, num_questions, difficulty)
-    return fallback_questions, "Fallback Quiz"
+        concepts_list = []
+        if isinstance(parsed_concepts, dict):
+            concepts_list = parsed_concepts.get("concepts", [])
+        elif isinstance(parsed_concepts, list):
+            concepts_list = parsed_concepts
+
+        # Filter out invalid concepts
+        concepts_list = [c for c in concepts_list if isinstance(c, dict) and c.get("concept")]
+
+        if not concepts_list:
+            raise ValueError("Failed to extract any core concepts from topics.")
+
+        log.info(f"Step 2 complete: Extracted {len(concepts_list)} concepts.")
+
+        # STEP 3: DEFINITION GENERATION
+        concepts_json_str = json.dumps(concepts_list, indent=2)
+        definition_prompt = prompt_builder.build_definition_prompt(concepts_json_str)
+        raw_definitions_json = gemini_client.generate_content(definition_prompt, temperature=0.1, response_json=True)
+        parsed_definitions = json_validator.validate_and_parse(raw_definitions_json)
+        
+        definitions_list = []
+        if isinstance(parsed_definitions, dict):
+            definitions_list = parsed_definitions.get("definitions", [])
+        elif isinstance(parsed_definitions, list):
+            definitions_list = parsed_definitions
+
+        # Merge definitions back into concepts list
+        def_map = {str(d.get("concept", "")).strip().lower(): str(d.get("definition", "")).strip() 
+                   for d in definitions_list if isinstance(d, dict) and d.get("concept")}
+                   
+        for c in concepts_list:
+            c_name = str(c.get("concept", "")).strip().lower()
+            c["definition"] = def_map.get(c_name, "")
+
+        log.info("Step 3 complete: Generated definitions for concepts.")
+
+        # STEP 4: GENERATE MCQS
+        def_count = max(1, round(num_questions * 0.20))
+        app_count = max(1, round(num_questions * 0.20))
+        scen_count = max(1, round(num_questions * 0.20))
+        prac_count = max(1, round(num_questions * 0.20))
+        concept_count = max(1, num_questions - def_count - app_count - scen_count - prac_count)
+        
+        counts = {
+            "Concept": concept_count,
+            "Definition": def_count,
+            "Application": app_count,
+            "Scenario": scen_count,
+            "Practical": prac_count
+        }
+
+        concepts_defs_json_str = json.dumps(concepts_list, indent=2)
+        quiz_prompt = prompt_builder.build_quiz_prompt(
+            concepts_and_definitions_json=concepts_defs_json_str,
+            num_questions=num_questions,
+            difficulty=difficulty,
+            counts=counts
+        )
+        
+        raw_quiz_json = gemini_client.generate_content(quiz_prompt, temperature=0.3, response_json=True)
+        parsed_quiz = json_validator.validate_and_parse(raw_quiz_json)
+        
+        raw_questions = []
+        quiz_title = f"{subject_domain} Quiz"
+        
+        if isinstance(parsed_quiz, dict):
+            raw_questions = parsed_quiz.get("questions", [])
+            quiz_title = parsed_quiz.get("quizTitle", quiz_title)
+        elif isinstance(parsed_quiz, list):
+            raw_questions = parsed_quiz
+
+        if not raw_questions:
+            raise ValueError("Gemini returned no questions in response.")
+
+        log.info(f"Step 4 complete: Generated {len(raw_questions)} raw questions.")
+
+        # POST-PROCESSING PIPELINE
+        # Deduplicate questions
+        deduped_qs = duplicate_remover.remove_duplicate_questions(raw_questions)
+        
+        # Clean duplicate options
+        cleaned_qs = duplicate_remover.remove_duplicate_options(deduped_qs)
+        
+        # Shuffle/Randomize MCQ option position
+        shuffled_qs = option_randomizer.randomize_options(cleaned_qs)
+        
+        # Ensure explanations
+        final_qs = explanation_generator.ensure_explanations(shuffled_qs)
+
+        # Standardise the schema structure to return to caller:
+        formatted_questions = []
+        for i, q in enumerate(final_qs[:num_questions]):
+            category = q.get("category", "Concept")
+            q_difficulty = q.get("difficulty", difficulty)
+            
+            # Map categories to bloom levels for compatibility
+            bloom_map = {
+                "Definition": "Remember",
+                "Concept": "Understand",
+                "Application": "Apply",
+                "Scenario": "Analyze",
+                "Practical": "Evaluate"
+            }
+            bloom_level = bloom_map.get(category, "Understand")
+            
+            formatted_questions.append({
+                "question": q.get("question", f"Question {i+1}"),
+                "questionType": "MCQ",
+                "options": q.get("options", []),
+                "correctAnswer": q.get("correctAnswer", ""),
+                "correct_answer": q.get("correct_letter") or q.get("correct_answer") or "",
+                "explanation": q.get("explanation", "Based on technical concepts."),
+                "difficulty": q_difficulty.upper() if q_difficulty else "MEDIUM",
+                "bloom_level": bloom_level
+            })
+
+        if not formatted_questions:
+            raise ValueError("All generated questions were filtered out or invalid.")
+
+        cache_val = (formatted_questions, quiz_title)
+        quiz_cache.set(cache_key, cache_val)
+        
+        log.info(f"✅ Generated {len(formatted_questions)} questions successfully via direct REST pipeline")
+        return formatted_questions, quiz_title
+
+    except Exception as e:
+        log.error(f"Direct REST quiz generation failed: {e}. Falling back to text-based generator.", exc_info=True)
+        fallback_questions = generate_text_based_questions(text, num_questions, difficulty)
+        return fallback_questions, "Fallback Quiz"
 
 def _split_into_sentences(text: str) -> List[str]:
     """Split document text into clean, usable sentences."""
@@ -1184,8 +1180,8 @@ def _split_into_sentences(text: str) -> List[str]:
 
 def _extract_key_terms(text: str) -> List[str]:
     """Extract candidate key terms from the document for question seeding."""
-    # Multi-word capitalized phrases (likely concepts, e.g., "Build in Exception")
-    phrases = re.findall(r'\b[A-Z][A-Za-z]+(?:\s+[A-Za-z]+){1,4}\b', text)
+    # Multi-word capitalized phrases (likely concepts, e.g., "REST Assured")
+    phrases = re.findall(r'\b[A-Z][A-Za-z\-]+(?:\s+[A-Z][A-Za-z\-]+){1,4}\b', text)
     # Long lowercase technical words (e.g., "photosynthesis")
     long_words = re.findall(r'\b[a-z]{8,}\b', text)
     candidates = phrases + long_words
@@ -1206,108 +1202,219 @@ def _extract_key_terms(text: str) -> List[str]:
     return out
 
 
+def make_question_from_sentence(sentence: str, keyword: str) -> str:
+    s_clean = sentence.strip()
+    
+    # 1. Try to extract a clause starting with the keyword and followed by a copula
+    # e.g., "REST Assured, which is a Java library..." -> "REST Assured is a Java library..."
+    pattern = re.escape(keyword) + r"\s*(?:,\s*which\s+)?(is|are)\s+(?:a|an|the|used|refers|represents|key)\b"
+    match = re.search(pattern, s_clean, re.IGNORECASE)
+    
+    clause = None
+    if match:
+        start_idx = match.start()
+        # Reconstruct clause to start with keyword and replace ", which is" with "is"
+        raw_clause = s_clean[start_idx:].strip()
+        # Remove ", which" if present
+        clause = re.sub(r"^" + re.escape(keyword) + r"\s*,\s*which\s+", keyword + " ", raw_clause, flags=re.IGNORECASE)
+    
+    target = clause if clause else s_clean
+    keyword_len = len(keyword)
+    
+    if target[:keyword_len].lower() == keyword.lower():
+        rest = target[keyword_len:].strip()
+        
+        # Check for various copulas
+        copulas = [
+            ("is used to", "What is used to"),
+            ("are used to", "What are used to"),
+            ("is a", "Which of the following is defined as a"),
+            ("is an", "Which of the following is defined as an"),
+            ("is the", "Which of the following is defined as the"),
+            ("are a", "Which of the following are defined as"),
+            ("are an", "Which of the following are defined as"),
+            ("are the", "Which of the following are defined as the"),
+            ("refers to", "What refers to"),
+            ("represents", "What represents"),
+            ("is key to", "Which of the following is key to"),
+            ("are key to", "Which of the following are key to"),
+            ("is", "Which of the following is"),
+            ("are", "Which of the following are")
+        ]
+        for copula, question_prefix in copulas:
+            copula_pattern = r"^" + re.escape(copula) + r"\b"
+            if re.match(copula_pattern, rest, re.IGNORECASE):
+                pred = rest[len(copula):].strip()
+                if pred:
+                    if pred.endswith("."):
+                        pred = pred[:-1]
+                    return f"{question_prefix} {pred}?"
+
+    # Fallback to a cleanly formatted sentence completion question
+    blanked = re.sub(re.escape(keyword), "____", sentence, count=1, flags=re.IGNORECASE)
+    if "____" not in blanked:
+        blanked = sentence.replace(keyword, "____", 1)
+    if blanked.endswith("."):
+        blanked = blanked[:-1]
+    return f"Which option correctly completes the statement: '{blanked}'?"
+
+
+BANNED_PHRASES = [
+    "according to the document", "according to the text", "as mentioned in the",
+    "refer to the document", "in the text", "as per the document", "the author",
+    "referred to in the", "as described in", "in the document", "the document states"
+]
+
+
 def generate_text_based_questions(text: str, num_questions: int, difficulty: str) -> List[Dict]:
     """
-    Knowledge-based fallback when the LLM is unavailable.
-
-    Builds fill-in-the-blank style MCQs where:
-      - The CORRECT option is the actual sentence from the document containing the term.
-      - The DISTRACTORS are OTHER real sentences from the document (similar length).
-    This guarantees every option is grounded in the document and the correct
-    answer position is randomized — much better than the previous fallback that
-    used hard-coded strings like "This is contradicted by the document".
+    Last-resort, no-LLM fallback. Produces a mix of MCQ and FILL_BLANK questions.
     """
     import random
-    log.info("Generating knowledge-based fallback questions from document...")
+    log.info("Generating knowledge-based fallback (MCQ & FILL_BLANK) questions from document...")
 
     text = clean_text_for_quiz(text)
     sentences = _split_into_sentences(text)
-    key_terms = _extract_key_terms(text)
+    
+    # Filter candidates by length and diary/personal keywords
+    candidates = []
+    for s in sentences:
+        s_lower = s.lower()
+        # Filter out personal diary style sentences
+        if any(w in s_lower for w in ["yesterday", "today", "tomorrow", " learned", " practicing", " plan to", " afternoon"]):
+            continue
+        if any(p in s_lower for p in [" i ", " my ", " me ", " we ", " our "]) or s_lower.startswith("i ") or s_lower.startswith("my "):
+            continue
+        if any(phrase in s_lower for phrase in BANNED_PHRASES):
+            continue
+        if not (8 <= len(s.split()) <= 25):
+            continue
+        candidates.append(s)
 
-    if not sentences or len(sentences) < 4:
-        # Not enough material to build genuine MCQs — bubble up the failure.
-        log.warning(
-            "Document yielded only %d usable sentences and %d key terms — cannot build "
-            "knowledge-based fallback. Refusing to return placeholder questions.",
-            len(sentences), len(key_terms)
-        )
+    # Fallback to general length-filtered sentences if strict candidates are too sparse
+    if len(candidates) < num_questions:
+        candidates = [s for s in sentences if 8 <= len(s.split()) <= 25]
+        
+    random.shuffle(candidates)
+
+    if not candidates:
         raise HTTPException(
             status_code=422,
             detail=(
-                "Document text is too sparse or unstructured to generate a knowledge-based "
-                "quiz. Please upload a richer document or check that AI service (LLM) is "
-                "reachable."
+                "Document text is too sparse or unstructured to generate fallback questions. "
+                "Please upload a richer document or check that the AI service (LLM) is configured."
             )
         )
 
-    # Map each key term to the first sentence that mentions it
-    term_to_sentence: Dict[str, str] = {}
-    for term in key_terms:
-        pattern = re.compile(re.escape(term), re.IGNORECASE)
-        for s in sentences:
-            if pattern.search(s):
-                if term not in term_to_sentence:
-                    term_to_sentence[term] = s
-                break
+    all_key_terms = _extract_key_terms(text)
+    default_distractors = ["development", "testing", "framework", "automation", "concept", "system", "database", "method"]
 
-    # Fall back to using sentences directly if we couldn't link terms reliably
-    if len(term_to_sentence) < min(4, num_questions):
-        log.info("Term mapping sparse, using sentence-based seeding")
-        # Use unique sentences as questions: "Which statement appears in the document?"
-        random.shuffle(sentences)
-        seeds = [(f"Statement {i+1}", s) for i, s in enumerate(sentences[:num_questions])]
-    else:
-        seeds = list(term_to_sentence.items())[:num_questions]
+    def pick_keyword(sentence: str) -> Optional[str]:
+        words = sentence.split()
+        stopwords = {
+            "the", "this", "that", "with", "from", "into", "according", "document", "based",
+            "following", "statement", "correct", "describes", "best", "which", "what", "where",
+            "when", "then", "there", "their", "they", "them", "these", "those", "have", "been",
+            "were", "will", "would", "could", "should", "your", "only", "about", "above", "below",
+            "specifically", "yesterday", "tomorrow", "today", "afternoon", "morning", "evening",
+            "learning", "practicing", "practice", "started", "planning", "plans", "wants", "want",
+            "using", "automated", "automation", "testing", "development", "developer", "another",
+            "through", "because", "between", "without", "against", "during", "before", "after",
+            "under", "first", "second", "third", "about", "could", "would", "should", "might",
+            "shall", "cannot", "really", "actually", "specially", "mainly", "mostly", "usually",
+            "commonly", "finally", "originally", "initially", "primarily", "secondly", "specifically"
+        }
+        
+        candidates = []
+        for w in words:
+            clean_w = re.sub(r"[^\w\-\']", "", w)
+            if len(clean_w) >= 4 and clean_w.lower() not in stopwords:
+                candidates.append(clean_w)
+                
+        if not candidates:
+            return None
+            
+        candidates.sort(key=len, reverse=True)
+        return candidates[0]
 
     questions: List[Dict] = []
-    for i, (term, correct_sentence) in enumerate(seeds):
-        # Build distractors from OTHER sentences that don't mention the term
-        pattern = re.compile(re.escape(term), re.IGNORECASE) if term and not term.startswith("Statement") else None
-        candidate_distractors = [
-            s for s in sentences
-            if s != correct_sentence and (pattern is None or not pattern.search(s))
-        ]
-        if len(candidate_distractors) < 3:
-            # Allow reuse — relax the no-term constraint
-            candidate_distractors = [s for s in sentences if s != correct_sentence]
-
-        random.shuffle(candidate_distractors)
-        distractors = candidate_distractors[:3]
-        if len(distractors) < 3:
-            log.warning("Not enough distinct distractors for question %d, skipping", i + 1)
-            continue
-
-        # Randomize correct answer position
-        options = distractors + [correct_sentence]
-        random.shuffle(options)
-        correct_index = options.index(correct_sentence)
-        correct_letter = chr(ord("A") + correct_index)
-
-        # Phrase the question
-        if term.startswith("Statement"):
-            question_text = "Which of the following statements is supported by the document?"
-        else:
-            question_text = f"According to the document, which statement correctly describes \"{term}\"?"
-
-        questions.append({
-            "question": question_text,
-            "options": [o[:280] for o in options],
-            "correct_answer": correct_letter,
-            "explanation": f"This statement is taken directly from the document content.",
-            "difficulty": difficulty if difficulty != "MIXED" else "MEDIUM",
-            "bloom_level": "Remember",
-        })
-
+    for i, sentence in enumerate(candidates):
         if len(questions) >= num_questions:
             break
+            
+        # 1. Try to find a matching multi-word key term first
+        keyword = None
+        matching_terms = [t for t in all_key_terms if re.search(r"\b" + re.escape(t) + r"\b", sentence, re.IGNORECASE)]
+        if matching_terms:
+            # Sort by length descending to get the most specific/representative term
+            matching_terms.sort(key=len, reverse=True)
+            keyword = matching_terms[0]
+        else:
+            # Fall back to picking the longest single word
+            keyword = pick_keyword(sentence)
+            
+        if not keyword:
+            continue
+            
+        blanked = re.sub(re.escape(keyword), "____", sentence, count=1, flags=re.IGNORECASE)
+        if "____" not in blanked:
+            blanked = sentence.replace(keyword, "____", 1)
+            
+        q_type = "MCQ" if len(questions) % 2 == 0 else "FILL_BLANK"
+
+        if q_type == "MCQ":
+            possible_distractors = [t for t in all_key_terms if t.lower() != keyword.lower()]
+            if len(possible_distractors) < 3:
+                possible_distractors += [d for d in default_distractors if d.lower() != keyword.lower()]
+            
+            unique_distractors = []
+            for d in possible_distractors:
+                if d.lower() not in [ud.lower() for ud in unique_distractors]:
+                    unique_distractors.append(d)
+                    if len(unique_distractors) >= 3:
+                        break
+            
+            while len(unique_distractors) < 3:
+                unique_distractors.append("Option_" + str(len(unique_distractors)))
+
+            options = [keyword] + unique_distractors[:3]
+            random.shuffle(options)
+            
+            correct_idx = options.index(keyword)
+            correct_letter = chr(65 + correct_idx)
+
+            # Generate proper question text without the "____" if possible
+            question_text = make_question_from_sentence(sentence, keyword)
+
+            questions.append({
+                "question": question_text,
+                "questionType": "MCQ",
+                "options": options,
+                "correct_answer": correct_letter,
+                "correctAnswer": keyword,
+                "explanation": f"Based on the document context: '{sentence}'",
+                "difficulty": difficulty if difficulty != "MIXED" else "MEDIUM",
+                "bloom_level": "Remember"
+            })
+        else:
+            questions.append({
+                "question": blanked,
+                "questionType": "FILL_BLANK",
+                "options": [],
+                "correctAnswer": keyword,
+                "acceptableAnswers": [keyword],
+                "explanation": f"The original sentence used '{keyword}' here.",
+                "difficulty": difficulty if difficulty != "MIXED" else "MEDIUM",
+                "bloom_level": "Remember"
+            })
 
     if not questions:
         raise HTTPException(
             status_code=422,
-            detail="Could not generate any knowledge-based questions from the document content."
+            detail="Could not generate any fallback questions from the document content."
         )
 
-    log.info("✅ Generated %d knowledge-based fallback questions", len(questions))
+    log.info("✅ Generated %d fallback questions (MCQ & FILL_BLANK mix)", len(questions))
     return questions
 
 
@@ -1746,7 +1853,12 @@ async def upload_and_generate(
         
         # Generate quiz
         try:
-            questions = generate_quiz_with_langchain(text, num_questions, difficulty)
+            res = generate_quiz_with_langchain(text, num_questions, difficulty)
+            if isinstance(res, tuple):
+                questions, quiz_title = res
+            else:
+                questions = res
+                quiz_title = "Fallback Quiz"
         except Exception as e:
             error_msg = str(e)
             if any(kw in error_msg.lower() for kw in ["image", "does not support", "invalid input"]):
@@ -1759,6 +1871,7 @@ async def upload_and_generate(
         return {
             "success": True,
             "questions": questions,
+            "quiz_title": quiz_title,
             "message": f"Generated {len(questions)} questions from uploaded document using {llm_type}"
         }
         

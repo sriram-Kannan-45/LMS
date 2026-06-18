@@ -18,7 +18,7 @@ const AIQuestion = sequelize.define('AIQuestion', {
     field: 'question_text'
   },
   questionType: {
-    type: DataTypes.ENUM('MCQ', 'SHORT_ANSWER'),
+    type: DataTypes.ENUM('MCQ', 'SHORT_ANSWER', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING'),
     allowNull: false,
     field: 'question_type'
   },
@@ -31,6 +31,17 @@ const AIQuestion = sequelize.define('AIQuestion', {
     type: DataTypes.TEXT,
     allowNull: true,
     field: 'correct_answer'
+  },
+  acceptableAnswers: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    field: 'acceptable_answers',
+    comment: 'Acceptable answers for FILL_BLANK'
+  },
+  pairs: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Pairs for MATCHING question type'
   },
   explanation: {
     type: DataTypes.TEXT,

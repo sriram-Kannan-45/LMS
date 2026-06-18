@@ -81,8 +81,8 @@ function ensureAssets() {
     const style = document.createElement('style');
     style.id = 'preexam-styles';
     style.textContent = `
-      .preexam { font-family: 'Inter', system-ui, sans-serif; }
-      .preexam .display { font-family: 'Sora', 'Inter', system-ui, sans-serif; }
+      .preexam { font-family: 'Poppins', system-ui, sans-serif; }
+      .preexam .display { font-family: 'Poppins', sans-serif; }
       .preexam .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
 
       @keyframes preexam-fade-slide-in {

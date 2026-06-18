@@ -392,7 +392,7 @@ export default function ForgotPassword() {
           justify-content: center;
           background: linear-gradient(135deg, #eff6ff 0%, #eef4ff 50%, #f8faff 100%);
           padding: 24px;
-          font-family: 'Manrope', 'Inter', sans-serif;
+          font-family: 'Poppins', 'Poppins', sans-serif;
           -webkit-font-smoothing: antialiased;
         }
 

@@ -62,9 +62,11 @@ function CoursesList({ user, onOpenCourse }) {
       setLoading(true)
       const r = await fetch(API.TRAINER_COURSES.LIST, { headers: auth() })
       const d = await r.json()
+      console.log('DEBUG - API Response (/trainer/courses):', d)
       if (d.success) setCourses(d.courses || [])
       else showError(d.error || 'Failed to load courses')
     } catch (e) {
+      console.error('DEBUG - fetchCourses error:', e.message)
       showError(e.message || 'Failed to load courses')
     } finally {
       setLoading(false)

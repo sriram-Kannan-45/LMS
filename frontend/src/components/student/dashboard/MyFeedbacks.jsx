@@ -57,7 +57,7 @@ export default function MyFeedbacks({ feedbacks = [], loading = false }) {
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <h3 style={{
-                    fontFamily: "'Outfit', sans-serif", fontSize: 15, fontWeight: 700,
+                    fontFamily: "'Poppins', sans-serif", fontSize: 15, fontWeight: 700,
                     color: 'var(--academic-text)', marginBottom: 4,
                   }}>
                     {f.trainingTitle}

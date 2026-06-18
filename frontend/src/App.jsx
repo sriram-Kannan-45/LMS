@@ -50,7 +50,7 @@ function FullScreenLoader() {
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 9999,
-      fontFamily: "'Manrope', 'Inter', sans-serif"
+      fontFamily: "'Manrope', 'Poppins', sans-serif"
     }}>
       <div style={{
         width: '44px',
@@ -98,6 +98,25 @@ function App() {
       }
     }
     setInitializing(false)
+  }, [])
+
+  useEffect(() => {
+    const originalFetch = window.fetch
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args)
+      if (response.status === 401 || response.status === 403) {
+        const urlStr = response.url || ''
+        const isAuthEndpoint = urlStr.includes('/api/auth/login') || urlStr.includes('/api/auth/register')
+        if (!isAuthEndpoint) {
+          localStorage.removeItem('user')
+          setUser(null)
+        }
+      }
+      return response
+    }
+    return () => {
+      window.fetch = originalFetch
+    }
   }, [])
 
   const handleLogin = (userData) => {
@@ -183,9 +202,36 @@ function AppRoutes({ user, onLogin, onLogout }) {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/admin/login" element={<Navigate to="/admin" replace />} />
-      <Route path="/trainer/login" element={<Navigate to="/trainer" replace />} />
-      <Route path="/participant/login" element={<Navigate to="/participant" replace />} />
+      <Route
+        path="/admin/login"
+        element={
+          user?.role === 'ADMIN' ? (
+            <Navigate to="/admin" replace />
+          ) : (
+            <AdminLogin onLogin={onLogin} />
+          )
+        }
+      />
+      <Route
+        path="/trainer/login"
+        element={
+          user?.role === 'TRAINER' ? (
+            <Navigate to="/trainer" replace />
+          ) : (
+            <TrainerLogin onLogin={onLogin} />
+          )
+        }
+      />
+      <Route
+        path="/participant/login"
+        element={
+          user?.role === 'PARTICIPANT' ? (
+            <Navigate to="/participant" replace />
+          ) : (
+            <ParticipantLogin onLogin={onLogin} />
+          )
+        }
+      />
       <Route path="/register" element={<Register onLogin={onLogin} />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
 
@@ -195,7 +241,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
           user?.role === 'ADMIN' ? (
             <DashboardWrapper component={AdminDashboard} user={user} onLogout={onLogout} />
           ) : (
-            <AdminLogin onLogin={onLogin} />
+            <Navigate to="/admin/login" replace />
           )
         }
       />
@@ -206,7 +252,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
           user?.role === 'TRAINER' ? (
             <DashboardWrapper component={TrainerDashboard} user={user} onLogout={onLogout} />
           ) : (
-            <TrainerLogin onLogin={onLogin} />
+            <Navigate to="/trainer/login" replace />
           )
         }
       />
@@ -217,7 +263,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
           user?.role === 'PARTICIPANT' ? (
             <DashboardWrapper component={ParticipantDashboard} user={user} onLogout={onLogout} />
           ) : (
-            <ParticipantLogin onLogin={onLogin} />
+            <Navigate to="/participant/login" replace />
           )
         }
       />

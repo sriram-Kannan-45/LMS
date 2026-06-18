@@ -13,3 +13,5 @@ pydantic>=2.9.2
 requests>=2.32.3
 python-multipart>=0.0.9
 json-repair>=0.30.0
+langgraph>=1.2.5
+

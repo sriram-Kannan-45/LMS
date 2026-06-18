@@ -156,6 +156,7 @@ function TrainerLogin({ onLogin }) {
             <p>Sign in to your Trainer Hub</p>
           </div>
 
+
           {error && (
             <div className="trainer-alert trainer-alert-error">
               <AlertCircle size={16} />

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bookmark, Cloud, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -17,7 +17,30 @@ export default function QuestionCard({
 }) {
   if (!question) return null;
   const isMCQ = question.questionType === 'MCQ';
+  const isTrueFalse = question.questionType === 'TRUE_FALSE';
+  const isFillBlank = question.questionType === 'FILL_BLANK';
+  const isMatching = question.questionType === 'MATCHING';
+
   const options = Array.isArray(question.options) ? question.options : [];
+
+  const pairsList = useMemo(() => {
+    if (!question?.pairs) return [];
+    if (Array.isArray(question.pairs)) return question.pairs;
+    if (typeof question.pairs === 'string') {
+      try {
+        return JSON.parse(question.pairs);
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  }, [question?.pairs]);
+
+  const matchingRightOptions = useMemo(() => {
+    if (question?.questionType !== 'MATCHING') return [];
+    const uniqueRights = [...new Set(pairsList.map(p => p.right).filter(Boolean))];
+    return uniqueRights.sort();
+  }, [question?.id, question?.questionType, pairsList]);
   const progress = total > 0 ? ((index + 1) / total) * 100 : 0;
   const atStart = index === 0;
   const atEnd = index >= total - 1;
@@ -64,7 +87,11 @@ export default function QuestionCard({
                     color: 'var(--eq-accent)',
                   }}
                 >
-                  {isMCQ ? 'Multiple Choice' : 'Short Answer'}
+                  {isMCQ && 'Multiple Choice'}
+                  {isTrueFalse && 'True / False'}
+                  {isFillBlank && 'Fill In The Blank'}
+                  {isMatching && 'Matching'}
+                  {(!question.questionType || question.questionType === 'SHORT_ANSWER') && 'Short Answer'}
                 </span>
                 <motion.button
                   type="button"
@@ -92,7 +119,7 @@ export default function QuestionCard({
               </h2>
 
               {/* Options — sit under question, full width of centered container */}
-              {isMCQ ? (
+              {isMCQ || isTrueFalse ? (
                 <div className="flex flex-col gap-3">
                   {options.map((opt, i) => (
                     <OptionCard
@@ -105,6 +132,61 @@ export default function QuestionCard({
                       questionId={question.id}
                     />
                   ))}
+                </div>
+              ) : isFillBlank ? (
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="text"
+                    value={answer?.answerText || ''}
+                    onChange={(e) => onChange({ answerText: e.target.value })}
+                    disabled={disabled}
+                    placeholder="Type the word that fits the blank..."
+                    className="w-full rounded-2xl border bg-white p-4 text-[15px] outline-none transition focus:ring-2"
+                    style={{
+                      borderColor: 'var(--eq-border)',
+                      color: 'var(--eq-text)',
+                      height: '48px'
+                    }}
+                  />
+                </div>
+              ) : isMatching ? (
+                <div className="flex flex-col gap-4">
+                  <p className="text-xs text-slate-500 mb-2">Match each term on the left with its definition on the right:</p>
+                  <div className="flex flex-col gap-3">
+                    {pairsList.map((pair, idx) => {
+                      const leftVal = pair.left;
+                      const selectedRight = answer?.matches?.[leftVal] || '';
+                      return (
+                        <div key={idx} className="flex items-center gap-3">
+                          <div className="flex-1 text-sm font-semibold text-slate-700">{leftVal}</div>
+                          <div className="text-slate-400">→</div>
+                          <div className="flex-[1.5]">
+                            <select
+                              value={selectedRight}
+                              disabled={disabled}
+                              onChange={(e) => {
+                                const currentMatches = answer?.matches || {};
+                                const updatedMatches = { ...currentMatches, [leftVal]: e.target.value };
+                                onChange({
+                                  matches: updatedMatches,
+                                  answerText: JSON.stringify(updatedMatches)
+                                });
+                              }}
+                              className="w-full h-10 px-3 border rounded-xl bg-white text-xs text-slate-600 outline-none focus:ring-2"
+                              style={{ borderColor: 'var(--eq-border)' }}
+                            >
+                              <option value="">-- Choose matching definition --</option>
+                              {matchingRightOptions.map((rightOpt, oIdx) => (
+                                <option key={oIdx} value={rightOpt}>
+                                  {rightOpt}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <ShortAnswer

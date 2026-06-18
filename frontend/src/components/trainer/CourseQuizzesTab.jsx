@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Pencil, Trash2, Eye, Send, Sparkles, ListChecks, Search,
@@ -32,6 +32,7 @@ const blankQuestion = () => ({
   question: '',
   options: ['', '', '', ''],
   correctIndex: 0,
+  explanation: '',
 })
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -49,7 +50,7 @@ function QuizBuilder({ user, courseId, lessons, existingQuiz, onClose, onSaved }
       const opts = Array.isArray(q.options) ? q.options.slice(0, 4) : ['', '', '', '']
       while (opts.length < 4) opts.push('')
       const correctIndex = Math.max(0, opts.findIndex(o => o === q.correctAnswer))
-      return { question: q.questionText || '', options: opts, correctIndex }
+      return { question: q.questionText || '', options: opts, correctIndex, explanation: q.explanation || '' }
     })
   })
   const [saving, setSaving] = useState(false)
@@ -226,6 +227,15 @@ function QuizBuilder({ user, courseId, lessons, existingQuiz, onClose, onSaved }
                       {q.correctIndex === oi && <Check size={14} color="#15803d" />}
                     </label>
                   ))}
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Explanation (Optional)</label>
+                  <input
+                    value={q.explanation || ''}
+                    onChange={(e) => updateQ(i, { explanation: e.target.value })}
+                    placeholder="Provide context or explanation for why the correct option is correct..."
+                    style={{ ...inputStyle, marginTop: 4, padding: '8px 12px', fontSize: 13 }}
+                  />
                 </div>
               </div>
             ))}
@@ -478,6 +488,21 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
   const [builderState, setBuilderState] = useState(null) // { quiz?: existingQuiz } | null (open) — null=closed
   const [previewQuiz, setPreviewQuiz] = useState(null)
   const [publishQuiz, setPublishQuiz] = useState(null)
+  const [showGenerator, setShowGenerator] = useState(false)
+
+  const handleQuizGenerated = (questions, title) => {
+    if (questions === null) {
+      fetchAll()
+      onCountChange?.()
+    } else {
+      setBuilderState({
+        quiz: {
+          title: title,
+          questions: questions
+        }
+      })
+    }
+  }
 
   const auth = () => ({ Authorization: `Bearer ${user.token}` })
 
@@ -571,7 +596,7 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
         </h3>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
-            onClick={() => info('AI document upload arrives in a future iteration. Use Create Manually for now.')}
+            onClick={() => setShowGenerator(true)}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '10px 16px', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
@@ -724,6 +749,14 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
 
       {/* Modals */}
       <AnimatePresence>
+        {showGenerator && (
+          <AIQuizGeneratorModal
+            user={user}
+            courseId={courseId}
+            onClose={() => setShowGenerator(false)}
+            onGenerated={handleQuizGenerated}
+          />
+        )}
         {builderState && (
           <QuizBuilder
             user={user}
@@ -748,6 +781,303 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
         )}
       </AnimatePresence>
     </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// AI Quiz Generator Modal
+// ════════════════════════════════════════════════════════════════════════════
+function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
+  const { success, error: showError } = useToast()
+  const [activeTab, setActiveTab] = useState('prompt') // 'prompt' | 'document'
+  
+  // Prompt Fields
+  const [promptText, setPromptText] = useState('')
+  const [questionCount, setQuestionCount] = useState(10)
+  const [difficulty, setDifficulty] = useState('Medium')
+  const [generating, setGenerating] = useState(false)
+  
+  // Document Fields
+  const [file, setFile] = useState(null)
+  const [fileGenerating, setFileGenerating] = useState(false)
+  const fileInputRef = useRef()
+
+  const handleGenerateFromPrompt = async (e) => {
+    e.preventDefault()
+    if (!promptText.trim()) {
+      showError('Please enter a prompt or topic')
+      return
+    }
+    setGenerating(true)
+    try {
+      const response = await fetch(API.TRAINER_COURSES.GENERATE_FROM_PROMPT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${user.token}`
+        },
+        body: JSON.stringify({
+          trainingId: courseId,
+          prompt: promptText.trim(),
+          questionCount: parseInt(questionCount, 10),
+          difficulty: difficulty
+        })
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate quiz')
+      }
+      
+      // Map AI response format to QuizBuilder format:
+      // AI returns: { success: true, questions: [{ question, optionA, optionB, optionC, optionD, correctAnswer, explanation }] }
+      const formatted = data.questions.map(q => {
+        const options = [q.optionA, q.optionB, q.optionC, q.optionD]
+        return {
+          questionText: q.question,
+          options: options,
+          correctAnswer: q.correctAnswer,
+          explanation: q.explanation || ''
+        }
+      })
+      
+      success('AI Quiz questions generated successfully! Loading preview...')
+      onGenerated(formatted, `AI Quiz: ${promptText.substring(0, 30)}`)
+      onClose()
+    } catch (err) {
+      showError(err.message)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const handleGenerateFromDocument = async (e) => {
+    e.preventDefault()
+    if (!file) {
+      showError('Please select a file to upload')
+      return
+    }
+    setFileGenerating(true)
+    
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('courseId', courseId)
+    formData.append('trainingId', courseId)
+    formData.append('numQuestions', questionCount)
+    formData.append('difficulty', difficulty.toUpperCase())
+
+    try {
+      const response = await fetch(API.AI_QUIZ.TRAINER_UPLOAD, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${user.token}`
+        },
+        body: formData
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate quiz from document')
+      }
+      
+      success('Quiz generated from document successfully!')
+      onGenerated(null) // trigger reload
+      onClose()
+    } catch (err) {
+      showError(err.message)
+    } finally {
+      setFileGenerating(false)
+    }
+  }
+
+  const modalStyle = {
+    position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)',
+    zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+  }
+
+  const contentStyle = {
+    background: '#fff', borderRadius: 14, width: '100%', maxWidth: 540,
+    boxShadow: '0 25px 60px -10px rgba(0,0,0,0.25)', overflow: 'hidden',
+    position: 'relative'
+  }
+
+  const tabStyle = (active) => ({
+    flex: 1, padding: '12px', border: 'none', cursor: 'pointer',
+    background: active ? '#fff' : '#f8fafc',
+    color: active ? '#4f46e5' : '#64748b',
+    fontWeight: 600, borderBottom: active ? '2px solid #4f46e5' : '1px solid #e2e8f0',
+    fontSize: 13, transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+  })
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={modalStyle} onClick={onClose}>
+      <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={e => e.stopPropagation()} style={contentStyle}>
+        
+        {/* Header */}
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>AI Quiz Wizard</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>🤖 Generate Quiz with AI</div>
+          </div>
+          <button onClick={onClose} style={iconBtn('#f1f5f9', '#475569')}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Tab Selector */}
+        <div style={{ display: 'flex' }}>
+          <button type="button" onClick={() => setActiveTab('prompt')} style={tabStyle(activeTab === 'prompt')}>
+            <Sparkles size={14} /> From Prompt / Topic
+          </button>
+          <button type="button" onClick={() => setActiveTab('document')} style={tabStyle(activeTab === 'document')}>
+            <BookOpen size={14} /> From Document
+          </button>
+        </div>
+
+        {generating || fileGenerating ? (
+          <div style={{ padding: '40px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <div className="generating-spinner" style={{ width: 40, height: 40, border: '4px solid #f3f3f3', borderTop: '4px solid #4f46e5', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', marginTop: 8 }}>AI is crafting your quiz...</div>
+            <div style={{ fontSize: 13, color: '#64748b', maxWidth: 360 }}>
+              Analyzing topic details and generating high-quality multiple choice questions. This may take up to 60 seconds.
+            </div>
+            {/* Loading skeleton */}
+            <div style={{ width: '100%', marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ height: 16, background: '#f1f5f9', borderRadius: 4, width: '70%' }} />
+              <div style={{ height: 12, background: '#f1f5f9', borderRadius: 4, width: '100%' }} />
+              <div style={{ height: 12, background: '#f1f5f9', borderRadius: 4, width: '85%' }} />
+            </div>
+          </div>
+        ) : (
+          <div style={{ padding: 20 }}>
+            {activeTab === 'prompt' ? (
+              <form onSubmit={handleGenerateFromPrompt}>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ ...lblStyle, marginTop: 0 }}>Topic or Prompt <span style={{ color: '#dc2626' }}>*</span></label>
+                  <textarea
+                    value={promptText}
+                    onChange={e => setPromptText(e.target.value)}
+                    placeholder="e.g. Java OOP Concepts (Inheritance, Polymorphism, Encapsulation, Abstraction)"
+                    rows={4}
+                    style={{ ...inputStyle, resize: 'vertical', fontSize: 13 }}
+                    required
+                  />
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                    Provide a specific topic or content snippet to guide question generation.
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                  <div>
+                    <label style={{ ...lblStyle, marginTop: 0 }}>Number of Questions</label>
+                    <select
+                      value={questionCount}
+                      onChange={e => setQuestionCount(e.target.value)}
+                      style={inputStyle}
+                    >
+                      {[5, 10, 15, 20, 25, 30, 40, 50].map(n => (
+                        <option key={n} value={n}>{n} Questions</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ ...lblStyle, marginTop: 0 }}>Difficulty</label>
+                    <select
+                      value={difficulty}
+                      onChange={e => setDifficulty(e.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="Easy">Easy</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Hard">Hard</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+                  <button type="button" onClick={onClose} style={btnSecondary}>Cancel</button>
+                  <button type="submit" style={{ ...btnPrimary, background: 'linear-gradient(135deg, #8b5cf6, #6366f1)' }}>
+                    🤖 Generate Quiz
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleGenerateFromDocument}>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ ...lblStyle, marginTop: 0 }}>Select File <span style={{ color: '#dc2626' }}>*</span></label>
+                  <div style={{ fontSize: 11, color: '#92400e', background: '#fef3c7', padding: '8px 12px', borderRadius: 6, marginBottom: 8, display: 'flex', gap: 6 }}>
+                    <span>⚠️</span>
+                    <span>Only PDF, DOCX, and TXT files are supported. Images are not supported.</span>
+                  </div>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept=".pdf,.docx,.txt"
+                    onChange={e => setFile(e.target.files[0])}
+                    style={{ display: 'none' }}
+                  />
+                  <div
+                    onClick={() => fileInputRef.current.click()}
+                    style={{
+                      border: '2px dashed #cbd5e1', borderRadius: 8, padding: '24px 12px',
+                      textAlign: 'center', cursor: 'pointer', background: '#f8fafc',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    {file ? (
+                      <div>
+                        <div style={{ fontSize: 24, marginBottom: 4 }}>📕</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{file.name}</div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{(file.size / 1024).toFixed(1)} KB</div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize: 24, marginBottom: 4, color: '#94a3b8' }}>☁️</div>
+                        <div style={{ fontSize: 13, fontWeight: 550, color: '#475569' }}>Click to select a file</div>
+                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>PDF, DOCX, or TXT up to 10MB</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                  <div>
+                    <label style={{ ...lblStyle, marginTop: 0 }}>Number of Questions</label>
+                    <select
+                      value={questionCount}
+                      onChange={e => setQuestionCount(e.target.value)}
+                      style={inputStyle}
+                    >
+                      {[5, 10, 15, 20].map(n => (
+                        <option key={n} value={n}>{n} Questions</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ ...lblStyle, marginTop: 0 }}>Difficulty</label>
+                    <select
+                      value={difficulty}
+                      onChange={e => setDifficulty(e.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="Easy">Easy</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Hard">Hard</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+                  <button type="button" onClick={onClose} style={btnSecondary}>Cancel</button>
+                  <button type="submit" disabled={!file} style={{ ...btnPrimary, opacity: file ? 1 : 0.5 }}>
+                    🤖 Upload &amp; Generate
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
   )
 }
 

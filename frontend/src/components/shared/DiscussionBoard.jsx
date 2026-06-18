@@ -146,7 +146,7 @@ function DiscussionBoard({ user, trainingId }) {
   })
 
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif", color: 'var(--academic-text)' }}>
+    <div style={{ fontFamily: "'Poppins', sans-serif", color: 'var(--academic-text)' }}>
       {/* Tab controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', gap: 6, background: 'rgba(255,255,255,0.03)', padding: 4, borderRadius: 8, border: '1px solid var(--academic-border)' }}>

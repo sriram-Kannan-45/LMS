@@ -61,29 +61,62 @@ const aiService = {
 
         // Transform response format to match backend expectations
         const questions = response.data.questions.map((q, i) => {
+          const questionType = (q.questionType || 'MCQ').toUpperCase();
+
+          if (questionType === 'TRUE_FALSE') {
+            const correctIdx = String(q.correctAnswer || 'True').trim().toLowerCase() === 'true' ? '0' : '1';
+            return {
+              questionText: q.question || `Question ${i + 1}`,
+              questionType: 'TRUE_FALSE',
+              options: ['True', 'False'],
+              correctAnswer: correctIdx,
+              explanation: q.explanation || '',
+              difficulty,
+              order: i
+            };
+          }
+
+          if (questionType === 'FILL_BLANK') {
+            return {
+              questionText: q.question || `Question ${i + 1}`,
+              questionType: 'FILL_BLANK',
+              options: [],
+              correctAnswer: q.correctAnswer || '',
+              acceptableAnswers: Array.isArray(q.acceptableAnswers) ? q.acceptableAnswers : [],
+              explanation: q.explanation || '',
+              difficulty,
+              order: i
+            };
+          }
+
+          if (questionType === 'MATCHING') {
+            return {
+              questionText: q.question || `Question ${i + 1}`,
+              questionType: 'MATCHING',
+              pairs: Array.isArray(q.pairs) ? q.pairs : [],
+              explanation: q.explanation || '',
+              difficulty,
+              order: i
+            };
+          }
+
+          // Default: MCQ — existing logic, unchanged
           const options = q.options || ['Option A', 'Option B', 'Option C', 'Option D'];
           let correctAnswer = q.correct_answer || q.correctAnswer || 'A';
-          
           if (['A', 'B', 'C', 'D'].includes(correctAnswer)) {
             correctAnswer = (correctAnswer.charCodeAt(0) - 65).toString();
           } else if (!['0', '1', '2', '3'].includes(correctAnswer)) {
-            // It is likely the text of the correct option. Try to find its index.
             const cleanCorrect = String(correctAnswer).trim().toLowerCase();
             const idx = options.findIndex(opt => String(opt).trim().toLowerCase() === cleanCorrect);
-            if (idx !== -1) {
-              correctAnswer = idx.toString();
-            } else {
-              correctAnswer = '0';
-            }
+            correctAnswer = idx !== -1 ? idx.toString() : '0';
           }
-          
           return {
-            questionText: q.question || q.questionText || `Question ${i+1}`,
+            questionText: q.question || q.questionText || `Question ${i + 1}`,
             questionType: 'MCQ',
-            options: options,
-            correctAnswer: correctAnswer,
+            options,
+            correctAnswer,
             explanation: q.explanation || '',
-            difficulty: difficulty,
+            difficulty,
             order: i
           };
         });

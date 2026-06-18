@@ -142,7 +142,7 @@
 .modal-header h3 {
   font-size: 18px;
   font-weight: 600;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   color: var(--text-primary);
   letter-spacing: -0.02em;
 }
@@ -200,7 +200,7 @@
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 8px;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
 }
 
 .empty-state p {
@@ -270,7 +270,7 @@
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 8px;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   color: var(--text-primary);
   letter-spacing: -0.01em;
 }
@@ -340,7 +340,7 @@
 .section-header h3 {
   font-size: 22px;
   font-weight: 700;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   color: var(--text-primary);
   letter-spacing: -0.03em;
 }
@@ -377,7 +377,7 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: var(--space-2);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
 }
 
 .cred-row {
@@ -400,7 +400,7 @@
 .cred-value {
   font-size: 13px;
   font-weight: 600;
-  font-family: 'Inter', monospace;
+  font-family: 'Poppins', monospace;
   color: var(--text-primary);
   background: var(--bg-surface);
   padding: 3px 8px;
@@ -538,7 +538,7 @@
   font-weight: 700;
   color: var(--text-inverse);
   flex-shrink: 0;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   transition: transform var(--duration-normal) var(--ease-spring);
 }
 
@@ -550,7 +550,7 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -631,7 +631,7 @@
   font-size: 24px;
   font-weight: 700;
   color: var(--text-inverse);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
 }
 
 .trainer-details-grid {
@@ -662,7 +662,7 @@
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
 }
 
 .detail-value {
@@ -770,7 +770,7 @@
   border-radius: 16px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   white-space: nowrap;
 }
 
