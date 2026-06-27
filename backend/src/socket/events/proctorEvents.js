@@ -49,6 +49,16 @@ const { ExamSession, Screenshot } = require('../../models');
 const logger = require('../../utils/logger');
 
 module.exports = function registerProctorEvents(io, socket) {
+  /**
+   * Determine whether the connected user is allowed to view or signal on
+   * behalf of a proctoring session. Only the participant owner or an
+   * authorized trainer/admin may interact.
+   */
+  function canViewSession(session) {
+    if (session.participantId === socket.userId) return true;
+    return ['TRAINER', 'ADMIN'].includes(socket.userRole);
+  }
+
   // ── Participant joins their own session room ────────────────────────────
   socket.on('proctor:join', async ({ sessionId }, ack) => {
     try {
@@ -90,6 +100,13 @@ module.exports = function registerProctorEvents(io, socket) {
             session: proctoring.buildClientView(session),
           });
         }
+
+        // Record proctor activity for join
+        await proctoring.recordActivity({
+          session,
+          eventType: 'JOIN',
+          payload: { socketId: socket.id, ipAddress: socket.handshake.address },
+        });
       }
 
       ack?.({ ok: true, session: proctoring.buildClientView(session) });
@@ -192,6 +209,7 @@ module.exports = function registerProctorEvents(io, socket) {
   socket.on('proctor:violation', async (data, ack) => {
     try {
       const { sessionId, type, message, metadata } = data || {};
+      console.log(`[proctorEvents] Violation reported by user ${socket.userId}, session ${sessionId}, type ${type}`);
       const session = await ExamSession.findByPk(sessionId);
       if (!session || session.participantId !== socket.userId) {
         return ack?.({ ok: false, error: 'forbidden' });
@@ -262,12 +280,15 @@ module.exports = function registerProctorEvents(io, socket) {
   socket.on('proctor:webrtc-offer', async ({ sessionId, viewerId, sdp }) => {
     try {
       const session = await ExamSession.findByPk(sessionId);
-      if (!session || session.participantId !== socket.userId) return;
+      if (!session || !canViewSession(session)) return;
+      if (session.participantId !== socket.userId) return; // only owner can offer
 
+      console.log(`[proctorEvents] Offer received from participant ${socket.userId} for viewer ${viewerId}, session ${sessionId}`);
       // Relay offer to the requesting trainer only
       io.to(`user_${viewerId}`).emit('proctor:webrtc-offer', {
         sessionId, viewerId, sdp, participantName: socket.userName || 'Participant',
       });
+      console.log(`[proctorEvents] Offer relayed to trainer ${viewerId}`);
     } catch (err) {
       logger.warn('webrtc-offer relay error', { err: err.message });
     }
@@ -277,11 +298,14 @@ module.exports = function registerProctorEvents(io, socket) {
   socket.on('proctor:webrtc-answer', async ({ sessionId, viewerId, sdp }) => {
     try {
       const session = await ExamSession.findByPk(sessionId);
-      if (!session) return;
+      if (!session || !canViewSession(session)) return;
+      if (!['TRAINER', 'ADMIN'].includes(socket.userRole)) return; // only trainers answer
+      console.log(`[proctorEvents] Answer received from trainer ${socket.userId} for participant ${session.participantId}, session ${sessionId}`);
       // Relay answer to the participant
       io.to(`user_${session.participantId}`).emit('proctor:webrtc-answer', {
         sessionId, viewerId, sdp,
       });
+      console.log(`[proctorEvents] Answer relayed to participant ${session.participantId}`);
     } catch (err) {
       logger.warn('webrtc-answer relay error', { err: err.message });
     }
@@ -291,9 +315,13 @@ module.exports = function registerProctorEvents(io, socket) {
   socket.on('proctor:ice-candidate', async ({ sessionId, viewerId, candidate }) => {
     try {
       const session = await ExamSession.findByPk(sessionId);
-      if (!session) return;
+      if (!session || !canViewSession(session)) return;
       const isOwner = session.participantId === socket.userId;
+      // Trainers may only relay ICE candidates toward the participant;
+      // participants may only relay toward a trainer.
+      if (!isOwner && !['TRAINER', 'ADMIN'].includes(socket.userRole)) return;
       const targetUserId = isOwner ? viewerId : session.participantId;
+      console.log(`[proctorEvents] ICE candidate relay from ${isOwner ? 'participant' : 'trainer'} ${socket.userId} to ${targetUserId}, session ${sessionId}`);
       io.to(`user_${targetUserId}`).emit('proctor:ice-candidate', {
         sessionId, viewerId, candidate,
       });
@@ -307,8 +335,25 @@ module.exports = function registerProctorEvents(io, socket) {
     try {
       const session = await ExamSession.findByPk(sessionId);
       if (!session || session.participantId !== socket.userId) return;
+      if (session.status !== 'ACTIVE') return;
+
+      console.log(`[proctorEvents] Stream available from participant ${socket.userId}, session ${sessionId}`);
+      session.isScreenSharing = true;
+      await session.save();
+
+      // Record activity for screen sharing start
+      await proctoring.recordActivity({
+        session,
+        eventType: 'SCREEN_SHARE_START',
+        payload: { timestamp: new Date() }
+      });
+
       io.to(`proctor_quiz_${session.quizId}`).emit('proctor:stream-available', {
         sessionId,
+      });
+      io.to(`proctor_quiz_${session.quizId}`).emit('proctor:update', {
+        type: 'state',
+        session: proctoring.buildClientView(session),
       });
     } catch (err) {
       logger.warn('stream-available error', { err: err.message });
@@ -320,8 +365,24 @@ module.exports = function registerProctorEvents(io, socket) {
     try {
       const session = await ExamSession.findByPk(sessionId);
       if (!session || session.participantId !== socket.userId) return;
+
+      console.log(`[proctorEvents] Stream ended by participant ${socket.userId}, session ${sessionId}`);
+      session.isScreenSharing = false;
+      await session.save();
+
+      // Record activity for screen sharing stop
+      await proctoring.recordActivity({
+        session,
+        eventType: 'SCREEN_SHARE_STOP',
+        payload: { timestamp: new Date() }
+      });
+
       io.to(`proctor_quiz_${session.quizId}`).emit('proctor:stream-ended', {
         sessionId,
+      });
+      io.to(`proctor_quiz_${session.quizId}`).emit('proctor:update', {
+        type: 'state',
+        session: proctoring.buildClientView(session),
       });
     } catch (err) {
       logger.warn('stream-ended error', { err: err.message });
@@ -331,11 +392,12 @@ module.exports = function registerProctorEvents(io, socket) {
   // ── Trainer requests to observe a participant's stream ─────────────────
   socket.on('proctor:observe', async ({ sessionId }, ack) => {
     try {
-      if (!['TRAINER', 'ADMIN'].includes(socket.userRole)) {
-        return ack?.({ ok: false, error: 'forbidden' });
-      }
       const session = await ExamSession.findByPk(sessionId);
       if (!session) return ack?.({ ok: false, error: 'not_found' });
+      if (!canViewSession(session) || !['TRAINER', 'ADMIN'].includes(socket.userRole)) {
+        return ack?.({ ok: false, error: 'forbidden' });
+      }
+      console.log(`[proctorEvents] Trainer ${socket.userId} observing session ${sessionId}`);
       // Tell the participant to create a WebRTC offer for this trainer
       io.to(`user_${session.participantId}`).emit('proctor:observe-request', {
         sessionId, viewerId: socket.userId,
@@ -350,7 +412,7 @@ module.exports = function registerProctorEvents(io, socket) {
     try {
       const session = await ExamSession.findByPk(sessionId);
       if (!session) return;
-      if (!['TRAINER', 'ADMIN'].includes(socket.userRole)) return;
+      if (!canViewSession(session) || !['TRAINER', 'ADMIN'].includes(socket.userRole)) return;
       // Tell the participant to close the peer connection for this trainer
       io.to(`user_${session.participantId}`).emit('proctor:unobserve-request', {
         sessionId, viewerId: socket.userId,
@@ -408,6 +470,29 @@ module.exports = function registerProctorEvents(io, socket) {
       const session = await ExamSession.findByPk(sid);
       if (session && session.participantId === socket.userId && session.status === 'ACTIVE') {
         await proctoring.enterGracePeriod(session);
+
+        // Notify trainers that an active screen share has dropped.
+        if (session.isScreenSharing) {
+          session.isScreenSharing = false;
+          await session.save();
+          // Record activity for screen sharing stop
+          await proctoring.recordActivity({
+            session,
+            eventType: 'SCREEN_SHARE_STOP',
+            payload: { reason: 'socket disconnected', timestamp: new Date() }
+          });
+          io.to(`proctor_quiz_${session.quizId}`).emit('proctor:stream-ended', {
+            sessionId: session.id,
+          });
+        }
+
+        // Record proctor activity for leave
+        await proctoring.recordActivity({
+          session,
+          eventType: 'LEAVE',
+          payload: { reason: 'socket disconnected' }
+        });
+
         io.to(`proctor_quiz_${session.quizId}`).emit('proctor:update', {
           type: 'disconnected',
           session: proctoring.buildClientView(session),

@@ -1,413 +1,120 @@
-==============================================================================
-   WAVE INIT LMS  —  PARTICIPANT MCQ QUIZ WORKFLOW
-   (current implementation, generated 2026-05-27)
-==============================================================================
-
-This document describes exactly what happens when a participant attempts a
-multiple-choice (MCQ) quiz, end to end. It maps every UI action to the React
-component that handles it, the HTTP request it fires, the Express route +
-controller logic that processes it, the Sequelize tables it reads/writes, and
-the Socket.IO events broadcast as a side effect.
-
-──────────────────────────────────────────────────────────────────────────────
-0. PRE-CONDITIONS
-──────────────────────────────────────────────────────────────────────────────
-
-  * A trainer has already uploaded a document and the AI service has
-    generated questions, producing rows in three tables:
-        ai_documents     (1 row per uploaded file)
-        ai_quizzes       (1 row, status='DRAFT')
-        ai_questions     (N rows, questionType='MCQ', options JSON,
-                          correctAnswer = "0".."3" — index into options[])
-  * The trainer has flipped the quiz status from 'DRAFT' to 'PUBLISHED'
-    (PUT /api/ai-quiz/trainer/quiz/:id  body { status: 'PUBLISHED' }).
-  * The participant is logged in (JWT issued by /api/auth/login) and
-    enrolled in a training the quiz is attached to — OR the quiz has
-    trainingId = NULL (treated as global / open to everyone).
-
-──────────────────────────────────────────────────────────────────────────────
-1. PARTICIPANT BROWSES AVAILABLE QUIZZES
-──────────────────────────────────────────────────────────────────────────────
-
-  UI:
-    Sidebar → "Quizzes" tab
-    pages/ParticipantDashboard.jsx  →  components/AIQuizList.jsx
-                                    →  components/ai-quizzes/AIQuizzesDashboard.jsx
-
-  Hook: components/ai-quizzes/hooks/useQuizzes.js  on mount calls:
-
-    HTTP:  GET /api/ai-quiz/participant/quizzes
-           Authorization: Bearer <jwt>
-
-  Backend handler: backend/src/routes/aiQuizRoutes.js
-    1. Reads req.user.id from authenticateToken middleware.
-    2. SELECT enrollments for that user → list of trainingIds.
-    3. SELECT ai_quizzes WHERE status = 'PUBLISHED'
-                         AND (training_id IN trainingIds  OR  training_id IS NULL)
-       INCLUDE ai_questions (full payload — id, text, type, options, correct, etc.)
-       INCLUDE training (id, title) for context.
-    4. Returns: { quizzes: [...] }
-
-  Frontend enrichment (useQuizzes → enrichQuiz):
-    Each quiz gets:
-      questionCount     = quiz.questions.length
-      completionPercent = quiz.completionPercent
-                         OR quiz.bestScore
-                         OR localStorage 'ai-quiz-progress' for this id
-
-  Render:
-    components/ai-quizzes/sections/QuizGrid.jsx
-      → for each quiz: components/ai-quizzes/cards/QuizCard.jsx
-        showing: title, question count, time-limit, difficulty bar,
-                 your-progress bar, "Start quiz" button.
-
-──────────────────────────────────────────────────────────────────────────────
-2. PARTICIPANT CLICKS "START QUIZ"
-──────────────────────────────────────────────────────────────────────────────
-
-  UI: QuizCard onStart → useQuizzes.startQuiz(quiz)
-
-    HTTP:  POST /api/ai-quiz/participant/start/:quizId
-           Authorization: Bearer <jwt>
-           Body:  (none)
-
-  Backend handler in aiQuizRoutes.js:
-    1. Finds quiz with status='PUBLISHED' and INCLUDE ai_questions.
-       → 404 if not found, 422 if quiz has zero questions.
-    2. Looks for an existing IN_PROGRESS QuizAttempt for (quizId, userId).
-       a) If found  → returns { attemptId: existing.id, quiz }   (resume).
-       b) If absent → INSERT INTO quiz_attempts
-                       (quiz_id, participant_id, status='IN_PROGRESS',
-                        started_at = NOW())
-                      → returns { attemptId, quiz }.
-
-  Database after this step:
-       ┌──────────────── quiz_attempts ────────────────┐
-       │ id │ quiz_id │ participant_id │ status      │ │
-       │ 42 │ 7       │ 18             │ IN_PROGRESS │ │   started_at = NOW
-       └────────────────────────────────────────────────┘
-
-  Frontend: ParticipantDashboard.handleStartQuiz(attemptId, quiz)
-    - sets activeQuiz = quiz, quizAttemptId = attemptId
-    - tracks { type:'quiz', id:quiz.id, title } in localStorage
-      via useContinueLearning  → drives the "Continue learning" widget.
-    - the dashboard's "ai-quizzes" tab now renders <QuizTaking …/>.
-
-──────────────────────────────────────────────────────────────────────────────
-3. PARTICIPANT TAKES THE QUIZ
-──────────────────────────────────────────────────────────────────────────────
-
-  UI:  components/QuizTaking.jsx  (the only screen during the attempt)
-       Styling: styles/quiz-taking.css
-
-  Local state held entirely in the component (NOT in a backend session):
-        currentQ        index of the question on screen
-        answers         { [questionId]: { selectedOption } | { answerText } }
-        timeLeft        seconds, counts down once a second
-        submitting      bool, prevents double-submit
-        showConfirmSubmit  bool, the "Are you sure?" modal flag
-
-  Layout:
-       ┌─────────────────────────────────────────────────────────────────┐
-       │  Top bar  [progress fill]   ✦ Quiz title | Q 3 of 10            │
-       │           ✓ 2/10 done   ⏱ 28:14   (urgent <5min, warn <10min)   │
-       ├──────────────────────────────────────┬──────────────────────────┤
-       │                                      │  Sidebar                 │
-       │  Question card                       │  ┌────────────────────┐  │
-       │   • AI Assessment chip               │  │ Progress ring 30%  │  │
-       │   • Question text  (numbered)        │  │ ans / left / time  │  │
-       │   • For MCQ:  A B C D options        │  └────────────────────┘  │
-       │     each click:  setAnswers(prev,    │  Navigator grid 1..N     │
-       │       { [q.id]: { selectedOption: i }})│  Completion bar       │
-       │   • For SHORT_ANSWER: textarea       │  Tip insight             │
-       │                                      │  Submit quiz button      │
-       │  Footer: ◀ Prev   ●●●○○○○   Next ▶   │                          │
-       └──────────────────────────────────────┴──────────────────────────┘
-
-  Timer:
-       useEffect with setInterval(1s).
-       When timeLeft == 0  → handleSubmit() fires automatically.
-
-  No request is sent to the backend during navigation. Answers stay
-  local until the participant submits. (This means a hard refresh during
-  the attempt LOSES local answers — the IN_PROGRESS row stays in DB,
-  and the next "Start quiz" call will resume it via path 2.a above.)
-
-──────────────────────────────────────────────────────────────────────────────
-4. PARTICIPANT SUBMITS
-──────────────────────────────────────────────────────────────────────────────
-
-  UI: "Submit quiz" → confirmation modal showing answered count, time left,
-                      completion %, and a warning if there are unanswered Qs.
-       Confirm → handleSubmit().
-
-  handleSubmit() builds:
-       answerArray = Object.entries(answers).map(([qid, val]) => ({
-         questionId:    parseInt(qid),
-         selectedOption: val.selectedOption ?? null,
-         answerText:    val.answerText      || null,
-       }))
-
-    HTTP:  POST /api/ai-quiz/participant/submit/:attemptId
-           Authorization: Bearer <jwt>
-           Content-Type:  application/json
-           Body: { answers: answerArray }
-
-  Backend handler in aiQuizRoutes.js (the heart of the flow):
-
-    A. Validate ownership
-       SELECT * FROM quiz_attempts WHERE id=:attemptId AND participant_id=:userId
-       → 404 if mismatch.
-
-    B. Hydrate quiz with questions (need correctAnswer to grade).
-       SELECT * FROM ai_quizzes WHERE id=attempt.quizId
-         INCLUDE ai_questions
-
-    C. Build a Map  questionsMap[id] = question  for O(1) lookup.
-
-    D. For each submitted answer (loop):
-         questionsMap[ans.questionId]  →  question
-         IF question.questionType === 'MCQ':
-           isCorrect = String(question.correctAnswer)
-                       === String(ans.selectedOption)
-           score     = isCorrect ? 100 : 0
-           feedback  = isCorrect ? "Correct!"
-                                  : `Incorrect. Correct answer: ${
-                                       question.correctAnswer}`
-         ELSE  (questionType === 'SHORT_ANSWER'):
-           // Calls Python AI service via aiService.evaluateShortAnswer
-           // Falls back to keyword-overlap scoring if AI is offline.
-           { score, feedback, isCorrect } = await aiService.evaluate(...)
-         INSERT INTO quiz_answers (
-           attempt_id, question_id,
-           answer_text       = ans.answerText      OR '',
-           selected_option   = ans.selectedOption  OR NULL,
-           is_correct        = isCorrect,
-           score             = score,
-           feedback          = feedback,
-           evaluated_by_ai   = true
-         )
-         totalScore += score
-
-    E. Compute totals
-         maxScore   = quiz.questions.length * 100
-         percentage = maxScore > 0 ? totalScore / maxScore * 100 : 0
-
-    F. Compute time taken (added recently — was previously NULL)
-         submittedAt = new Date()
-         timeTaken   = max(0, round((submittedAt - attempt.startedAt)/1000))
-
-    G. UPDATE quiz_attempts SET
-         status      = 'EVALUATED',
-         submitted_at = submittedAt,
-         time_taken   = timeTaken
-       WHERE id = attemptId
-
-    H. INSERT INTO quiz_results (
-         attempt_id, quiz_id, participant_id,
-         total_score, max_score, percentage,
-         evaluated_at = NOW()
-       )
-
-    I. Realtime fan-out (best-effort; failures swallowed):
-         build leaderboard rows from quiz_results JOIN users ORDER BY percentage DESC
-         io.to(`leaderboard:quiz:${quiz.id}`)         .emit('leaderboard:update', {…})
-         IF quiz.trainingId:
-            io.to(`leaderboard:training:${trainingId}`).emit('leaderboard:update', {…})
-         io.to('leaderboard:global')                  .emit('leaderboard:update', {…})
-
-    J. HTTP 200  →  { message: "Quiz submitted successfully", result }
-       The result object includes percentage, totalScore, maxScore.
-
-  Frontend:
-    QuizTaking.handleSubmit:
-      - showSuccess('Quiz submitted successfully!')
-      - calls props.onSubmit(d.result)
-    ParticipantDashboard.handleQuizComplete(result):
-      - sets activeQuiz = null, quizAttemptId = null  (returns to list)
-      - shows toast: "Quiz submitted! Score: <pct>%"
-      - calls fetchQuizzes() to refresh completion % across the grid
-
-──────────────────────────────────────────────────────────────────────────────
-5. SCORING RULES (MCQ-SPECIFIC)
-──────────────────────────────────────────────────────────────────────────────
-
-  * Correct answer is stored as a STRING numeric index into options[]
-        e.g. options = ["Paris","London","Berlin","Rome"]
-             correctAnswer = "0"  →  Paris
-
-    Trainers' upload flow auto-converts "A".."D" labels coming back from
-    the AI service into "0".."3" before INSERT (see aiService.js).
-
-  * The frontend sends the chosen option index as a NUMBER:
-        { selectedOption: 0 }
-    Backend coerces both sides with String() before comparing,
-    so the type difference never causes a false negative.
-
-  * MCQ scoring is binary: 100 (correct) or 0 (wrong).  No partial credit.
-    Skipped questions (missing from req.body.answers) score 0 implicitly —
-    nothing is inserted into quiz_answers for them.
-
-  * "accuracy" surfaced in the leaderboard endpoint is the same number as
-    "score" for an MCQ-only quiz (totalScore/maxScore × 100).
-    Mixed quizzes can drift because SHORT_ANSWER scores are 0..100.
-
-──────────────────────────────────────────────────────────────────────────────
-6. WHAT THE LEADERBOARD SEES
-──────────────────────────────────────────────────────────────────────────────
-
-  Endpoint: GET /api/ai-quiz/participant/global-leaderboard?scope=quiz&id=:quizId
-  (Frontend hook: hooks/useLeaderboard.js,
-   UI: components/student/leaderboard/{PodiumTop3,LeaderRow,LeaderboardSection})
-
-  Build:
-    SELECT * FROM quiz_results WHERE quiz_id = :quizId
-      JOIN users  AS participant   (id, name, profilePic)
-      JOIN quiz_attempts AS attempt (id, time_taken)
-      ORDER BY percentage DESC
-    Aggregate per user:  best percentage  (tie-break: shortest time_taken)
-    Sort by score DESC, then time_taken ASC, slice(0..50)
-
-  Rows include:
-        rank, userId, name, score (best %),
-        accuracy (100 × totalScore / maxScore),
-        timeTaken (seconds; null if attempt never recorded one),
-        attempts (how many tries),
-        isCurrentUser (true if userId === req.user.id)
-
-  Realtime: when ANY user submits, the relevant scope rooms receive a
-  fresh, sorted top-50 array. The frontend re-renders without re-fetching.
-
-──────────────────────────────────────────────────────────────────────────────
-7. STATE MACHINE (per attempt)
-──────────────────────────────────────────────────────────────────────────────
-
-           ┌────────────┐    POST /start   ┌────────────────┐
-           │  No row    │ ────────────────►│ status =       │
-           │  yet       │                  │ IN_PROGRESS    │
-           └────────────┘                  └────────────────┘
-                                                  │
-                                                  │ POST /submit
-                                                  ▼
-                                          ┌────────────────┐
-                                          │ status =       │
-                                          │ EVALUATED      │
-                                          │ time_taken set │
-                                          │ submitted_at   │
-                                          └────────────────┘
-                                                  │
-                                                  │ insert
-                                                  ▼
-                                          ┌────────────────┐
-                                          │ quiz_results   │
-                                          │ row written    │
-                                          │ (1-1 attempt)  │
-                                          └────────────────┘
-
-  (The 'SUBMITTED' enum value defined on QuizAttempt is reserved; the
-  current code path always promotes straight to 'EVALUATED' since
-  evaluation is synchronous in the same request.)
-
-──────────────────────────────────────────────────────────────────────────────
-8. SEQUENCE DIAGRAM
-──────────────────────────────────────────────────────────────────────────────
-
-  Participant     ParticipantDashboard      Express route          MySQL                 Socket.IO clients
-  (browser UI)    (React state)             aiQuizRoutes.js        (Sequelize)           subscribed to rooms
-       │                  │                       │                     │                          │
-       │ Click "Quizzes"  │                       │                     │                          │
-       │─────────────────►│                       │                     │                          │
-       │                  │ GET /participant/quizzes ──────────────────►│                          │
-       │                  │                       │  SELECT quizzes     │                          │
-       │                  │◄──────────────── { quizzes:[...] } ─────────│                          │
-       │                  │                       │                     │                          │
-       │ Click "Start"    │                       │                     │                          │
-       │─────────────────►│ POST /participant/start/:id ───────────────►│                          │
-       │                  │                       │  INSERT attempt     │                          │
-       │                  │◄──────────────── { attemptId, quiz } ───────│                          │
-       │                  │                       │                     │                          │
-       │ Render <QuizTaking/>                     │                     │                          │
-       │◄─── timer + question UI ── (all local) ──│                     │                          │
-       │                  │                       │                     │                          │
-       │ Pick options, navigate, submit           │                     │                          │
-       │─────────────────►│ POST /participant/submit/:aid ─────────────►│                          │
-       │                  │                       │  Loop grade Qs      │                          │
-       │                  │                       │  INSERT N answers   │                          │
-       │                  │                       │  UPDATE attempt     │                          │
-       │                  │                       │  INSERT result      │                          │
-       │                  │                       │                     │                          │
-       │                  │                       │  io.to(rooms)       │                          │
-       │                  │                       │     .emit('leaderboard:update', ...) ─────────►│
-       │                  │◄────────────── { message, result } ─────────│                          │
-       │ Toast "Score: X%"│                       │                     │                          │
-       │ Back to list     │                       │                     │                          │
-       │ (re-fetch quizzes)                       │                     │                          │
-       │                  │                       │                     │                          │
-
-──────────────────────────────────────────────────────────────────────────────
-9. FILES INVOLVED
-──────────────────────────────────────────────────────────────────────────────
-
-  Frontend (React)
-    src/pages/ParticipantDashboard.jsx              // tab orchestrator
-    src/components/AIQuizList.jsx                   // re-export for embedding
-    src/components/ai-quizzes/AIQuizzesDashboard.jsx// catalogue page composer
-    src/components/ai-quizzes/hooks/useQuizzes.js   // GET list + POST start
-    src/components/ai-quizzes/cards/QuizCard.jsx    // single quiz tile
-    src/components/QuizTaking.jsx                   // attempt screen + submit
-    src/styles/quiz-taking.css                      // quiz styling
-    src/components/student/leaderboard/*            // realtime view post-submit
-    src/hooks/useLeaderboard.js                     // socket subscription
-    src/hooks/useSocket.js                          // singleton socket-io client
-
-  Backend (Node + Express + Sequelize + Socket.IO)
-    src/routes/aiQuizRoutes.js                      // all endpoints in this flow
-    src/services/aiService.js                       // SHORT_ANSWER evaluation
-    src/socket/events/leaderboardEvents.js          // join/leave room handlers
-    src/config/socket.js                            // Socket.IO bootstrap
-    src/middleware/auth.js                          // JWT → req.user
-    src/middleware/roles.js                         // roleMiddleware('PARTICIPANT')
-
-  Database tables (MySQL via Sequelize)
-    ai_quizzes        (id, title, status, num_questions, time_limit, training_id…)
-    ai_questions      (id, quiz_id, question_type, options JSON, correct_answer…)
-    quiz_attempts     (id, quiz_id, participant_id, status, started_at,
-                       submitted_at, time_taken)
-    quiz_answers      (id, attempt_id, question_id, selected_option, answer_text,
-                       is_correct, score, feedback, evaluated_by_ai)
-    quiz_results      (id, attempt_id, quiz_id, participant_id,
-                       total_score, max_score, percentage, evaluated_at, rank)
-
-──────────────────────────────────────────────────────────────────────────────
-10. KNOWN BEHAVIOUR / GOTCHAS
-──────────────────────────────────────────────────────────────────────────────
-
-  * Resume is server-side only. If the participant refreshes while
-    answering, the IN_PROGRESS attempt is reused but their picked options
-    are LOST (not yet auto-saved). They restart from question 1 with an
-    empty answers map. (Future work: PATCH /attempt/:id/draft on each
-    selection.)
-
-  * timeTaken depends on attempt.started_at being correct. The Sequelize
-    model defaults this to NOW() at insert time, so it's always populated.
-    Older rows from before this column was added MAY have time_taken=NULL —
-    the leaderboard sort tolerates that by pushing nulls to the end.
-
-  * MAX_ATTEMPTS isn't enforced. A participant can keep retaking the same
-    published quiz; each new POST /start creates a fresh attempt + result
-    row. The leaderboard aggregates the BEST percentage per user.
-
-  * The 'SUBMITTED' status on QuizAttempt is unused (always promoted to
-    EVALUATED in the same request). Safe to leave for backwards compat.
-
-  * Submitting with answers=[] is legal — every question scores 0 and
-    the user gets a 0% result row.
-
-  * 404 from the global 404 handler vs 404 from the route handler look
-    identical to the user. If the handler ever returns "Quiz not found",
-    check that quiz.status is actually 'PUBLISHED' and that the user is
-    enrolled in the quiz's training (or the quiz is unattached).
-
-==============================================================================
-   END OF DOCUMENT
-==============================================================================
+================================================================================
+           WAVE INIT LMS — END-TO-END PROCTORED QUIZ WORKFLOW
+================================================================================
+
+This document outlines the complete workflow of a proctored quiz, starting from 
+the trainer creating the quiz, the participant taking the proctored attempt, 
+the signaling/recording process, and finally the trainer viewing the recording.
+
+
+--------------------------------------------------------------------------------
+STAGE 1: TRAINER CREATES A PROCTORED QUIZ
+--------------------------------------------------------------------------------
+1. Access Dashboard:
+   - The Trainer logs in via the unified portal at `/login` (Trainer tab).
+   - Trainer navigates to the Quiz Builder under their Training/Course section.
+
+2. Build Quiz:
+   - Trainer fills in details (title, description, duration, passing score, questions).
+   - Under the "Proctoring Options", the trainer checks the box for 
+     "Enable Screen Sharing Monitoring" and "Enable Fullscreen Enforcement".
+   
+3. Save & Publish:
+   - Clicking "Create Quiz" saves the quiz details into the backend database.
+   - The system creates rows in the `ai_quizzes` table with `isProctored = true`.
+
+
+--------------------------------------------------------------------------------
+STAGE 2: PARTICIPANT ATTEMPTS THE QUIZ & ENTERS PROCTORING SHELL
+--------------------------------------------------------------------------------
+1. Access Portal:
+   - The Participant logs in via the unified `/login` page.
+   - Participant opens their Course/Training page and clicks "Start Quiz".
+
+2. Verification Guard:
+   - The frontend validates participant permissions:
+     - Checks if the training program is active.
+     - Checks if the participant is enrolled.
+     - If the participant has already started the quiz and has an active attempt, 
+       the system skips the date check constraints and allows resumption of the 
+       `IN_PROGRESS` attempt.
+
+3. Pre-Exam Readiness:
+   - The participant is routed to `/trainings/:trainingId/quizzes/:quizId/attempt`.
+   - The system displays the proctoring requirements (Camera, Screen Sharing, Fullscreen).
+   - The participant clicks "Enable Fullscreen & Start Exam".
+
+
+--------------------------------------------------------------------------------
+STAGE 3: SCREEN SHARING, PEER CONNECTION & SIGNALING INITIALIZATION
+--------------------------------------------------------------------------------
+1. Capture Stream:
+   - The browser prompts the participant to choose a screen to share using:
+     `navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })`
+
+2. Backend Session Registration:
+   - The frontend requests a new proctoring session from the backend.
+   - The backend creates an `ExamSession` in the database with status `PENDING`.
+
+3. WebRTC / Recording Initialization:
+   - Once display media is selected, the frontend initializes a MediaRecorder
+     instance that records the screen share stream in raw WebM chunks in the background.
+   - The browser automatically enters fullscreen mode.
+   - The proctoring session status is updated to `ACTIVE`.
+
+
+--------------------------------------------------------------------------------
+STAGE 4: TAKING THE EXAM & ENFORCING VIOLATION CONTROLS
+--------------------------------------------------------------------------------
+1. Fullscreen & Tab Monitoring:
+   - The participant answers the quiz questions inside the `ExamShell`.
+   - The frontend actively monitors focus and visibility:
+     - `visibilitychange` & `window.blur`: Triggered if the student switches tabs or 
+       clicks outside the browser. A `TAB_SWITCH` warning overlay displays, and the 
+       event is logged via Socket.io signaling.
+     - `fullscreenchange`: Triggered if the student exits fullscreen. A warning displays 
+       requiring them to re-enter fullscreen.
+
+2. Database Logging:
+   - Every Socket.io event (`JOIN`, `TAB_SWITCH`, `FULLSCREEN_EXIT`, `SCREEN_SHARE_STOP`) 
+     is captured by the backend server socket handlers.
+   - The server inserts violation entries into the `violations` table, incrementing 
+     the student's warning count.
+
+
+--------------------------------------------------------------------------------
+STAGE 5: SUBMISSION & VIDEO UPLOAD
+--------------------------------------------------------------------------------
+1. Complete Attempt:
+   - The student finishes answering questions and clicks "Submit Quiz".
+   - The frontend stops the media recording.
+   - The quiz attempt is updated to `SUBMITTED`.
+
+2. Assemble Video:
+   - The captured WebM video chunks are compiled by the frontend into a single `Blob`.
+   - The frontend calls the backend upload endpoint:
+     `POST /api/recordings/upload`
+     sending the WebM file along with `quizId`, `participantId`, and `sessionId`.
+
+3. Storage & DB Entry:
+   - The backend receives the file, moves it to `storage/recordings/[quizId]/`, 
+     calculates the size, and registers a record in the `quiz_recordings` table 
+     with status `ready`.
+   - The proctoring session status updates to `SUBMITTED`.
+
+
+--------------------------------------------------------------------------------
+STAGE 6: TRAINER VIEWS AND REVIEWS SCREEN RECORDINGS
+--------------------------------------------------------------------------------
+1. Access recordings:
+   - Trainer goes to the "Recordings" tab on their dashboard sidebar (`/trainer/recordings`).
+   - The page displays stats cards (Total, Ready, Processing), styled filters, 
+     and a responsive grid of recording cards showing full participant names, emails, 
+     duration, status badges, and violation count highlights.
+
+2. Stream playback:
+   - Trainer clicks "Watch Recording" for a participant.
+   - The viewer plays back the WebM/MP4 video stream dynamically from the backend 
+     stream endpoint (`/api/recordings/:id/stream`).
+   - The viewer plots marker indicators on the timeline showing exactly when and where 
+     tab switches or violations occurred.

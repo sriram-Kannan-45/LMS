@@ -196,6 +196,7 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--accent);
   font-weight: 600;
   box-shadow: none;
+  border-right: 2px solid var(--accent);
 }
 .sidebar-nav-item.active:hover {
   background: rgba(124,58,237,0.12);

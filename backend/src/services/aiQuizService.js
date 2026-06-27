@@ -7,9 +7,11 @@ const {
   Course,
   QuizAttempt,
   QuizResult,
-  QuizAssignment
+  QuizAssignment,
+  QuizAnswer
 } = require('../models');
 const aiService = require('./aiService');
+const { gradeAnswer } = require('../utils/gradeAnswer');
 const { Op } = require('sequelize');
 
 class AIQuizService {
@@ -293,6 +295,121 @@ class AIQuizService {
     const completedQuizzes = enriched.filter(q => q.myStatus === 'SUBMITTED' || q.myStatus === 'EVALUATED');
 
     return { availableQuizzes, completedQuizzes };
+  }
+
+  /**
+   * Grades a quiz attempt and creates QuizAnswer + QuizResult rows.
+   * Used by manual submit and by auto-submit on session termination.
+   * @param {QuizAttempt} attempt
+   * @param {Array} answers - [{ questionId, selectedOption, answerText, matches }]
+   * @param {Object} [options]
+   * @param {boolean} [options.autoSubmit=false]
+   */
+  async submitAndGradeAttempt(attempt, answers = [], options = {}) {
+    const { autoSubmit = false } = options;
+    const { sequelize } = require('../models');
+
+    const quiz = await AIQuiz.findByPk(attempt.quizId);
+    if (!quiz) throw new Error('Quiz not found');
+
+    const questions = await AIQuestion.findAll({ where: { quizId: attempt.quizId } });
+    const questionsMap = {};
+    let maxScore = 0;
+    questions.forEach(q => {
+      questionsMap[q.id] = q;
+      maxScore += (q.marks || 1);
+    });
+
+    let totalScore = 0;
+
+    await sequelize.transaction(async (t) => {
+      await QuizAnswer.destroy({ where: { attemptId: attempt.id }, transaction: t });
+
+      for (const ans of answers) {
+        const question = questionsMap[ans.questionId];
+        if (!question) continue;
+
+        let score = 0;
+        let feedback = '';
+        let isCorrect = false;
+        const qMarks = question.marks || 1;
+
+        if (['MCQ', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING'].includes(question.questionType)) {
+          const result = gradeAnswer(question, {
+            selectedOption: ans.selectedOption !== undefined ? ans.selectedOption : null,
+            answer: ans.answerText || ans.answer || '',
+            answerText: ans.answerText || ans.answer || '',
+            matches: ans.matches
+          });
+          isCorrect = result.isCorrect;
+          score = result.score > 0 ? (result.score / 100) * qMarks : 0;
+          if (question.questionType === 'MATCHING') {
+            feedback = `Score: ${result.score}%. Matched ${result.correctCount} of ${result.total} correctly.`;
+          } else {
+            feedback = isCorrect ? 'Correct!' : `Incorrect. Correct answer: ${question.correctAnswer}`;
+          }
+        } else {
+          // Fallback to AI evaluation
+          try {
+            const evaluation = await aiService.evaluateShortAnswer(
+              question.questionText,
+              question.correctAnswer,
+              ans.answerText || ''
+            );
+            score = evaluation.score || 0;
+            feedback = evaluation.feedback || '';
+            isCorrect = evaluation.isCorrect || false;
+          } catch (aiErr) {
+            console.error('AI evaluation failed, defaulting to 0:', aiErr.message);
+          }
+        }
+
+        await QuizAnswer.create({
+          attemptId: attempt.id,
+          questionId: ans.questionId,
+          answerText: ans.answerText || '',
+          selectedOption: ans.selectedOption !== undefined ? ans.selectedOption : null,
+          isCorrect,
+          score,
+          feedback,
+          evaluatedByAI: !['MCQ', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING'].includes(question.questionType)
+        }, { transaction: t });
+
+        totalScore += score;
+      }
+
+      const submittedAt = new Date();
+      let timeTaken = null;
+      if (attempt.startedAt) {
+        timeTaken = Math.max(0, Math.round((submittedAt.getTime() - new Date(attempt.startedAt).getTime()) / 1000));
+      }
+
+      await attempt.update({
+        status: autoSubmit ? 'AUTO_SUBMITTED' : 'EVALUATED',
+        submittedAt,
+        ...(timeTaken != null ? { timeTaken } : {})
+      }, { transaction: t });
+
+      const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+
+      await QuizResult.create({
+        attemptId: attempt.id,
+        quizId: quiz.id,
+        participantId: attempt.participantId,
+        totalScore,
+        maxScore,
+        percentage,
+        evaluatedAt: submittedAt,
+        resultPublished: false
+      }, { transaction: t });
+
+      await QuizAssignment.update(
+        { status: 'COMPLETED' },
+        { where: { quizId: quiz.id, participantId: attempt.participantId }, transaction: t }
+      );
+    });
+
+    return { totalScore, maxScore, percentage: maxScore > 0 ? (totalScore / maxScore) * 100 : 0 };
   }
 }
 

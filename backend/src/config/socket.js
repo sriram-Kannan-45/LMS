@@ -89,6 +89,7 @@ const initializeSocket = (server) => {
     logger.debug('Joined role room', { room: `role_${socket.userRole}` });
 
     // Emit connection success
+    console.log('[Socket] Connected:', { socketId: socket.id, userId: socket.userId, role: socket.userRole });
     socket.emit('connected', {
       socketId: socket.id,
       userId: socket.userId,
@@ -168,6 +169,8 @@ const initializeSocket = (server) => {
     require('../socket/events/leaderboardEvents')(io, socket);
     // Register proctoring events
     require('../socket/events/proctorEvents')(io, socket);
+    // Register parallel monitor system events
+    require('../socket/events/monitorEvents')(io, socket);
   });
 
   return io;

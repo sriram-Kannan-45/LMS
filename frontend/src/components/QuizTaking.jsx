@@ -30,6 +30,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   XCircle,
+  MonitorPlay,
 } from 'lucide-react'
 import { useToast } from './Toast'
 import { API_BASE } from '../api/api'
@@ -99,7 +100,7 @@ function ProgressRing({ percent, size = 132 }) {
 /* ──────────────────────────────────────────────────────────────────────────
    MAIN COMPONENT
    ────────────────────────────────────────────────────────────────────────── */
-function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isStandardQuiz = false }) {
+function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isStandardQuiz = false, screenStream, examSession, onScreenShareResumed }) {
   const { error: showError, success: showSuccess } = useToast()
 
   /* ── Question / answer state ─────────────────────────────────────────── */
@@ -125,6 +126,13 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
   // browser and warnings never fire.
   const enteredFullscreenOnce = useRef(!!fsApi.element())
   const submittedRef = useRef(false)
+
+  /* ── Screen share monitoring state ───────────────────────────────────── */
+  const [isScreenSharing, setIsScreenSharing] = useState(!!screenStream)
+  const [screenShareError, setScreenShareError] = useState(null)
+  const [isPaused, setIsPaused] = useState(false)
+  const reconnectTimeoutRef = useRef(null)
+  const SCREEN_SHARE_RECONNECT_TIMEOUT_MS = 30000
 
   const userData = useMemo(() => {
     try {
@@ -280,6 +288,101 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
     }
   }, [terminated, handleSubmit, onSubmit])
 
+  /* ── Screen share violation reporting ──────────────────────────────── */
+  const reportViolation = useCallback(async (type, message) => {
+    if (!examSession?.sessionId || !examSession?.sessionToken) return
+    console.log('[QuizTaking] Reporting violation:', type)
+    try {
+      await fetch(`${API_BASE}/proctor/sessions/${examSession.sessionId}/violation`, {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+          'X-Proctor-Session-Token': examSession.sessionToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type, message }),
+      })
+    } catch (e) {
+      console.warn('[QuizTaking] Violation report failed:', e)
+    }
+  }, [examSession])
+
+  /* ── Screen share reconnect / auto-submit ──────────────────────────── */
+  const startReconnectTimer = useCallback(() => {
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current)
+    reconnectTimeoutRef.current = setTimeout(() => {
+      console.log('[QuizTaking] Screen share not restored; auto-submitting quiz')
+      reportViolation('SCREEN_SHARE_STOPPED', 'Auto-submitted: screen share not restored in time')
+      handleSubmit({ silent: true }).finally(() => {
+        onSubmit?.(null)
+      })
+    }, SCREEN_SHARE_RECONNECT_TIMEOUT_MS)
+  }, [handleSubmit, onSubmit, reportViolation])
+
+  const resumeScreenShare = useCallback(async () => {
+    console.log('[QuizTaking] Attempting to resume screen share...')
+    try {
+      const newStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'always' },
+        audio: false,
+      })
+      const track = newStream.getVideoTracks()[0]
+      track.addEventListener('ended', () => {
+        console.log('[QuizTaking] Resumed screen share track ended again')
+        setIsScreenSharing(false)
+        setIsPaused(true)
+        setScreenShareError('Screen sharing stopped again. Please resume.')
+        reportViolation('SCREEN_SHARE_STOPPED', 'Participant stopped screen sharing again')
+        startReconnectTimer()
+      })
+      setIsScreenSharing(true)
+      setIsPaused(false)
+      setScreenShareError(null)
+      console.log('[QuizTaking] Screen share resumed')
+      onScreenShareResumed?.(newStream)
+    } catch (err) {
+      console.error('[QuizTaking] Resume screen share failed:', err)
+      setScreenShareError('Screen share required. Retry or the quiz will auto-submit.')
+    }
+  }, [onScreenShareResumed, reportViolation, startReconnectTimer])
+
+  /* ── Watch screen share stream lifecycle ───────────────────────────── */
+  useEffect(() => {
+    console.log('[QuizTaking] Mounted — waiting for screen stream')
+    return () => {
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!screenStream) {
+      setIsScreenSharing(false)
+      return
+    }
+    setIsScreenSharing(true)
+    setScreenShareError(null)
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current)
+    console.log('[QuizTaking] Screen stream attached')
+
+    const track = screenStream.getVideoTracks()[0]
+    if (!track) return
+
+    const onEnded = () => {
+      console.log('[QuizTaking] Screen share track ended')
+      setIsScreenSharing(false)
+      setIsPaused(true)
+      setScreenShareError('Screen sharing stopped. Please resume sharing to continue.')
+      reportViolation('SCREEN_SHARE_STOPPED', 'Participant stopped screen sharing')
+      startReconnectTimer()
+    }
+
+    track.addEventListener('ended', onEnded)
+
+    return () => {
+      track.removeEventListener('ended', onEnded)
+    }
+  }, [screenStream, reportViolation, startReconnectTimer])
+
   /* ── Status verification on question change ────────────────────────── */
   useEffect(() => {
     if (submittedRef.current || terminated || !attemptId) return
@@ -319,6 +422,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
   /* ── Countdown timer ─────────────────────────────────────────────────── */
   useEffect(() => {
     if (isCopyDisqualified) return
+    if (isPaused) return
     if (timeLeft <= 0) {
       handleSubmit()
       return
@@ -335,7 +439,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
     }, 1000)
     return () => clearInterval(timerRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCopyDisqualified])
+  }, [isCopyDisqualified, isPaused])
 
   /* ── Autosave to localStorage ─────────────────────────────────────────── */
   const PROGRESS_KEY = `quiz_progress_${attemptId}`
@@ -890,6 +994,60 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
                 ) : (
                   <><Loader size={14} className="qt-spin" /> Returning to your dashboard…</>
                 )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Screen share paused overlay ───────────────────────────────── */}
+      <AnimatePresence>
+        {isPaused && !terminated && (
+          <motion.div
+            key="pause-bg"
+            className="qt-modal-bg qt-modal-bg--terminate"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              role="alertdialog"
+              aria-labelledby="qt-pause-title"
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              className="qt-modal qt-modal--terminate"
+              style={{ maxWidth: 440 }}
+            >
+              <div className="qt-modal__icon-wrap qt-modal__icon-wrap--danger">
+                <MonitorPlay size={32} />
+              </div>
+              <h2 id="qt-pause-title" className="qt-modal__title">Screen sharing paused</h2>
+              <p className="qt-modal__desc">
+                {screenShareError || 'You must share your screen to continue the assessment.'}
+              </p>
+              <p className="qt-modal__desc" style={{ fontSize: 12, color: '#94a3b8', marginTop: -8 }}>
+                The quiz will auto-submit if screen sharing is not resumed within 30 seconds.
+              </p>
+              <div className="qt-modal__actions" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
+                <button
+                  type="button"
+                  className="qt-foot__btn qt-foot__btn--primary qt-foot__btn--block"
+                  onClick={resumeScreenShare}
+                  autoFocus
+                >
+                  <MonitorPlay size={15} /> Resume Screen Sharing
+                </button>
+                <button
+                  type="button"
+                  className="qt-foot__btn qt-foot__btn--ghost qt-foot__btn--block"
+                  onClick={() => {
+                    if (fsApi.element()) { try { fsApi.exit() } catch {} }
+                    onSubmit?.(null)
+                  }}
+                >
+                  Cancel Assessment
+                </button>
               </div>
             </motion.div>
           </motion.div>

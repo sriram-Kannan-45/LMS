@@ -697,13 +697,21 @@ async function getLessonDetail(req, res) {
       console.error('ParticipantTracking view log error:', e.message);
     }
 
-    const [materials, quizzes, assessments, progress] = await Promise.all([
+    const { LessonCodingAssessment, CodingAssessment, CodingQuestion, CodingAttempt } = require('../models');
+
+    const [materials, quizzes, assessments, codingAssessments, progress] = await Promise.all([
       LessonMaterial.findAll({ where: { lessonId: lesson.id }, order: [['orderIndex', 'ASC']] }),
       AIQuiz.findAll({
         where: { lessonId: lesson.id, status: 'PUBLISHED' },
         include: [{ model: AIQuestion, as: 'questions', attributes: ['id'] }],
       }),
       LessonAssessment.findAll({ where: { lessonId: lesson.id } }),
+      LessonCodingAssessment.findAll({
+        where: { lessonId: lesson.id },
+        include: [
+          { model: CodingAssessment, as: 'assessment', attributes: ['id', 'title', 'description', 'timeLimit'] },
+        ],
+      }),
       LessonProgress.findOne({ where: { lessonId: lesson.id, participantId: req.user.id } }),
     ]);
 
@@ -726,6 +734,13 @@ async function getLessonDetail(req, res) {
       where: { assessmentId: assessmentIds, participantId: req.user.id },
     });
     const submissionByAssessment = Object.fromEntries(submissions.map(s => [String(s.assessmentId), s]));
+
+    // Coding assessment attempt status per assessment
+    const codingAssessmentIds = codingAssessments.map(ca => ca.assessmentId);
+    const codingAttempts = codingAssessmentIds.length === 0 ? [] : await CodingAttempt.findAll({
+      where: { assessmentId: codingAssessmentIds, participantId: req.user.id },
+    });
+    const attemptByCoding = Object.fromEntries(codingAttempts.map(a => [String(a.assessmentId), a]));
 
     res.json({
       success: true,
@@ -764,6 +779,21 @@ async function getLessonDetail(req, res) {
           isMandatory: a.isMandatory,
           myStatus: sub?.status || 'NOT_STARTED',
           mySubmittedAt: sub?.submittedAt || null,
+        };
+      }),
+      codingAssessments: codingAssessments.map(ca => {
+        const attempt = attemptByCoding[String(ca.assessmentId)];
+        const assessment = ca.assessment;
+        return {
+          lessonCodingId: ca.id,
+          assessmentId: ca.assessmentId,
+          title: assessment?.title || 'Coding Assessment',
+          description: assessment?.description,
+          timeLimit: assessment?.timeLimit,
+          isMandatory: ca.isMandatory,
+          resultStatus: ca.resultStatus,
+          myStatus: attempt?.status || 'NOT_STARTED',
+          myScore: attempt?.score ?? null,
         };
       }),
       progress: progress ? {
@@ -808,7 +838,7 @@ async function loadAccessibleQuiz(req, res, quizId) {
   const id = parseInt(quizId, 10);
   if (!id) { res.status(422).json({ error: 'Invalid quizId' }); return null; }
   
-  const { Course, Training } = require('../models');
+  const { Course, Training, QuizAttempt } = require('../models');
   const quiz = await AIQuiz.findByPk(id, {
     include: [{
       model: Course,
@@ -826,17 +856,24 @@ async function loadAccessibleQuiz(req, res, quizId) {
   });
   if (!enrollment) { res.status(403).json({ error: 'You are not enrolled in this course' }); return null; }
 
-  // Check availability
-  const training = quiz.course?.program || (quiz.trainingId ? await Training.findByPk(quiz.trainingId) : null);
-  if (training) {
-    const now = new Date();
-    if (training.startDate && now < new Date(training.startDate)) {
-      res.status(403).json({ error: 'Quiz is not yet available (training program has not started)' });
-      return null;
-    }
-    if (training.endDate && now > new Date(training.endDate)) {
-      res.status(403).json({ error: 'Quiz is no longer available (training program has ended)' });
-      return null;
+  // Check if any attempt already exists
+  const existingAttempt = await QuizAttempt.findOne({
+    where: { quizId: quiz.id, participantId: req.user.id }
+  });
+
+  // Check availability only if no active attempt exists (new attempt)
+  if (!existingAttempt) {
+    const training = quiz.course?.program || (quiz.trainingId ? await Training.findByPk(quiz.trainingId) : null);
+    if (training) {
+      const now = new Date();
+      if (training.startDate && now < new Date(training.startDate)) {
+        res.status(403).json({ error: 'Quiz is not yet available (training program has not started)' });
+        return null;
+      }
+      if (training.endDate && now > new Date(training.endDate)) {
+        res.status(403).json({ error: 'Quiz is no longer available (training program has ended)' });
+        return null;
+      }
     }
   }
 
@@ -858,22 +895,29 @@ async function startQuiz(req, res) {
     let attempt;
     try {
       await sequelize.transaction(async t => {
+        const { QuizAttempt } = require('../models');
         const existingAttempt = await QuizAttempt.findOne({
           where: { quizId: quiz.id, participantId: req.user.id },
           lock: t.LOCK.UPDATE,
           transaction: t
         });
         if (existingAttempt) {
-          const err = new Error('You have already attempted this quiz.');
-          err.status = 400;
-          throw err;
+          // If the attempt is IN_PROGRESS, allow reloading/resuming it instead of throwing an error
+          if (existingAttempt.status === 'IN_PROGRESS') {
+            attempt = existingAttempt;
+          } else {
+            const err = new Error('You have already attempted this quiz.');
+            err.status = 400;
+            throw err;
+          }
+        } else {
+          attempt = await QuizAttempt.create({
+            quizId: quiz.id,
+            participantId: req.user.id,
+            status: 'IN_PROGRESS',
+            startedAt: new Date(),
+          }, { transaction: t });
         }
-
-        attempt = await QuizAttempt.create({
-          quizId: quiz.id,
-          participantId: req.user.id,
-          status: 'IN_PROGRESS',
-        }, { transaction: t });
       });
     } catch (transError) {
       if (transError.status === 400) {

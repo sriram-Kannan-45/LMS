@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Award, BookOpen, BookPlus, ClipboardList, Code, FileText, GraduationCap, Home, LayoutDashboard, LogOut, Menu, MessageSquare, Sparkles, Trophy, User, UserPlus, Users, X } from 'lucide-react'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import ProfileDropdown from './student/profile/ProfileDropdown'
 
 const iconMap = {
@@ -45,6 +46,7 @@ const navItems = {
     { key: 'notes', label: 'Notes', icon: 'Lessons' },
     { key: 'feedback', label: 'Feedback', icon: 'Feedback' },
     { key: 'surveys', label: 'Surveys', icon: 'Surveys' },
+    { key: 'recordings', label: 'Recordings', icon: 'ClipboardList' },
   ],
   TRAINER: [
     { key: 'courses', label: 'Trainings', icon: 'Trainings' },
@@ -53,6 +55,7 @@ const navItems = {
     { key: 'enrollments', label: 'Enrollment Requests', icon: 'UserPlus' },
     { key: 'reports', label: 'Trainer Reports', icon: 'ClipboardList' },
     { key: 'feedback', label: 'Feedback Received', icon: 'Feedback' },
+    { key: 'recordings', label: 'Recordings', icon: 'ClipboardList' },
     { key: 'profile', label: 'My Profile', icon: 'My Profile' },
   ],
   PARTICIPANT: [
@@ -76,6 +79,7 @@ const roleColors = {
 }
 
 function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }) {
+  const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const items = navItems[user.role] || []
   const colors = roleColors[user.role] || roleColors.PARTICIPANT
@@ -144,7 +148,15 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
             <motion.button
               key={item.key}
               className={`sidebar-nav-item${activeTab === item.key ? ' active' : ''}`}
-              onClick={() => { onTabChange(item.key); closeSidebar() }}
+              onClick={() => {
+                if (item.key === 'recordings') {
+                  const path = user.role === 'ADMIN' ? '/admin/recordings' : '/trainer/recordings'
+                  navigate(path)
+                } else {
+                  onTabChange(item.key)
+                }
+                closeSidebar()
+              }}
               whileHover={{ x: 3 }}
               whileTap={{ scale: 0.98 }}
             >

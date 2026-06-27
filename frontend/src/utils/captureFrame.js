@@ -1,75 +1,34 @@
-/**
- * Captures a video frame from a MediaStream (the screen share stream)
- * and returns it as a compressed base64 JPEG string.
- * 
- * @param {MediaStream} stream - The screen share MediaStream
- * @param {number} quality - JPEG compression quality (0.0 to 1.0)
- * @returns {Promise<string|null>} Resolves to a base64 data URL string or null if failed
- */
-export function captureFrame(stream, quality = 0.5) {
-  return new Promise((resolve) => {
-    try {
-      if (!stream) {
-        return resolve(null);
-      }
-      
-      const videoTracks = stream.getVideoTracks();
-      if (!videoTracks || videoTracks.length === 0) {
-        return resolve(null);
-      }
+export const captureFrameAsBase64 = (stream) => {
+  if (!stream || !stream.active) return null;
 
-      const video = document.createElement('video');
-      video.srcObject = stream;
-      video.muted = true;
-      video.playsInline = true;
+  const video = document.createElement('video');
+  video.srcObject = stream;
+  video.play().catch(() => {});
 
-      // When the video metadata is loaded, play it and capture the frame
-      video.onloadedmetadata = () => {
-        video.play()
-          .then(() => {
-            // Give it a tiny moment to ensure the stream is drawing actual pixels
-            setTimeout(() => {
-              try {
-                const canvas = document.createElement('canvas');
-                // Use the video's actual stream dimensions, or fall back to track settings
-                const width = video.videoWidth || 1280;
-                const height = video.videoHeight || 720;
-                
-                canvas.width = width;
-                canvas.height = height;
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth || 1280;
+  canvas.height = video.videoHeight || 720;
 
-                const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                  return resolve(null);
-                }
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                ctx.drawImage(video, 0, 0, width, height);
-                const dataUrl = canvas.toDataURL('image/jpeg', quality);
-                
-                // Clean up the video element
-                video.srcObject = null;
-                video.pause();
-                
-                resolve(dataUrl);
-              } catch (err) {
-                console.error('Error drawing frame to canvas:', err);
-                resolve(null);
-              }
-            }, 100);
-          })
-          .catch((err) => {
-            console.error('Error playing video for captureFrame:', err);
-            resolve(null);
-          });
-      };
+  return canvas.toDataURL('image/jpeg', 0.6);
+};
 
-      video.onerror = (err) => {
-        console.error('Video error in captureFrame:', err);
-        resolve(null);
-      };
-    } catch (err) {
-      console.error('Failed to capture frame from stream:', err);
-      resolve(null);
-    }
-  });
-}
+// Backward-compatible alias used by the existing proctoring system
+export const captureFrame = (stream, quality = 0.6) => {
+  if (!stream || !stream.active) return null;
+
+  const video = document.createElement('video');
+  video.srcObject = stream;
+  video.play().catch(() => {});
+
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth || 1280;
+  canvas.height = video.videoHeight || 720;
+
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  return canvas.toDataURL('image/jpeg', quality);
+};

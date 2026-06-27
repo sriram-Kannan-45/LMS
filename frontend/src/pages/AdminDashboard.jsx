@@ -173,8 +173,14 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       } else if (confirmModal.action === 'delete-trainer') {
         const r = await fetch(`${API_BASE}/admin/trainers/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
         const d = await r.json()
-        if (!r.ok) throw new Error(d.error)
-        success('Trainer removed successfully')
+        if (!r.ok) {
+          console.error('[AdminDashboard] Delete trainer failed:', r.status, d)
+          if (r.status === 500) {
+            throw new Error('Unexpected server error.')
+          }
+          throw new Error(d.message || d.error || 'Server error deleting trainer')
+        }
+        success(d.message || 'Trainer removed successfully')
         fetchTrainers(); fetchStats()
       } else if (confirmModal.action === 'delete-program') {
         const r = await fetch(`${API_BASE}/admin/training-programs/${confirmModal.id}`, { method: 'DELETE', headers: auth() })

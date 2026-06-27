@@ -132,6 +132,17 @@ export default function TrainerProctoringDashboard({ quizId, quizTitle }) {
     observed: observedSessions.length,
   }), [sessions, observedSessions]);
 
+  // Auto-observe any active screen-sharing session so the trainer receives
+  // the live stream without clicking "Observe".
+  useEffect(() => {
+    sessions.forEach(s => {
+      if (s.status === 'ACTIVE' && s.isScreenSharing && !observedSessions.includes(s.sessionId)) {
+        console.log('[TrainerProctoringDashboard] Auto-observing session', s.sessionId);
+        observe(s.sessionId);
+      }
+    });
+  }, [sessions, observedSessions, observe]);
+
   const handleTerminate = async (s) => {
     if (!window.confirm(`Force-terminate ${s.participant?.name}'s exam?`)) return;
     await forceTerminate(s.sessionId, 'Trainer terminated');

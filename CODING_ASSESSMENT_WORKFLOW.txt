@@ -1,0 +1,142 @@
+================================================================================
+       WAVE INIT LMS — END-TO-END PROCTORED CODING ASSESSMENT WORKFLOW
+================================================================================
+
+This document details the complete end-to-end workflow of the proctored Coding
+Assessment Module, mirroring the 6-stage proctored quiz workflow. It maps 
+how the database, backend APIs, and frontend code interact at each stage.
+
+
+--------------------------------------------------------------------------------
+STAGE 1 — TRAINER CREATES A CODING ASSESSMENT
+--------------------------------------------------------------------------------
+1. Navigation:
+   - Trainer logs in via `/login` and accesses their Course/Training section.
+   - Trainer clicks "Create Assessment" and selects "Coding Assessment".
+   - Route: `/trainer/coding` (renders `TrainerCodingFormPage` wrapper).
+
+2. Assessment Builder Form (`CodingAssessmentForm.jsx`):
+   - Trainer fills in title, description, passing score, time limit, and language.
+   - Problems can be added manually or generated via AI:
+     - **Manual**: Inputs problem statement, input/output formats, constraints, 
+       starter template code, and points.
+     - **AI Generation**: Trainer provides a topic, difficulty, and language; the 
+       backend uses `codingAIService.js` to call Gemini to generate the title, 
+       problem descriptions, sample test cases, starter code, and test cases.
+   - For each problem, multiple test cases are defined, marking them as either 
+     visible (sample) or hidden (used for final scoring).
+
+3. Save & Publish:
+   - Clicking "Create" sends a payload to the backend APIs:
+     - `POST /api/coding/assessments` -> Creates a row in `coding_assessments`.
+     - `POST /api/coding/assessments/:id/questions` -> Creates a row in `coding_questions`.
+     - Also creates linked test cases in the `coding_test_cases` table.
+
+4. Database Schema Relationships:
+   - `CodingAssessment` belongs to `User` (Trainer) and `Course`.
+   - `CodingAssessment` has many `CodingQuestion` (`question_id`).
+   - `CodingQuestion` has many `TestCase` (`coding_test_cases` table).
+
+
+--------------------------------------------------------------------------------
+STAGE 2 — PARTICIPANT ATTEMPTS THE ASSESSMENT
+--------------------------------------------------------------------------------
+1. Access & Entry:
+   - Participant logs in and navigates to the training program.
+   - Participant clicks "Start Coding Assessment".
+   - Route: `/participant/coding/:assessmentId` (renders `ParticipantCodingPage`).
+
+2. Verification Guard:
+   - Checks if the participant is enrolled and if the training is active.
+   - If an attempt is already `IN_PROGRESS`, the guard resumes the attempt 
+     without duplicate errors. If already `SUBMITTED`, access is blocked.
+
+3. Pre-flight Readiness Lobby (`AssessmentLobby.jsx`):
+   - Displays exam rules: screen sharing, fullscreen mode, and time limits.
+   - Participant must click "Share Screen" and "Enter Fullscreen & Start".
+   - Triggers `POST /api/coding/participant/assessments/:id/start` to create or 
+     retrieve a `CodingAttempt` in the database with status `IN_PROGRESS`.
+
+
+--------------------------------------------------------------------------------
+STAGE 3 — SCREEN SHARING & SESSION INITIALIZATION
+--------------------------------------------------------------------------------
+1. Stream Capture:
+   - The browser prompts the participant to select a screen to share using:
+     `navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'monitor' }, audio: false })`
+   - Capture streams are loaded into the global state.
+
+2. WebRTC & Fullscreen Enforcement:
+   - Once screen sharing is accepted, the browser requests fullscreen mode via:
+     `document.documentElement.requestFullscreen()`
+   - An active proctoring session is registered, setting status to `ACTIVE`.
+
+
+--------------------------------------------------------------------------------
+STAGE 4 — THE CODING ASSESSMENT SHELL & PROCTORING ENFORCEMENT
+--------------------------------------------------------------------------------
+1. Two-Panel Workspace Layout (`CodingEditor.jsx`):
+   - **Left Panel (40%)**: Displays the current problem description, input/output 
+     formats, constraints, sample inputs, and list of problems (Q1, Q2, etc.).
+   - **Right Panel (60%)**: Renders the Monaco Code Editor (`@monaco-editor/react`) 
+     pre-filled with the language-specific starter template code.
+
+2. Code Execution ("Run Code" button):
+   - Executes the code against visible sample test cases.
+   - Triggers: `POST /api/coding/participant/attempts/:attemptId/run`.
+   - Backend calls `runTestCases` in `codeExecutionService.js`, which runs the 
+     code in an isolated environment via Judge0 CE (`http://localhost:2358`).
+   - Returns stdout comparisons to the frontend without storing scores.
+
+3. Code Submission ("Submit" button):
+   - Executes code against ALL test cases (including hidden ones).
+   - Triggers: `POST /api/coding/participant/attempts/:attemptId/submit`.
+   - Backend runs all tests, calculates score = `(marks * passed) / total`, 
+     saves a row in `coding_submissions` (marked `isFinal: true`), and creates 
+     test case detail records in `submission_results`.
+   - Summarizes and updates the total overall score inside `coding_attempts`.
+
+4. Real-time Proctoring Guard (`useProctoringGuard.js`):
+   - **Visibility (Tab Switching)**: Listening to `visibilitychange`. If tab is hidden, 
+     triggers `POST /api/coding/participant/attempts/:attemptId/violation` 
+     logging a `TAB_SWITCH` record.
+   - **Fullscreen Enforcement**: If fullscreen is exited, alerts the participant 
+     to re-enter and logs a `FULLSCREEN_EXIT` violation.
+   - **Screen Share Loss**: If sharing stops, a overlay starts a 30s countdown. 
+     If the countdown reaches zero without resuming, the system auto-submits.
+   - **Max Violations**: If violation count reaches the threshold, the session is 
+     terminated and auto-submitted.
+
+
+--------------------------------------------------------------------------------
+STAGE 5 — FINAL SUBMISSION & VIDEO RECORDING UPLOAD
+--------------------------------------------------------------------------------
+1. Complete Attempt:
+   - Student clicks "Finish" or the time limit expires.
+   - The frontend terminates the media stream recording.
+   - The status of `coding_attempts` is updated to `SUBMITTED`.
+
+2. Save Screen Recording:
+   - The frontend compiles WebM binary chunks from the screen stream and sends it to:
+     `POST /api/recordings/upload`
+   - The backend stores the file in `storage/recordings/` and saves an entry 
+     in `quiz_recordings` with `type = 'coding_assessment'` and `status = 'ready'`.
+
+
+--------------------------------------------------------------------------------
+STAGE 6 — TRAINER REVIEWS SUBMISSIONS
+--------------------------------------------------------------------------------
+1. Review Dashboard (`TrainerCodingAssessments.jsx`):
+   - Trainer can view results, plagiarism indices, and user recordings.
+   - **Module C (Plagiarism Checker)**: Trainer can trigger 
+     `POST /api/coding/assessments/:id/plagiarism-check`, which compares all 
+     submitted codes using MOSS-style similarity checks and highlights high/medium flags.
+   
+2. Recording & Code Viewer (`CodingRecordingViewer.jsx`):
+   - **Left side**: Custom video player playing the streamed screen video, with 
+     timeline markers indicating when tab switches or focus blurs occurred.
+   - **Right side**: Displays participant details, test case scores, and a 
+     read-only code tab where the trainer can inspect the exact final code 
+     submitted for each problem.
+   - **AI Assistant**: Displays the automated AI review code critique (`aiReview` 
+     json column generated by `codingAIService.js`).

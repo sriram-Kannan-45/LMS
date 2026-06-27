@@ -32,6 +32,7 @@ import useTabVisibility from '../hooks/useTabVisibility';
 import useFullscreen from '../hooks/useFullscreen';
 import useNetworkStatus from '../hooks/useNetworkStatus';
 import useProctoringMedia from '../hooks/useProctoringMedia';
+import useDeviceFingerprint from '../hooks/useDeviceFingerprint';
 
 import TopBar from './TopBar';
 import QuestionNavigator from './QuestionNavigator';
@@ -47,6 +48,7 @@ const AUTOSAVE_MS = 8_000;
 export default function ExamShell({ sessionId, onSubmitted }) {
   const navigate = useNavigate();
   const proctor = useProctor();
+  const fp = useDeviceFingerprint();
   const { success: toastSuccess, error: toastError, warning: toastWarning, info: toastInfo } = useToast();
 
   // ── Hydration state ────────────────────────────────────────────────────
@@ -95,8 +97,64 @@ export default function ExamShell({ sessionId, onSubmitted }) {
 
     (async () => {
       try {
-        const token = await ensureToken();
-        const payload = await proctorApi.getExamData(sessionId, token);
+        let token;
+        try {
+          token = await ensureToken();
+        } catch (e) {
+          // If ensureToken fails (no active session found), try to fetch the session details to see if it's expired/ended
+          console.log('[ExamShell] Active session not found; fetching details to see if we should recreate...');
+          const oldSession = await proctorApi.getSession(sessionId);
+          if (oldSession && ['EXPIRED', 'TERMINATED'].includes(oldSession.status)) {
+            console.log('[ExamShell] Session expired/terminated; recreating a new session...');
+            const newSession = await proctor.start({
+              quizId: oldSession.quizId,
+              attemptId: oldSession.attemptId,
+              fingerprintHash: fp,
+              screenSharing: true,
+            });
+            await proctor.activate(newSession.sessionId, newSession.sessionToken);
+            if (alive) {
+              navigate(`/exam/${newSession.sessionId}`, { replace: true });
+            }
+            return;
+          } else if (oldSession && oldSession.status === 'SUBMITTED') {
+            if (alive) {
+              navigate(`/exam/${sessionId}/result`, { replace: true });
+            }
+            return;
+          }
+          throw e;
+        }
+
+        let payload;
+        try {
+          payload = await proctorApi.getExamData(sessionId, token);
+        } catch (e) {
+          // If request fails because session ended/expired, try to recreate
+          if (e.status === 410 || e.status === 403) {
+            const oldSession = await proctorApi.getSession(sessionId);
+            if (oldSession && ['EXPIRED', 'TERMINATED', 'SUBMITTED'].includes(oldSession.status)) {
+              if (oldSession.status === 'SUBMITTED') {
+                if (alive) navigate(`/exam/${sessionId}/result`, { replace: true });
+                return;
+              }
+              console.log('[ExamShell] Session expired/terminated; recreating a new session...');
+              const newSession = await proctor.start({
+                quizId: oldSession.quizId,
+                attemptId: oldSession.attemptId,
+                fingerprintHash: fp,
+                screenSharing: true,
+              });
+              await proctor.activate(newSession.sessionId, newSession.sessionToken);
+              if (alive) {
+                navigate(`/exam/${newSession.sessionId}`, { replace: true });
+              }
+              return;
+            }
+          }
+          throw e;
+        }
+
         if (!alive) return;
 
         setData(payload);
@@ -125,7 +183,7 @@ export default function ExamShell({ sessionId, onSubmitted }) {
 
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, fp]);
 
   // ── 2. Server-driven countdown ────────────────────────────────────────
   const isOnline = useNetworkStatus();
@@ -198,10 +256,27 @@ export default function ExamShell({ sessionId, onSubmitted }) {
     onViolation: (type, meta) => proctor.report(type, undefined, meta),
   });
 
+  const isBlurredRef = useRef(false);
+
   useTabVisibility({
     enabled: isActive && !submitting,
-    onHidden: () => proctor.report('TAB_SWITCH'),
-    onBlur:   () => proctor.report('WINDOW_BLUR'),
+    onHidden: () => {
+      if (isBlurredRef.current) {
+        proctor.report('BROWSER_MINIMIZE', 'Browser was minimized or window lost focus.');
+      } else {
+        proctor.report('TAB_SWITCH', 'Participant switched tabs.');
+      }
+    },
+    onBlur: () => {
+      isBlurredRef.current = true;
+      proctor.report('WINDOW_BLUR', 'Exam window lost focus.');
+    },
+    onFocus: () => {
+      isBlurredRef.current = false;
+    },
+    onShown: () => {
+      isBlurredRef.current = false;
+    }
   });
 
   useFullscreen({

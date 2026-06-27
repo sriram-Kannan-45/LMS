@@ -23,6 +23,7 @@ export default function useScreenShare({ onStop, onDenied, onInvalidShare } = {}
 
   const request = useCallback(async () => {
     setError(null);
+    console.log('[useScreenShare] Requesting display media...');
     if (!navigator.mediaDevices?.getDisplayMedia) {
       const e = new Error('Screen sharing is not supported in this browser');
       setError(e); onDeniedRef.current?.(e);
@@ -30,18 +31,18 @@ export default function useScreenShare({ onStop, onDenied, onInvalidShare } = {}
     }
     try {
       const s = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: 'monitor' },
+        video: { cursor: 'always' },
         audio: false,
       });
 
-      // Post-grant validation: verify the user shared the entire screen,
-      // not just a tab or window. Chrome exposes displaySurface on the track.
+      // Post-grant validation: verify the user shared the entire screen
+      // or an application window. Reject browser tab shares only.
       const track = s.getVideoTracks()[0];
       let surface = track?.getSettings?.().displaySurface;
       // Firefox/Safari may not support getSettings().displaySurface — skip check
-      if (surface && surface !== 'monitor') {
+      if (surface && surface === 'browser') {
         s.getTracks().forEach(t => t.stop());
-        const e = new Error('Please share your entire screen, not a tab or application window. Click "Entire Screen" when prompted.');
+        const e = new Error('Please share your entire screen or an application window, not a browser tab.');
         setError(e);
         onInvalidShareRef.current?.(e);
         return null;
@@ -49,9 +50,11 @@ export default function useScreenShare({ onStop, onDenied, onInvalidShare } = {}
 
       setStream(s);
       setIsSharing(true);
+      console.log('[useScreenShare] Stream acquired, surface:', surface || 'unknown');
 
       // The user can stop sharing at any time via the browser UI.
       track.addEventListener('ended', () => {
+        console.log('[useScreenShare] Track ended by user/browser');
         setIsSharing(false);
         setStream(null);
         onStopRef.current?.();
@@ -59,6 +62,7 @@ export default function useScreenShare({ onStop, onDenied, onInvalidShare } = {}
 
       return s;
     } catch (err) {
+      console.error('[useScreenShare] getDisplayMedia failed:', err);
       setError(err);
       onDeniedRef.current?.(err);
       return null;

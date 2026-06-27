@@ -29,7 +29,7 @@ router.get(
   async (req, res) => {
     try {
       const trainers = await User.findAll({
-        where: { role: 'TRAINER' },
+        where: { role: 'TRAINER', isDeleted: false },
         attributes: ['id', 'name', 'email', 'username'],
         include: [{
           model: TrainerProfile,
@@ -57,7 +57,7 @@ router.get(
   async (req, res) => {
     try {
       const trainer = await User.findOne({
-        where: { id: req.params.id, role: 'TRAINER' },
+        where: { id: req.params.id, role: 'TRAINER', isDeleted: false },
         attributes: ['id', 'name', 'email', 'username', 'phone'],
         include: [{
           model: TrainerProfile,

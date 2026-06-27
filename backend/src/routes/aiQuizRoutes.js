@@ -922,23 +922,31 @@ router.post('/participant/start/:quizId',
         console.log(`[participant/start] Created QuizAssignment on-the-fly for participant #${req.user.id}, quiz #${quiz.id}`);
       }
 
-      // Time window check on the quiz itself
-      const now = new Date();
-      if (quiz.startTime && now < new Date(quiz.startTime)) {
-        return res.status(403).json({ error: 'Quiz is not yet available' });
-      }
-      if (quiz.endTime && now > new Date(quiz.endTime)) {
-        return res.status(403).json({ error: 'Quiz availability window has ended' });
-      }
+      // Check if attempt already exists
+      const { QuizAttempt } = require('../models');
+      const activeAttempt = await QuizAttempt.findOne({
+        where: { quizId: quiz.id, participantId: req.user.id }
+      });
 
-      // Training dates check
-      const training = quiz.course?.program || (quiz.trainingId ? await Training.findByPk(quiz.trainingId) : null);
-      if (training) {
-        if (training.startDate && now < new Date(training.startDate)) {
-          return res.status(403).json({ error: 'Quiz is not yet available (training program has not started)' });
+      if (!activeAttempt) {
+        // Time window check on the quiz itself
+        const now = new Date();
+        if (quiz.startTime && now < new Date(quiz.startTime)) {
+          return res.status(403).json({ error: 'Quiz is not yet available' });
         }
-        if (training.endDate && now > new Date(training.endDate)) {
-          return res.status(403).json({ error: 'Quiz is no longer available (training program has ended)' });
+        if (quiz.endTime && now > new Date(quiz.endTime)) {
+          return res.status(403).json({ error: 'Quiz availability window has ended' });
+        }
+
+        // Training dates check
+        const training = quiz.course?.program || (quiz.trainingId ? await Training.findByPk(quiz.trainingId) : null);
+        if (training) {
+          if (training.startDate && now < new Date(training.startDate)) {
+            return res.status(403).json({ error: 'Quiz is not yet available (training program has not started)' });
+          }
+          if (training.endDate && now > new Date(training.endDate)) {
+            return res.status(403).json({ error: 'Quiz is no longer available (training program has ended)' });
+          }
         }
       }
 

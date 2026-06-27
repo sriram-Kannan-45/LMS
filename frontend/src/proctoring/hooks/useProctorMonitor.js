@@ -53,15 +53,28 @@ export default function useProctorMonitor(quizId) {
   // Trainer-side socket subscription
   useEffect(() => {
     if (!socket || !quizId) return;
-    socket.emit('proctor:trainerJoin', { quizId }, (ack) => {
-      if (ack?.ok && Array.isArray(ack.sessions)) {
-        const next = new Map();
-        for (const r of ack.sessions) next.set(r.sessionId, r);
-        setById(next);
-        setLoading(false);
-      }
-    });
-    return () => socket.emit('proctor:trainerLeave', { quizId });
+
+    const handleJoin = () => {
+      console.log('[useProctorMonitor] Joining quiz monitor room...');
+      socket.emit('proctor:trainerJoin', { quizId }, (ack) => {
+        if (ack?.ok && Array.isArray(ack.sessions)) {
+          const next = new Map();
+          for (const r of ack.sessions) next.set(r.sessionId, r);
+          setById(next);
+          setLoading(false);
+        }
+      });
+    };
+
+    if (socket.connected) {
+      handleJoin();
+    }
+
+    socket.on('connect', handleJoin);
+    return () => {
+      socket.off('connect', handleJoin);
+      socket.emit('proctor:trainerLeave', { quizId });
+    };
   }, [socket, quizId]);
 
   // Live incremental updates
@@ -82,6 +95,7 @@ export default function useProctorMonitor(quizId) {
   // ── WebRTC: receive offer from participant via server relay ────────────
   useSocketEvent('proctor:webrtc-offer', async ({ sessionId, sdp }) => {
     if (!socket) return;
+    console.log('[useProctorMonitor] WebRTC offer received for session', sessionId);
     // Close existing PC for this session if any
     const existing = peerConnections.current.get(sessionId);
     if (existing) { existing.close(); peerConnections.current.delete(sessionId); }
@@ -94,6 +108,7 @@ export default function useProctorMonitor(quizId) {
 
       pc.ontrack = (event) => {
         if (!event.streams?.[0]) return;
+        console.log('[useProctorMonitor] Remote track received, kind:', event.track.kind, 'label:', event.track.label);
         // Try to identify track type by label
         const track = event.track;
         const isWebcam = track.label?.toLowerCase().includes('camera') ||
@@ -118,15 +133,18 @@ export default function useProctorMonitor(quizId) {
           next.set(sessionId, { screen: streams.screen, webcam: streams.webcam });
           return next;
         });
+        console.log('[useProctorMonitor] Stream attached to video element');
       };
 
       pc.onicecandidate = (e) => {
         if (e.candidate) {
+          console.log('[useProctorMonitor] Sending ICE candidate to participant');
           socket.emit('proctor:ice-candidate', { sessionId, candidate: e.candidate.toJSON() });
         }
       };
 
       pc.oniceconnectionstatechange = () => {
+        console.log('[useProctorMonitor] ICE connection state:', pc.iceConnectionState);
         if (['failed', 'disconnected', 'closed'].includes(pc.iceConnectionState)) {
           setObservedStreams(prev => {
             const next = new Map(prev);
@@ -140,28 +158,33 @@ export default function useProctorMonitor(quizId) {
       await pc.setRemoteDescription(new RTCSessionDescription(sdp));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      console.log('[useProctorMonitor] Sending WebRTC answer to participant');
       socket.emit('proctor:webrtc-answer', { sessionId, sdp: pc.localDescription });
     } catch (err) {
-      console.warn('WebRTC answer creation failed for session', sessionId, err);
+      console.warn('[useProctorMonitor] WebRTC answer creation failed for session', sessionId, err);
     }
   }, [socket]);
 
   // ── WebRTC: receive ICE candidate from participant via server relay ────
   useSocketEvent('proctor:ice-candidate', ({ sessionId, candidate }) => {
+    console.log('[useProctorMonitor] ICE candidate received from participant');
     const pc = peerConnections.current.get(sessionId);
     if (!pc || !candidate) return;
     try {
       pc.addIceCandidate(new RTCIceCandidate(candidate));
+      console.log('[useProctorMonitor] ICE candidate added');
     } catch (err) {
-      console.warn('addIceCandidate failed', err);
+      console.warn('[useProctorMonitor] addIceCandidate failed', err);
     }
   }, []);
 
   // ── Observe: request to start watching a participant's screen ─────────
   const observe = useCallback((sessionId) => {
     if (!socket) return;
+    console.log('[useProctorMonitor] Requesting observe for session', sessionId);
     socket.emit('proctor:observe', { sessionId }, (ack) => {
-      if (!ack?.ok) console.warn('Observe request rejected', ack?.error);
+      if (!ack?.ok) console.warn('[useProctorMonitor] Observe request rejected', ack?.error);
+      else console.log('[useProctorMonitor] Observe request accepted for session', sessionId);
     });
   }, [socket]);
 
