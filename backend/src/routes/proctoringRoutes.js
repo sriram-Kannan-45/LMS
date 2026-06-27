@@ -41,8 +41,11 @@ router.post('/sessions/:sessionId/finalize', sessionLock, ctrl.finalize);
 router.get('/sessions/:sessionId',                   ctrl.getSession);
 router.get('/sessions/:sessionId/result',            ctrl.getResult);
 router.get('/sessions/:sessionId/violations',        ctrl.getViolations);
+router.get('/sessions/:sessionId/screenshots',       ctrl.getScreenshots);
 router.get('/sessions/:sessionId/export.json',       ctrl.exportLogs);
 router.post('/sessions/:sessionId/force-terminate',  ctrl.forceTerminate);
 router.get('/quiz/:quizId/monitor',                  ctrl.getQuizMonitor);
+router.get('/quiz/:quizId/report',                    ctrl.getQuizReport);
+router.get('/quiz/:quizId/report/csv',                ctrl.exportReportCSV);
 
 module.exports = router;

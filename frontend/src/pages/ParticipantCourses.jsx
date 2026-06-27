@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, BookOpen, FileText, Sparkles, ClipboardList, Folder,
   PlayCircle, CheckCircle2, Clock, ExternalLink, Send, X, Eye,
   Image as ImageIcon, Video, Link as LinkIcon, FilePenLine, Presentation,
-  Trophy, AlertCircle, User, Lock, MessageSquare,
+  Trophy, AlertCircle, User, Lock, MessageSquare, Code2, Terminal,
 } from 'lucide-react'
-import { API, assetUrl } from '../api/api'
+import { API, assetUrl, API_BASE } from '../api/api'
 import { useToast } from '../components/Toast'
 import DiscussionBoard from '../components/shared/DiscussionBoard'
 
@@ -303,7 +304,7 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
             <LessonsView user={user} courseId={courseId} onOpenLesson={onOpenLesson} />
           )}
           {tab === 'resources' && <ResourcesView user={user} courseId={courseId} />}
-          {tab === 'quizzes' && <QuizzesView user={user} courseId={courseId} />}
+          {tab === 'quizzes' && <QuizzesView user={user} courseId={courseId} trainingId={overview.course.trainingProgramId} />}
           {tab === 'discussions' && (
             <DiscussionBoard user={user} trainingId={overview.course.trainingProgramId} />
           )}
@@ -527,26 +528,69 @@ function ResourcesView({ user, courseId }) {
 }
 
 // ── Quizzes tab ────────────────────────────────────────────────────────────
-function QuizzesView({ user, courseId }) {
+function QuizzesView({ user, courseId, trainingId }) {
   const { error: showError } = useToast()
+  const navigate = useNavigate()
   const [quizzes, setQuizzes] = useState([])
+  const [completedQuizzes, setCompletedQuizzes] = useState([])
   const [loading, setLoading] = useState(true)
-  const [openQuizId, setOpenQuizId] = useState(null)
 
   const refresh = async () => {
     try {
       setLoading(true)
       const r = await fetch(API.PARTICIPANT_COURSES.QUIZZES(courseId), { headers: auth(user.token) })
       const d = await r.json()
-      if (d.success) setQuizzes(d.quizzes || [])
+      if (d.success) {
+        setQuizzes(d.quizzes || [])
+        setCompletedQuizzes(d.completedQuizzes || [])
+      }
       else showError(d.error || 'Failed to load quizzes')
     } catch (e) { showError(e.message) }
     finally { setLoading(false) }
   }
   useEffect(() => { refresh() }, [courseId])
 
+  const handleStart = async (quizId) => {
+    const token = user?.token;
+    const participantId = user?.id;
+    console.log("--- START QUIZ ATTEMPT CLICKED (handleStart) ---");
+    console.log("Training ID:", trainingId);
+    console.log("Quiz ID:", quizId);
+    console.log("Participant ID:", participantId);
+    console.log("JWT Token:", token);
+
+    try {
+      const startUrl = `${API_BASE}/quizzes/${quizId}/start`;
+      console.log(`[handleStart] Calling API POST: ${startUrl}`);
+      const res = await fetch(startUrl, {
+        method: 'POST',
+        headers: auth(token)
+      });
+      const response = await res.json();
+      console.log("API Response:", response);
+
+      if (!res.ok) {
+        showError(response.error || 'Failed to start quiz');
+        return;
+      }
+      if (response.quiz?.proctoringEnabled) {
+        navigate(`/participant/exam/${quizId}`, {
+          state: {
+            attemptId: response.attemptId,
+            quizData: response.quiz
+          }
+        });
+      } else {
+        navigate(`/trainings/${trainingId}/quizzes/${quizId}/attempt?attemptId=${response.attemptId}&sessionToken=${response.sessionToken}`);
+      }
+    } catch (err) {
+      console.error("[handleStart] Error starting quiz attempt:", err);
+      showError(err.message);
+    }
+  }
+
   if (loading) return <div style={{ height: 100, background: '#f1f5f9', borderRadius: 10 }} />
-  if (quizzes.length === 0) {
+  if (quizzes.length === 0 && completedQuizzes.length === 0) {
     return (
       <div style={emptyCard}>
         <Sparkles size={36} color="#cbd5e1" />
@@ -555,52 +599,106 @@ function QuizzesView({ user, courseId }) {
     )
   }
 
-  return (
-    <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-        {quizzes.map(q => (
-          <div key={q.quizId} style={{
-            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16,
-            display: 'flex', flexDirection: 'column',
-          }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
+  const renderQuizGrid = (list) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+      {list.map(q => (
+        <div key={q.quizId} style={{
+          background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16,
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
               {q.title}
             </div>
-            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
-              {q.lessonTitle || 'Course-level'} · {q.questionCount} question{q.questionCount !== 1 ? 's' : ''}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 'auto', justifyContent: 'space-between' }}>
-              {q.myStatus === 'SUBMITTED' ? (
+            {q.myStatus !== 'NOT_STARTED' && (
+              q.resultStatus === 'PUBLISHED' ? (
+                <span style={{
+                  background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: 999,
+                  fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3, flexShrink: 0
+                }}>
+                  Result Available
+                </span>
+              ) : (
+                <span style={{
+                  background: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: 999,
+                  fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3, flexShrink: 0
+                }}>
+                  Pending Result
+                </span>
+              )
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+            {q.lessonTitle || 'Course-level'} · {q.questionCount} question{q.questionCount !== 1 ? 's' : ''}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 'auto', justifyContent: 'space-between' }}>
+            {q.myStatus === 'IN_PROGRESS' ? (
+              <span style={{ fontSize: 11, color: '#92400e', fontWeight: 600 }}>
+                In Progress
+              </span>
+            ) : q.myStatus !== 'NOT_STARTED' ? (
+              q.resultStatus === 'PUBLISHED' ? (
                 <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600 }}>
                   ✓ Submitted{q.myScore != null ? ` · ${q.myScore.toFixed(0)}%` : ''}
                 </span>
               ) : (
-                <span style={{ fontSize: 11, color: '#475569' }}>Not started</span>
-              )}
-              <button
-                onClick={() => setOpenQuizId(q.quizId)}
-                style={{
-                  padding: '7px 12px', background: '#4f46e5', color: '#fff', border: 'none',
-                  borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                }}
-              >
-                {q.myStatus === 'SUBMITTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
-                {q.myStatus === 'SUBMITTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Awaiting Result') : 'Start'}
-              </button>
-            </div>
+                <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
+                  Result Pending - Waiting for Trainer to Publish Results
+                </span>
+              )
+            ) : (
+              <span style={{ fontSize: 11, color: '#475569' }}>Not started</span>
+            )}
+            <button
+              onClick={() => {
+                if (q.myStatus === 'IN_PROGRESS') {
+                  handleStart(q.quizId)
+                } else if (q.myStatus !== 'NOT_STARTED') {
+                  if (q.resultStatus === 'PUBLISHED') {
+                    navigate(`/trainings/${trainingId}/quizzes/${q.quizId}/result`)
+                  }
+                } else {
+                  handleStart(q.quizId)
+                }
+              }}
+              disabled={q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED'}
+              style={{
+                padding: '7px 12px',
+                background: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#4f46e5',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              {q.myStatus === 'IN_PROGRESS' ? <PlayCircle size={12} /> : q.myStatus !== 'NOT_STARTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
+              {q.myStatus === 'IN_PROGRESS' ? 'Resume' : q.myStatus !== 'NOT_STARTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Attempted') : 'Start'}
+            </button>
           </div>
-        ))}
-      </div>
-      <AnimatePresence>
-        {openQuizId && (
-          <QuizModal
-            user={user}
-            quizId={openQuizId}
-            onClose={() => { setOpenQuizId(null); refresh() }}
-          />
-        )}
-      </AnimatePresence>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <>
+      {quizzes.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <h4 style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 12 }}>Available Quizzes</h4>
+          {renderQuizGrid(quizzes)}
+        </div>
+      )}
+      {completedQuizzes.length > 0 && (
+        <div>
+          <h4 style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 12 }}>Completed Quizzes</h4>
+          {renderQuizGrid(completedQuizzes)}
+        </div>
+      )}
     </>
   )
 }
@@ -610,9 +708,9 @@ function QuizzesView({ user, courseId }) {
 // ════════════════════════════════════════════════════════════════════════════
 function LessonView({ user, lessonId, onBack }) {
   const { error: showError, success } = useToast()
+  const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [tab, setTab] = useState('materials')
-  const [openQuizId, setOpenQuizId] = useState(null)
   const [openAssessmentId, setOpenAssessmentId] = useState(null)
 
   const fetchLesson = async () => {
@@ -624,6 +722,46 @@ function LessonView({ user, lessonId, onBack }) {
     } catch (e) { showError(e.message) }
   }
   useEffect(() => { fetchLesson() }, [lessonId])
+
+  const handleStartQuiz = async (quizId) => {
+    const token = user?.token;
+    const participantId = user?.id;
+    const currentTrainingId = data?.trainingProgramId || trainingId;
+    console.log("--- START QUIZ ATTEMPT CLICKED (handleStartQuiz) ---");
+    console.log("Training ID:", currentTrainingId);
+    console.log("Quiz ID:", quizId);
+    console.log("Participant ID:", participantId);
+    console.log("JWT Token:", token);
+
+    try {
+      const startUrl = `${API_BASE}/quizzes/${quizId}/start`;
+      console.log(`[handleStartQuiz] Calling API POST: ${startUrl}`);
+      const res = await fetch(startUrl, {
+        method: 'POST',
+        headers: auth(token)
+      });
+      const response = await res.json();
+      console.log("API Response:", response);
+
+      if (!res.ok) {
+        showError(response.error || 'Failed to start quiz');
+        return;
+      }
+      if (response.quiz?.proctoringEnabled) {
+        navigate(`/participant/exam/${quizId}`, {
+          state: {
+            attemptId: response.attemptId,
+            quizData: response.quiz
+          }
+        });
+      } else {
+        navigate(`/trainings/${currentTrainingId}/quizzes/${quizId}/attempt?attemptId=${response.attemptId}&sessionToken=${response.sessionToken}`);
+      }
+    } catch (err) {
+      console.error("[handleStartQuiz] Error starting quiz attempt:", err);
+      showError(err.message);
+    }
+  }
 
   const markViewed = async () => {
     try {
@@ -643,6 +781,7 @@ function LessonView({ user, lessonId, onBack }) {
   const SUBTABS = [
     { key: 'materials',  label: 'Materials',  icon: <Folder size={14} /> },
     { key: 'quiz',       label: 'Quiz',       icon: <Sparkles size={14} /> },
+    { key: 'coding',     label: 'Coding',     icon: <Code2 size={14} /> },
     { key: 'assessment', label: 'Assessment', icon: <ClipboardList size={14} /> },
   ]
 
@@ -744,21 +883,145 @@ function LessonView({ user, lessonId, onBack }) {
                   display: 'flex', alignItems: 'center', gap: 12,
                 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{q.title}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{q.title}</div>
+                      {q.myStatus !== 'NOT_STARTED' && (
+                        q.resultStatus === 'PUBLISHED' ? (
+                          <span style={{
+                            background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: 999,
+                            fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3
+                          }}>
+                            Result Available
+                          </span>
+                        ) : (
+                          <span style={{
+                            background: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: 999,
+                            fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3
+                          }}>
+                            Pending Result
+                          </span>
+                        )
+                      )}
+                    </div>
                     <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
                       {q.questionCount} questions · {q.isMandatory ? 'Mandatory' : 'Optional'}
+                      {q.myStatus !== 'NOT_STARTED' && (
+                        <> · <span style={{ fontWeight: 600, color: q.myStatus === 'IN_PROGRESS' ? '#92400e' : q.resultStatus === 'PUBLISHED' ? '#15803d' : '#f59e0b' }}>
+                          {q.myStatus === 'IN_PROGRESS' ? 'In Progress' : q.resultStatus === 'PUBLISHED' ? `Submitted${q.myScore != null ? ` (${q.myScore.toFixed(0)}%)` : ''}` : 'Result Pending - Waiting for Trainer to Publish Results'}
+                        </span></>
+                      )}
                     </div>
                   </div>
                   <button
-                    onClick={() => setOpenQuizId(q.quizId)}
+                    onClick={() => {
+                      if (q.myStatus === 'IN_PROGRESS') {
+                        handleStartQuiz(q.quizId)
+                      } else if (q.myStatus !== 'NOT_STARTED') {
+                        if (q.resultStatus === 'PUBLISHED') {
+                          navigate(`/trainings/${data.trainingProgramId}/quizzes/${q.quizId}/result`)
+                        }
+                      } else {
+                        handleStartQuiz(q.quizId)
+                      }
+                    }}
+                    disabled={q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED'}
                     style={{
-                      padding: '8px 14px', background: '#4f46e5', color: '#fff', border: 'none',
-                      borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '8px 14px',
+                      background: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#4f46e5',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
                     }}
                   >
-                    {q.myStatus === 'SUBMITTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
-                    {q.myStatus === 'SUBMITTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Awaiting Result') : 'Start Quiz'}
+                    {q.myStatus === 'IN_PROGRESS' ? <PlayCircle size={12} /> : q.myStatus !== 'NOT_STARTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
+                    {q.myStatus === 'IN_PROGRESS' ? 'Resume Quiz' : q.myStatus !== 'NOT_STARTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Attempted') : 'Start Quiz'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'coding' && (
+        <div>
+          {(data.codingAssessments || []).length === 0 ? (
+            <div style={emptyCard}>
+              <Code2 size={32} color="#cbd5e1" />
+              <p>No coding assessment for this lesson.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {data.codingAssessments.map(ca => (
+                <div key={ca.assessmentId} style={{
+                  background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16,
+                  display: 'flex', alignItems: 'center', gap: 12,
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{ca.title}</div>
+                      {ca.myStatus !== 'NOT_STARTED' && (
+                        ca.resultStatus === 'PUBLISHED' ? (
+                          <span style={{
+                            background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: 999,
+                            fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3
+                          }}>
+                            Result Available
+                          </span>
+                        ) : (
+                          <span style={{
+                            background: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: 999,
+                            fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3
+                          }}>
+                            Pending Result
+                          </span>
+                        )
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                      {ca.timeLimit ? `${ca.timeLimit} min` : 'No time limit'} · {ca.isMandatory ? 'Mandatory' : 'Optional'}
+                      {ca.myStatus !== 'NOT_STARTED' && (
+                        <> · <span style={{
+                          fontWeight: 600,
+                          color: ca.myStatus === 'IN_PROGRESS' ? '#92400e' : ca.resultStatus === 'PUBLISHED' ? '#15803d' : '#f59e0b'
+                        }}>
+                          {ca.myStatus === 'IN_PROGRESS' ? 'In Progress' : ca.resultStatus === 'PUBLISHED' ? `Submitted (${ca.myScore != null ? ca.myScore.toFixed(0) : '?'} pts)` : 'Submitted - Pending Results'}
+                        </span></>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (ca.myStatus === 'NOT_STARTED' || ca.myStatus === 'IN_PROGRESS') {
+                        navigate(`/participant/coding/${ca.assessmentId}`, {
+                          state: { lessonCodingId: ca.lessonCodingId }
+                        })
+                      } else if (ca.resultStatus === 'PUBLISHED') {
+                        navigate(`/trainer/coding/${ca.assessmentId}/results`)
+                      }
+                    }}
+                    style={{
+                      padding: '8px 14px',
+                      background: ca.myStatus !== 'NOT_STARTED' && ca.myStatus !== 'IN_PROGRESS' ? '#4f46e5' : '#7C3AED',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    {ca.myStatus === 'NOT_STARTED' ? <PlayCircle size={12} /> : ca.myStatus === 'IN_PROGRESS' ? <Terminal size={12} /> : <Eye size={12} />}
+                    {ca.myStatus === 'NOT_STARTED' ? 'Start Coding' : ca.myStatus === 'IN_PROGRESS' ? 'Resume' : 'View Results'}
                   </button>
                 </div>
               ))}
@@ -816,9 +1079,6 @@ function LessonView({ user, lessonId, onBack }) {
       )}
 
       <AnimatePresence>
-        {openQuizId && (
-          <QuizModal user={user} quizId={openQuizId} onClose={() => { setOpenQuizId(null); fetchLesson() }} />
-        )}
         {openAssessmentId && (
           <AssessmentModal
             user={user}
@@ -872,227 +1132,6 @@ function MaterialCard({ material }) {
         <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 13 }}>{m.content}</p>
       )}
     </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// QUIZ MODAL — start, take, submit, view result
-// ════════════════════════════════════════════════════════════════════════════
-function QuizModal({ user, quizId, onClose }) {
-  const { error: showError, success } = useToast()
-  const [phase, setPhase] = useState('loading') // loading | taking | submitted-hidden | result | error
-  const [attemptId, setAttemptId] = useState(null)
-  const [questions, setQuestions] = useState([])
-  const [answers, setAnswers] = useState({})
-  const [meta, setMeta] = useState(null)
-  const [result, setResult] = useState(null)
-  const [submitting, setSubmitting] = useState(false)
-
-  // First, check if already submitted
-  useEffect(() => {
-    let aborted = false
-    ;(async () => {
-      try {
-        // Try to read result first — if SUBMITTED_HIDDEN or PUBLISHED, no need to start
-        const rr = await fetch(API.PARTICIPANT_COURSES.QUIZ_RESULT(quizId), { headers: auth(user.token) })
-        const dr = await rr.json()
-        if (aborted) return
-        if (dr.success && dr.status === 'PUBLISHED') {
-          setResult(dr); setPhase('result'); return
-        }
-        if (dr.success && dr.status === 'SUBMITTED_HIDDEN') {
-          setResult(dr); setPhase('submitted-hidden'); return
-        }
-        // Otherwise start
-        const rs = await fetch(API.PARTICIPANT_COURSES.QUIZ_START(quizId), {
-          method: 'POST', headers: auth(user.token),
-        })
-        const ds = await rs.json()
-        if (aborted) return
-        if (!rs.ok || ds.success === false) {
-          showError(ds.error || 'Could not start quiz'); setPhase('error'); return
-        }
-        setAttemptId(ds.attemptId)
-        setQuestions(ds.questions || [])
-        setMeta(ds.quiz || {})
-        setPhase('taking')
-      } catch (e) {
-        if (!aborted) { showError(e.message); setPhase('error') }
-      }
-    })()
-    return () => { aborted = true }
-  }, [quizId])
-
-  const submit = async () => {
-    const missing = questions.filter(q => !answers[q.id])
-    if (missing.length > 0) {
-      if (!window.confirm(`${missing.length} question${missing.length !== 1 ? 's' : ''} unanswered. Submit anyway?`)) return
-    }
-    try {
-      setSubmitting(true)
-      const r = await fetch(API.PARTICIPANT_COURSES.QUIZ_SUBMIT(quizId), {
-        method: 'POST', headers: auth(user.token),
-        body: JSON.stringify({
-          attemptId,
-          answers: questions.map(q => ({ questionId: q.id, answer: answers[q.id] || '' })),
-        }),
-      })
-      const d = await r.json()
-      if (!r.ok || d.success === false) { showError(d.error || 'Submit failed'); return }
-      success(d.message)
-      // Re-check result
-      const rr = await fetch(API.PARTICIPANT_COURSES.QUIZ_RESULT(quizId), { headers: auth(user.token) })
-      const dr = await rr.json()
-      setResult(dr)
-      setPhase(dr.status === 'PUBLISHED' ? 'result' : 'submitted-hidden')
-    } catch (e) { showError(e.message) }
-    finally { setSubmitting(false) }
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      onClick={() => !submitting && phase !== 'taking' && onClose()}
-      style={{
-        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)',
-        zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
-      }}
-    >
-      <motion.div
-        onClick={(e) => e.stopPropagation()}
-        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        style={{
-          background: '#fff', borderRadius: 14, width: '100%', maxWidth: 720,
-          maxHeight: '90vh', display: 'flex', flexDirection: 'column',
-        }}
-      >
-        <div style={{
-          padding: 18, borderBottom: '1px solid #e2e8f0',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
-            {meta?.title || result?.review?.[0]?.questionText ? meta?.title : 'Quiz'}
-          </div>
-          <button onClick={onClose} disabled={submitting} style={{
-            border: 'none', background: '#f1f5f9', color: '#475569', padding: 8, borderRadius: 8, cursor: 'pointer',
-          }}>
-            <X size={18} />
-          </button>
-        </div>
-        <div style={{ flex: 1, overflow: 'auto', padding: 18 }}>
-          {phase === 'loading' && <div style={{ height: 200, background: '#f1f5f9', borderRadius: 10 }} />}
-
-          {phase === 'taking' && questions.map((q, i) => (
-            <div key={q.id} style={{
-              background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 12,
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-                Question {i + 1}
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginBottom: 12 }}>
-                {q.questionText}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {(q.options || []).map((opt, oi) => (
-                  <label key={oi} style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: 10,
-                    background: answers[q.id] === opt ? '#eef2ff' : '#fff',
-                    border: `1px solid ${answers[q.id] === opt ? '#4f46e5' : '#e2e8f0'}`,
-                    borderRadius: 8, cursor: 'pointer', transition: 'all 0.1s',
-                  }}>
-                    <input
-                      type="radio" name={`q-${q.id}`} value={opt}
-                      checked={answers[q.id] === opt}
-                      onChange={() => setAnswers({ ...answers, [q.id]: opt })}
-                    />
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{'ABCD'[oi]}.</span>
-                    <span style={{ flex: 1, fontSize: 13 }}>{opt}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {phase === 'submitted-hidden' && (
-            <div style={{ padding: 30, textAlign: 'center' }}>
-              <Clock size={42} color="#f59e0b" style={{ margin: '0 auto 12px' }} />
-              <h3 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
-                Quiz submitted — awaiting trainer release
-              </h3>
-              <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
-                {result?.message || 'Your trainer will publish results soon.'}
-              </p>
-            </div>
-          )}
-
-          {phase === 'result' && result && (
-            <div>
-              <div style={{
-                background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff',
-                padding: 20, borderRadius: 12, textAlign: 'center', marginBottom: 16,
-              }}>
-                <Trophy size={28} style={{ marginBottom: 4 }} />
-                <div style={{ fontSize: 32, fontWeight: 700 }}>
-                  {result.score?.toFixed(0)}%
-                </div>
-                <div style={{ fontSize: 13, opacity: 0.9 }}>
-                  {result.totalScore} / {result.maxScore} correct
-                </div>
-              </div>
-              <h4 style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#0f172a',
-                            textTransform: 'uppercase', letterSpacing: 0.5 }}>Question review</h4>
-              {(result.review || []).map((q, i) => (
-                <div key={q.questionId} style={{
-                  background: '#fff', border: `1px solid ${q.isCorrect ? '#86efac' : '#fca5a5'}`,
-                  borderRadius: 10, padding: 14, marginBottom: 10,
-                }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: q.isCorrect ? '#15803d' : '#dc2626', marginBottom: 4 }}>
-                    {q.isCorrect ? '✓ Correct' : '✗ Incorrect'} · Q{i + 1}
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 6 }}>{q.questionText}</div>
-                  <div style={{ fontSize: 12, color: '#475569' }}>
-                    Your answer: <strong>{q.myAnswer || '—'}</strong>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#15803d' }}>
-                    Correct answer: <strong>{q.correctAnswer}</strong>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {phase === 'error' && (
-            <div style={{ padding: 30, textAlign: 'center', color: '#dc2626' }}>
-              <AlertCircle size={36} style={{ marginBottom: 8 }} />
-              <p>Could not load quiz. Please close and try again.</p>
-            </div>
-          )}
-        </div>
-
-        {phase === 'taking' && (
-          <div style={{
-            padding: 14, borderTop: '1px solid #e2e8f0',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
-            background: '#fafbfc',
-          }}>
-            <div style={{ fontSize: 12, color: '#64748b' }}>
-              {Object.keys(answers).length} / {questions.length} answered
-            </div>
-            <button
-              onClick={submit} disabled={submitting}
-              style={{
-                padding: '10px 20px', background: '#4f46e5', color: '#fff', border: 'none',
-                borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-              }}
-            >
-              <Send size={14} />
-              {submitting ? 'Submitting…' : 'Submit Quiz'}
-            </button>
-          </div>
-        )}
-      </motion.div>
-    </motion.div>
   )
 }
 

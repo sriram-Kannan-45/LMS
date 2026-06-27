@@ -1,6 +1,7 @@
 const {
   Lesson, LessonQuiz, LessonAssessment, AssessmentSubmission,
-  QuizProgress, LessonProgress, Enrollment, AIQuiz, User
+  QuizProgress, LessonProgress, Enrollment, AIQuiz, User,
+  LessonCodingAssessment, CodingAssessment, CodingAttempt,
 } = require('../models');
 const NotificationService = require('../services/notificationService');
 
@@ -27,6 +28,18 @@ const quizStats = async (lessonQuiz) => {
   return { total: ids.length, completed, pending: ids.length - completed, assignedIds: ids };
 };
 
+// Completion stats for one coding assessment: total / submitted / pending.
+const codingAssessmentStats = async (lessonCoding) => {
+  const lesson = await Lesson.findByPk(lessonCoding.lessonId);
+  const ids = await assignedParticipantIds(lesson.trainingId);
+  const submitted = ids.length
+    ? await CodingAttempt.count({
+        where: { assessmentId: lessonCoding.assessmentId, participantId: ids, status: ['SUBMITTED', 'AUTO_SUBMITTED'] }
+      })
+    : 0;
+  return { total: ids.length, completed: submitted, pending: ids.length - submitted, assignedIds: ids };
+};
+
 // ── Trainer: authoring ───────────────────────────────────────────────────────
 
 const createLesson = async (req, res) => {
@@ -48,7 +61,8 @@ const getTrainerLessons = async (req, res) => {
       where,
       include: [
         { model: LessonQuiz, as: 'quizzes', include: [{ model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] }] },
-        { model: LessonAssessment, as: 'assessments' }
+        { model: LessonAssessment, as: 'assessments' },
+        { model: LessonCodingAssessment, as: 'codingAssessments', include: [{ model: CodingAssessment, as: 'assessment', attributes: ['id', 'title', 'status'] }] },
       ],
       order: [['orderIndex', 'ASC']]
     });
@@ -81,13 +95,30 @@ const createAssessment = async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
 
+const attachCodingAssessment = async (req, res) => {
+  try {
+    const { assessmentId, isMandatory } = req.body;
+    const lesson = await Lesson.findByPk(req.params.lessonId);
+    if (!lesson || lesson.trainerId !== req.user.id) return res.status(404).json({ error: 'Lesson not found' });
+    const ca = await CodingAssessment.findByPk(assessmentId);
+    if (!ca || String(ca.trainerId) !== String(req.user.id)) return res.status(404).json({ error: 'Coding assessment not found' });
+    const link = await LessonCodingAssessment.create({
+      lessonId: lesson.id, assessmentId, isMandatory: isMandatory !== false
+    });
+    res.status(201).json({ lessonCodingAssessment: link });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+
 // ── Trainer: dashboard ───────────────────────────────────────────────────────
 
-// Enrolled / completed / pending counts per quiz in a lesson, plus publish-eligibility.
+// Enrolled / completed / pending counts per quiz & coding assessment in a lesson, plus publish-eligibility.
 const getLessonDashboard = async (req, res) => {
   try {
     const lesson = await Lesson.findByPk(req.params.lessonId, {
-      include: [{ model: LessonQuiz, as: 'quizzes', include: [{ model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] }] }]
+      include: [
+        { model: LessonQuiz, as: 'quizzes', include: [{ model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] }] },
+        { model: LessonCodingAssessment, as: 'codingAssessments', include: [{ model: CodingAssessment, as: 'assessment', attributes: ['id', 'title'] }] },
+      ]
     });
     if (!lesson || lesson.trainerId !== req.user.id) return res.status(404).json({ error: 'Lesson not found' });
 
@@ -104,7 +135,22 @@ const getLessonDashboard = async (req, res) => {
         canPublish: s.total > 0 && s.pending === 0 && lq.resultStatus === 'HIDDEN'
       };
     }));
-    res.json({ lessonId: lesson.id, quizzes });
+
+    const codingAssessments = await Promise.all(lesson.codingAssessments.map(async (lca) => {
+      const s = await codingAssessmentStats(lca);
+      return {
+        lessonCodingId: lca.id,
+        assessmentId: lca.assessmentId,
+        title: lca.assessment?.title,
+        resultStatus: lca.resultStatus,
+        enrolled: s.total,
+        completed: s.completed,
+        pending: s.pending,
+        canPublish: s.total > 0 && s.pending === 0 && lca.resultStatus === 'HIDDEN'
+      };
+    }));
+
+    res.json({ lessonId: lesson.id, quizzes, codingAssessments });
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
 
@@ -136,6 +182,37 @@ const publishQuizResults = async (req, res) => {
       }, io)
     ));
     res.json({ message: 'Quiz results published', lessonQuiz: lq });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+
+// ── Trainer: publish coding assessment results (gated) ───────────────────────
+
+const publishCodingAssessmentResults = async (req, res) => {
+  try {
+    const lca = await LessonCodingAssessment.findByPk(req.params.lessonCodingId, { include: [{ model: Lesson, as: 'lesson' }] });
+    if (!lca || lca.lesson.trainerId !== req.user.id) return res.status(404).json({ error: 'Lesson coding assessment not found' });
+
+    const s = await codingAssessmentStats(lca);
+    if (s.total === 0 || s.pending > 0) {
+      return res.status(409).json({ error: 'Results cannot be published until all assigned participants complete the coding assessment.' });
+    }
+
+    lca.resultStatus = 'PUBLISHED';
+    lca.publishedAt = new Date();
+    await lca.save();
+
+    const io = req.app.get('io');
+    await Promise.all(s.assignedIds.map(pid =>
+      NotificationService.createNotification({
+        userId: pid,
+        message: 'Your coding assessment results have been published.',
+        type: 'OTHER',
+        actionUrl: `/lessons/${lca.lessonId}`,
+        relatedEntityId: lca.id,
+        relatedEntityType: 'LessonCodingAssessment'
+      }, io)
+    ));
+    res.json({ message: 'Coding assessment results published', lessonCodingAssessment: lca });
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
 
@@ -202,7 +279,8 @@ const getParticipantLessons = async (req, res) => {
       where,
       include: [
         { model: LessonQuiz, as: 'quizzes', include: [{ model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] }] },
-        { model: LessonAssessment, as: 'assessments' }
+        { model: LessonAssessment, as: 'assessments' },
+        { model: LessonCodingAssessment, as: 'codingAssessments', include: [{ model: CodingAssessment, as: 'assessment', attributes: ['id', 'title'] }] },
       ],
       order: [['orderIndex', 'ASC']]
     });
@@ -284,6 +362,36 @@ const submitAssessment = async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
 
+// ── Participant: complete coding assessment ──────────────────────────────────
+
+const completeCodingAssessment = async (req, res) => {
+  try {
+    const lca = await LessonCodingAssessment.findByPk(req.params.lessonCodingId, { include: [{ model: Lesson, as: 'lesson' }] });
+    if (!lca) return res.status(404).json({ error: 'Lesson coding assessment not found' });
+
+    const attempt = await CodingAttempt.findOne({
+      where: { assessmentId: lca.assessmentId, participantId: req.user.id, status: ['SUBMITTED', 'AUTO_SUBMITTED'] }
+    });
+    if (!attempt) return res.status(400).json({ error: 'No submitted attempt found for this coding assessment.' });
+
+    const io = req.app.get('io');
+    await evaluateLessonCompletion(lca.lesson, req.user.id, io);
+
+    const s = await codingAssessmentStats(lca);
+    if (s.total > 0 && s.pending === 0) {
+      await NotificationService.createNotification({
+        userId: lca.lesson.trainerId,
+        message: `All participants have completed the coding assessment for lesson "${lca.lesson.title}". You can now publish results.`,
+        type: 'OTHER',
+        actionUrl: `/trainer/lessons/${lca.lessonId}`,
+        relatedEntityId: lca.id,
+        relatedEntityType: 'LessonCodingAssessment'
+      }, io);
+    }
+    res.json({ message: 'Coding assessment completed.', attempt: { id: attempt.id, score: attempt.score } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+
 // ── Participant: result visibility ───────────────────────────────────────────
 
 const getQuizResult = async (req, res) => {
@@ -322,9 +430,39 @@ const getAssessmentResult = async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 };
 
+const getCodingAssessmentResult = async (req, res) => {
+  try {
+    const lca = await LessonCodingAssessment.findByPk(req.params.lessonCodingId);
+    if (!lca) return res.status(404).json({ error: 'Lesson coding assessment not found' });
+
+    const attempt = await CodingAttempt.findOne({
+      where: { assessmentId: lca.assessmentId, participantId: req.user.id }
+    });
+
+    if (!attempt || !['SUBMITTED', 'AUTO_SUBMITTED'].includes(attempt.status)) {
+      return res.json({ status: attempt?.status || 'NOT_STARTED', resultStatus: lca.resultStatus });
+    }
+    if (lca.resultStatus !== 'PUBLISHED') {
+      return res.json({
+        status: 'SUBMITTED',
+        resultStatus: 'HIDDEN',
+        message: 'Your coding assessment has been submitted. Results will be available once published by the trainer.'
+      });
+    }
+    res.json({
+      status: 'SUBMITTED',
+      resultStatus: 'PUBLISHED',
+      score: attempt.score,
+      attemptId: attempt.id,
+      submittedAt: attempt.submittedAt,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+};
+
 // ── Lesson completion logic ──────────────────────────────────────────────────
 // Complete when: content viewed AND all mandatory quizzes COMPLETED AND all
-// mandatory assessments SUBMITTED (any of REVIEWED/PUBLISHED also counts).
+// mandatory assessments SUBMITTED (any of REVIEWED/PUBLISHED also counts) AND
+// all mandatory coding assessments SUBMITTED.
 const evaluateLessonCompletion = async (lesson, participantId, io) => {
   const [prog] = await LessonProgress.findOrCreate({
     where: { lessonId: lesson.id, participantId },
@@ -343,7 +481,13 @@ const evaluateLessonCompletion = async (lesson, participantId, io) => {
     return sub && ['SUBMITTED', 'REVIEWED', 'PUBLISHED'].includes(sub.status);
   }))).every(Boolean);
 
-  const completed = prog.contentViewed && quizzesDone && assessmentsDone;
+  const codingAssessments = await LessonCodingAssessment.findAll({ where: { lessonId: lesson.id, isMandatory: true } });
+  const codingDone = (await Promise.all(codingAssessments.map(async (ca) => {
+    const attempt = await CodingAttempt.findOne({ where: { assessmentId: ca.assessmentId, participantId } });
+    return attempt && ['SUBMITTED', 'AUTO_SUBMITTED'].includes(attempt.status);
+  }))).every(Boolean);
+
+  const completed = prog.contentViewed && quizzesDone && assessmentsDone && codingDone;
   const next = completed ? 'COMPLETED' : (prog.contentViewed ? 'IN_PROGRESS' : prog.status);
   if (next !== prog.status) {
     prog.status = next;
@@ -355,8 +499,10 @@ const evaluateLessonCompletion = async (lesson, participantId, io) => {
 
 module.exports = {
   createLesson, getTrainerLessons, attachQuiz, createAssessment,
-  getLessonDashboard, publishQuizResults,
+  attachCodingAssessment,
+  getLessonDashboard, publishQuizResults, publishCodingAssessmentResults,
   getAssessmentSubmissions, gradeAssessment, publishAssessment,
   getParticipantLessons, viewContent, completeQuiz, submitAssessment,
-  getQuizResult, getAssessmentResult
+  completeCodingAssessment,
+  getQuizResult, getAssessmentResult, getCodingAssessmentResult
 };

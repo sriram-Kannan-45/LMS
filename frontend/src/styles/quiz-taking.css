@@ -62,7 +62,22 @@
   color: var(--qt-text);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  user-select: text;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.qt-app input,
+.qt-app textarea,
+.qt-app select,
+.qt-app button,
+.qt-app [contenteditable] {
+  user-select: auto;
+  -webkit-user-select: auto;
+  -moz-user-select: auto;
+  -ms-user-select: auto;
 }
 
 /* ─── Hide LMS chrome (sidebar + top header) while a quiz is active ───
@@ -821,6 +836,35 @@ body.qt-fullscreen-active {
 }
 @keyframes qt-rotate {
   to { transform: rotate(360deg); }
+}
+
+/* ─── Print protection — blank all quiz content when printed ───────── */
+@media print {
+  .qt-app,
+  .qt-app * {
+    visibility: hidden !important;
+    display: none !important;
+  }
+  .qt-app::after {
+    content: "This assessment is protected and cannot be printed." !important;
+    visibility: visible !important;
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    color: #dc2626;
+    font-family: 'Poppins', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+    padding: 40px;
+    z-index: 999999;
+  }
+}
+
+/* ─── Watermark base guard ───────────────────────────────────────────── */
+.qt-app [aria-hidden="true"] {
+  pointer-events: none;
 }
 
 /* ─── Reduced motion ─────────────────────────────────────────────────── */

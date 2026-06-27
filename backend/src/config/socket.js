@@ -53,13 +53,14 @@ const initializeSocket = (server) => {
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret');
-      const user = await User.findByPk(decoded.userId);
+      const userId = decoded.id || decoded.userId;
+      const user = await User.findByPk(userId);
 
       if (!user) {
         return next(new Error('Authentication error: User not found'));
       }
 
-      socket.userId = decoded.userId;
+      socket.userId = userId;
       socket.userRole = user.role;
       socket.userName = user.name;
 
@@ -88,6 +89,7 @@ const initializeSocket = (server) => {
     logger.debug('Joined role room', { room: `role_${socket.userRole}` });
 
     // Emit connection success
+    console.log('[Socket] Connected:', { socketId: socket.id, userId: socket.userId, role: socket.userRole });
     socket.emit('connected', {
       socketId: socket.id,
       userId: socket.userId,
@@ -167,6 +169,8 @@ const initializeSocket = (server) => {
     require('../socket/events/leaderboardEvents')(io, socket);
     // Register proctoring events
     require('../socket/events/proctorEvents')(io, socket);
+    // Register parallel monitor system events
+    require('../socket/events/monitorEvents')(io, socket);
   });
 
   return io;

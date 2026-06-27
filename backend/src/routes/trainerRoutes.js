@@ -835,4 +835,28 @@ router.post(
   }
 );
 
+// GET /api/trainer/quizzes
+router.get(
+  '/quizzes',
+  authenticateToken,
+  roleMiddleware('TRAINER', 'ADMIN'),
+  async (req, res) => {
+    try {
+      const { AIQuiz, Course, Training } = require('../models');
+      const quizzes = await AIQuiz.findAll({
+        where: { trainerId: req.user.id },
+        include: [
+          { model: Course, as: 'course', attributes: ['id', 'title'] },
+          { model: Training, as: 'training', attributes: ['id', 'title'] }
+        ],
+        order: [['created_at', 'DESC']]
+      });
+      return res.json({ success: true, quizzes });
+    } catch (error) {
+      console.error('Error fetching trainer quizzes:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  }
+);
+
 module.exports = router;

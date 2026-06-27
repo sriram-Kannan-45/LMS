@@ -36,8 +36,14 @@ const {
   Enrollment,
   AIQuiz,
   AIQuestion,
+  AIQuestionOption,
   QuizAttempt,
+  QuizAnswer,
   QuizResult,
+  ExamSession,
+  Violation,
+  ProctorActivity,
+  AssessmentSession,
   User,
 } = require('../models');
 const { TYPE_LIMITS, ROOT: MATERIALS_ROOT } = require('../middleware/uploadMaterial');
@@ -718,8 +724,15 @@ async function updateCourseQuiz(req, res) {
     if (!course) return;
     const quiz = await AIQuiz.findOne({ where: { id: req.params.quizId, courseId: course.id } });
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+    const {
+      title, lessonId, isMandatory, status, questions,
+      showResultImmediately, showCorrectAnswersOnResult, shuffleQuestions,
+      allowMultipleAttempts, maxAttempts, difficulty, timeLimit,
+      copyProtectionEnabled, maxCopyWarnings, copyViolationActions,
+      copyWarningMessage, copyDisqualifyAction,
+      proctoringEnabled, proctoringLevel, gracePeriodMinutes
+    } = req.body;
 
-    const { title, lessonId, isMandatory, status, questions } = req.body;
     if (status && !['DRAFT', 'PUBLISHED', 'CLOSED'].includes(status)) {
       return res.status(422).json({ error: 'Invalid status' });
     }
@@ -730,13 +743,27 @@ async function updateCourseQuiz(req, res) {
 
     await sequelize.transaction(async t => {
       await quiz.update({
-        title:       title       ?? quiz.title,
-        lessonId:    lessonId    !== undefined ? lessonId : quiz.lessonId,
-        isMandatory: isMandatory !== undefined ? isMandatory : quiz.isMandatory,
-        status:      status      ?? quiz.status,
+        title:                      title                      ?? quiz.title,
+        lessonId:                   lessonId                   !== undefined ? lessonId : quiz.lessonId,
+        isMandatory:                isMandatory                !== undefined ? isMandatory : quiz.isMandatory,
+        status:                     status                     ?? quiz.status,
+        showResultImmediately:      showResultImmediately      !== undefined ? showResultImmediately : quiz.showResultImmediately,
+        showCorrectAnswersOnResult: showCorrectAnswersOnResult !== undefined ? showCorrectAnswersOnResult : quiz.showCorrectAnswersOnResult,
+        shuffleQuestions:           shuffleQuestions           !== undefined ? shuffleQuestions : quiz.shuffleQuestions,
+        allowMultipleAttempts:      allowMultipleAttempts      !== undefined ? allowMultipleAttempts : quiz.allowMultipleAttempts,
+        maxAttempts:                maxAttempts                !== undefined ? maxAttempts : quiz.maxAttempts,
+        difficulty:                 difficulty                 ?? quiz.difficulty,
+        timeLimit:                  timeLimit                  !== undefined ? timeLimit : quiz.timeLimit,
+        copyProtectionEnabled:      copyProtectionEnabled      !== undefined ? copyProtectionEnabled : quiz.copyProtectionEnabled,
+        maxCopyWarnings:            maxCopyWarnings            !== undefined ? maxCopyWarnings : quiz.maxCopyWarnings,
+        copyViolationActions:       copyViolationActions       !== undefined ? copyViolationActions : quiz.copyViolationActions,
+        copyWarningMessage:         copyWarningMessage         !== undefined ? copyWarningMessage : quiz.copyWarningMessage,
+        copyDisqualifyAction:       copyDisqualifyAction       !== undefined ? copyDisqualifyAction : quiz.copyDisqualifyAction,
+        proctoringEnabled:          proctoringEnabled          !== undefined ? proctoringEnabled : quiz.proctoringEnabled,
+        proctoringLevel:            proctoringLevel            !== undefined ? proctoringLevel : quiz.proctoringLevel,
+        gracePeriodMinutes:         gracePeriodMinutes         !== undefined ? gracePeriodMinutes : quiz.gracePeriodMinutes,
       }, { transaction: t });
-
-      if (Array.isArray(questions)) {
+      if (questions) {
         // Replace all questions atomically — simplest correct semantics for
         // a JSON PUT.
         await AIQuestion.destroy({ where: { quizId: quiz.id }, transaction: t });
@@ -773,16 +800,58 @@ async function deleteCourseQuiz(req, res) {
     const quiz = await AIQuiz.findOne({ where: { id: req.params.quizId, courseId: course.id } });
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
-    await Promise.all([
-      AIQuestion.destroy({ where: { quizId: quiz.id } }),
-      QuizAttempt.destroy({ where: { quizId: quiz.id } }),
-      LessonQuiz.destroy({ where: { quizId: quiz.id } }),
-    ]);
-    await quiz.destroy();
-    res.json({ success: true, message: 'Quiz deleted' });
+    const quizId = quiz.id;
+
+    await sequelize.transaction(async (t) => {
+      // 1. Find all dependent entity IDs to handle deep child records
+      const attempts = await QuizAttempt.findAll({ where: { quizId }, transaction: t });
+      const attemptIds = attempts.map(a => a.id);
+
+      const examSessions = await ExamSession.findAll({ where: { quizId }, transaction: t });
+      const examSessionIds = examSessions.map(es => es.id);
+
+      const questions = await AIQuestion.findAll({ where: { quizId }, transaction: t });
+      const questionIds = questions.map(q => q.id);
+
+      const lessonQuizzes = await LessonQuiz.findAll({ where: { quizId }, transaction: t });
+      const lessonQuizIds = lessonQuizzes.map(lq => lq.id);
+
+      // 2. Delete leaf nodes and child records in order of dependency constraints
+      if (examSessionIds.length > 0) {
+        await ProctorActivity.destroy({ where: { sessionId: { [Op.in]: examSessionIds } }, transaction: t });
+        await Violation.destroy({ where: { sessionId: { [Op.in]: examSessionIds } }, transaction: t });
+      }
+
+      await AssessmentSession.destroy({ where: { quizId }, transaction: t });
+      await ExamSession.destroy({ where: { quizId }, transaction: t });
+
+      if (lessonQuizIds.length > 0) {
+        await QuizProgress.destroy({ where: { lessonQuizId: { [Op.in]: lessonQuizIds } }, transaction: t });
+      }
+      await LessonQuiz.destroy({ where: { quizId }, transaction: t });
+
+      if (attemptIds.length > 0) {
+        await QuizAnswer.destroy({ where: { attemptId: { [Op.in]: attemptIds } }, transaction: t });
+      }
+      await QuizResult.destroy({ where: { quizId }, transaction: t });
+      await QuizAttempt.destroy({ where: { quizId }, transaction: t });
+
+      if (questionIds.length > 0) {
+        await AIQuestionOption.destroy({ where: { questionId: { [Op.in]: questionIds } }, transaction: t });
+      }
+      await AIQuestion.destroy({ where: { quizId }, transaction: t });
+
+      // 3. Delete the parent quiz
+      await quiz.destroy({ transaction: t });
+    });
+
+    res.json({ success: true, message: 'Quiz deleted successfully' });
   } catch (e) {
-    console.error('deleteCourseQuiz:', e.message);
-    res.status(500).json({ error: 'Failed to delete quiz' });
+    console.error('deleteCourseQuiz error:', e);
+    res.status(500).json({
+      error: 'Failed to delete quiz',
+      message: e.message || 'Failed to delete quiz'
+    });
   }
 }
 
@@ -794,10 +863,16 @@ async function publishQuizResults(req, res) {
     const quiz = await AIQuiz.findOne({ where: { id: req.params.quizId, courseId: course.id } });
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
-    const force = req.body.force === true || req.query.force === 'true';
+    const force = req.body.force === true || req.body.override === true || req.query.force === 'true';
+    const reason = req.body.reason || null;
     const participantIds = await courseParticipantIds(course.id);
-    const completed = await QuizAttempt.count({
-      where: { quizId: quiz.id, status: 'SUBMITTED' },
+
+    // ✅ FIX: Use QuizResult.count — a result row only exists when a participant
+    // fully completes and is graded, regardless of QuizAttempt.status enum value.
+    // The old code counted QuizAttempt{ status:'SUBMITTED' } which missed
+    // attempts stored as 'EVALUATED' or 'AUTO_SUBMITTED'.
+    const completed = participantIds.length === 0 ? 0 : await QuizResult.count({
+      where: { quizId: quiz.id, participantId: participantIds },
     });
     const pending = participantIds.length - completed;
 
@@ -810,10 +885,37 @@ async function publishQuizResults(req, res) {
       });
     }
 
+    const now = new Date();
+    const trainerId = req.user.id;
+
+    // Mark every QuizResult for this quiz as published
+    await QuizResult.update(
+      { resultPublished: true, publishedAt: now, publishedBy: trainerId },
+      { where: { quizId: quiz.id } }
+    );
+
     await quiz.update({
       resultStatus: 'PUBLISHED',
-      status:       'PUBLISHED',
+      status: 'PUBLISHED',
+      isResultPublished: true,
+      resultPublishedAt: now,
     });
+
+    // Write audit log
+    try {
+      const { QuizResultsAudit } = require('../models');
+      await QuizResultsAudit.create({
+        quizId: quiz.id,
+        action: pending > 0 ? 'override_used' : 'published',
+        performedBy: trainerId,
+        enrolledCount: participantIds.length,
+        completedCount: completed,
+        pendingCount: pending,
+        reason: pending > 0 ? (reason || 'Override used without reason') : null,
+      });
+    } catch (auditErr) {
+      console.warn('[publishQuizResults] Audit log failed (non-fatal):', auditErr.message);
+    }
 
     // Notify all enrolled participants
     const io = req.app.get('io');
@@ -828,7 +930,12 @@ async function publishQuizResults(req, res) {
       }, io).catch(() => {}),
     ));
 
-    res.json({ success: true, message: 'Quiz results published', enrolled: participantIds.length, completed });
+    // Emit real-time leaderboard update
+    if (io) {
+      io.emit('quiz:results:published', { quizId: quiz.id, courseId: course.id });
+    }
+
+    res.json({ success: true, message: 'Quiz results published', enrolled: participantIds.length, completed, published_at: now });
   } catch (e) {
     console.error('publishQuizResults:', e.message);
     res.status(500).json({ error: 'Failed to publish quiz results' });
@@ -844,18 +951,50 @@ async function quizDashboard(req, res) {
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
     const participantIds = await courseParticipantIds(course.id);
-    const completed = participantIds.length === 0 ? 0 : await QuizAttempt.count({
-      where: { quizId: quiz.id, participantId: participantIds, status: 'SUBMITTED' },
+
+    // ✅ FIX: Count participants who have a QuizResult row (fully graded) instead of
+    // counting QuizAttempt{ status:'SUBMITTED' }. The AI quiz flow writes EVALUATED
+    // attempts, which were never counted by the old query — making everyone look PENDING.
+    const completed = participantIds.length === 0 ? 0 : await QuizResult.count({
+      where: { quizId: quiz.id, participantId: participantIds },
     });
     const pending = participantIds.length - completed;
+
+    // Average score and pass rate (only meaningful once some results exist)
+    let averageScore = null;
+    let passRate = null;
+    if (completed > 0) {
+      const { fn, col } = require('sequelize');
+      const agg = await QuizResult.findOne({
+        where: { quizId: quiz.id, participantId: participantIds },
+        attributes: [
+          [fn('AVG', col('percentage')), 'avg'],
+        ],
+        raw: true,
+      });
+      averageScore = agg?.avg != null ? parseFloat(parseFloat(agg.avg).toFixed(1)) : null;
+      // Pass rate: % who scored >= 50 (configurable later via quiz.passScore)
+      const passThreshold = quiz.passScore || 50;
+      const passed = await QuizResult.count({
+        where: {
+          quizId: quiz.id,
+          participantId: participantIds,
+          percentage: { [Op.gte]: passThreshold }
+        },
+      });
+      passRate = completed > 0 ? parseFloat(((passed / completed) * 100).toFixed(1)) : null;
+    }
 
     res.json({
       success: true,
       enrolled: participantIds.length,
       completed,
       pending,
+      averageScore,
+      passRate,
       canPublish: participantIds.length > 0 && pending === 0 && quiz.resultStatus === 'HIDDEN',
       resultStatus: quiz.resultStatus,
+      quizTitle: quiz.title,
     });
   } catch (e) {
     console.error('quizDashboard:', e.message);

@@ -515,6 +515,36 @@
   transform: translateX(3px);
 }
 
+/* ─── Premium Tabs Navigation ────────────────────────────────────── */
+.quizzes-page .qz-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-2);
+  margin-top: 16px;
+  margin-bottom: 24px;
+}
+
+.quizzes-page .qz-tab-btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-3);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 160ms var(--ease-smooth);
+}
+
+.quizzes-page .qz-tab-btn:hover {
+  color: var(--text-2);
+}
+
+.quizzes-page .qz-tab-btn[data-active="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 /* ─── Reduced motion ─────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .quizzes-page * {

@@ -1,10 +1,14 @@
 /**
  * ParticipantMonitorCard — single tile in the trainer dashboard grid.
  *
+ * Shows live screen thumbnail when observed, plus controls to
+ * observe/unobserve and force-terminate.
+ *
  * Theme: white surface, slate borders, blue accents.
  */
+import { useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, Download, Power } from 'lucide-react';
+import { Clock, Download, Power, Eye, EyeOff } from 'lucide-react';
 
 import { proctorApi } from '../api';
 import { GlassCard, StatusDot } from './ui';
@@ -29,14 +33,60 @@ function statusColor(status) {
   }
 }
 
-export default function ParticipantMonitorCard({ session, onTerminate }) {
+export default function ParticipantMonitorCard({
+  session,
+  onTerminate,
+  onObserve,
+  onUnobserve,
+  isObserved,
+  liveStream,
+}) {
   const p = session.participant || {};
-  const warningPct = Math.min(100, ((session.warningsCount || 0) / 5) * 100);
-  const exitsPct = Math.min(100, ((session.fullscreenExits || 0) / 3) * 100);
-  const liveDanger = session.warningsCount >= 4 || session.fullscreenExits >= 2;
+  const maxW = session.maxWarnings || 5;
+  const maxFS = session.maxFullscreenExits || 3;
+  const warningPct = Math.min(100, ((session.warningsCount || 0) / maxW) * 100);
+  const exitsPct = Math.min(100, ((session.fullscreenExits || 0) / maxFS) * 100);
+  const liveDanger = session.warningsCount >= maxW - 1 || session.fullscreenExits >= maxFS - 1;
+  const isDisconnected = !!session.disconnectedAt && !!session.gracePeriodEndsAt;
+  const isGraceExpired = isDisconnected && new Date(session.gracePeriodEndsAt) < new Date();
+
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    if (videoRef.current && liveStream) {
+      const stream = liveStream.screen || liveStream;
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [liveStream]);
 
   return (
     <GlassCard className="p-4">
+      {/* Live screen stream or latest screenshot thumbnail */}
+      {isObserved && liveStream ? (
+        <div className="mb-3 overflow-hidden rounded-lg bg-black aspect-video">
+          <video
+            ref={videoRef}
+            muted
+            playsInline
+            className="h-full w-full object-contain"
+          />
+        </div>
+      ) : session.latestScreenshot ? (
+        <div className="mb-3 overflow-hidden rounded-lg bg-slate-900 border border-slate-200 aspect-video relative group flex items-center justify-center">
+          <img
+            src={session.latestScreenshot}
+            alt={`${p.name || 'Participant'}'s screen`}
+            className="h-full w-full object-contain"
+          />
+          <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <span className="text-[10px] text-white bg-slate-900/80 px-2 py-1 rounded shadow-sm uppercase tracking-wider font-semibold flex items-center gap-1">
+              <Eye className="h-3 w-3" /> Latest Snapshot
+            </span>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -49,8 +99,8 @@ export default function ParticipantMonitorCard({ session, onTerminate }) {
             </div>
           </div>
         </div>
-        <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase ring-1 ${statusColor(session.status)}`}>
-          {session.status}
+        <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase ring-1 ${statusColor(isGraceExpired ? 'TERMINATED' : isDisconnected ? 'PENDING' : session.status)}`}>
+          {isGraceExpired ? 'DISCONNECTED' : isDisconnected ? 'RECONNECTING' : session.status}
         </span>
       </div>
 
@@ -59,12 +109,13 @@ export default function ParticipantMonitorCard({ session, onTerminate }) {
         <StatusDot ok={session.isOnline} label={session.isOnline ? 'Online' : 'Offline'} />
         <StatusDot ok={session.isFullscreen} label="FS" />
         <StatusDot ok={session.isScreenSharing} label="Share" />
+        {isObserved && <StatusDot ok label="Live" />}
       </div>
 
       {/* meters */}
       <div className="mt-3 space-y-2">
-        <Meter label="Warnings" value={session.warningsCount || 0} max={5} pct={warningPct} />
-        <Meter label="FS exits" value={session.fullscreenExits || 0} max={3} pct={exitsPct} danger />
+        <Meter label="Warnings" value={session.warningsCount || 0} max={maxW} pct={warningPct} />
+        <Meter label="FS exits" value={session.fullscreenExits || 0} max={maxFS} pct={exitsPct} danger />
       </div>
 
       {/* footer */}
@@ -74,6 +125,22 @@ export default function ParticipantMonitorCard({ session, onTerminate }) {
           {timeAgo(session.lastHeartbeatAt || session.startedAt)}
         </span>
         <div className="flex gap-1.5">
+          {/* Observe/Unobserve toggle */}
+          {session.isScreenSharing && session.status === 'ACTIVE' && (
+            <button
+              onClick={() => isObserved ? onUnobserve?.(session.sessionId) : onObserve?.(session.sessionId)}
+              className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 transition ${
+                isObserved
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+              title={isObserved ? 'Stop observing' : 'Observe screen'}
+            >
+              {isObserved ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+              {isObserved ? 'Live' : 'Observe'}
+            </button>
+          )}
+
           <a
             href={proctorApi.exportLogsUrl(session.sessionId)}
             target="_blank" rel="noreferrer"
@@ -93,6 +160,13 @@ export default function ParticipantMonitorCard({ session, onTerminate }) {
           )}
         </div>
       </div>
+
+      {/* grace period indicator */}
+      {isDisconnected && (
+        <div className="mt-2 rounded-md bg-amber-50 border border-amber-200 px-2 py-1 text-[10px] text-amber-700">
+          Disconnected — grace period until {new Date(session.gracePeriodEndsAt).toLocaleTimeString()}
+        </div>
+      )}
 
       {/* danger flash */}
       {liveDanger && (

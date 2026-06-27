@@ -19,6 +19,7 @@ import ProfileSection from '../components/student/profile/ProfileSection'
 import ParticipantCourses from './ParticipantCourses'
 import ParticipantCodingList from '../components/coding-assessment/ParticipantCodingList'
 import { useContinueLearning } from '../hooks/useContinueLearning'
+import { useSocketEvent } from '../hooks/useSocket'
 
 const fadeVariant = {
   initial: { opacity: 0, y: 8 },
@@ -114,6 +115,14 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       console.error('fetchQuizzes error:', e.message)
     }
   }, [auth, handleResponse])
+
+  useSocketEvent('quiz:published', () => {
+    fetchQuizzes()
+  }, [fetchQuizzes])
+
+  useSocketEvent('quiz:results:published', () => {
+    fetchQuizzes()
+  }, [fetchQuizzes])
 
   const fetchAll = useCallback(() => {
     fetchTrainings(); fetchEnrollments(); fetchFeedbacks(); fetchQuizzes(); fetchParticipantReport()

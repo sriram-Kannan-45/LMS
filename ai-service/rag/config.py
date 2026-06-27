@@ -19,7 +19,9 @@ class RAGConfig:
     embedding_fallback_model = os.getenv("EMBEDDING_FALLBACK_MODEL", "intfloat/e5-large-v2")
     max_generation_retries = int(os.getenv("AI_JSON_RETRY_COUNT", "3"))
     faiss_index_dir = Path(os.getenv("FAISS_INDEX_DIR", "vector_store")).resolve()
-    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    raw_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    gemini_model = "gemini-2.5-pro" if "pro" in raw_model.lower() else "gemini-2.5-flash"
+    gemini_context_limit_chars = int(os.getenv("GEMINI_CONTEXT_LIMIT_CHARS", "150000"))
     gemini_api_key = os.getenv("GEMINI_API_KEY", "")
     env_file = ENV_FILE
 

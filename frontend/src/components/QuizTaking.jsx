@@ -30,10 +30,13 @@ import {
   ShieldAlert,
   ShieldCheck,
   XCircle,
+  MonitorPlay,
 } from 'lucide-react'
 import { useToast } from './Toast'
 import { API_BASE } from '../api/api'
 import { getAuthHeaders } from '../api/request'
+import { useQuizProtection } from '../hooks/useQuizProtection.jsx'
+import QuizWatermark from './ai-quizzes/QuizWatermark'
 import '../styles/quiz-taking.css'
 
 const MAX_WARNINGS = 3
@@ -97,7 +100,7 @@ function ProgressRing({ percent, size = 132 }) {
 /* ──────────────────────────────────────────────────────────────────────────
    MAIN COMPONENT
    ────────────────────────────────────────────────────────────────────────── */
-function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
+function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isStandardQuiz = false, screenStream, examSession, onScreenShareResumed }) {
   const { error: showError, success: showSuccess } = useToast()
 
   /* ── Question / answer state ─────────────────────────────────────────── */
@@ -106,7 +109,11 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
   const [timeLeft, setTimeLeft] = useState((quizData?.timeLimit || 30) * 60)
   const [submitting, setSubmitting] = useState(false)
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false)
+  const [attemptInvalidMsg, setAttemptInvalidMsg] = useState(null)
   const timerRef = useRef(null)
+
+  /* ── Post-submit result state ────────────────── */
+  const [resultData, setResultData] = useState(null)
 
   /* ── Fullscreen + warning state ──────────────────────────────────────── */
   const [isFullscreen, setIsFullscreen] = useState(!!fsApi.element())
@@ -120,6 +127,39 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
   const enteredFullscreenOnce = useRef(!!fsApi.element())
   const submittedRef = useRef(false)
 
+  /* ── Screen share monitoring state ───────────────────────────────────── */
+  const [isScreenSharing, setIsScreenSharing] = useState(!!screenStream)
+  const [screenShareError, setScreenShareError] = useState(null)
+  const [isPaused, setIsPaused] = useState(false)
+  const reconnectTimeoutRef = useRef(null)
+  const SCREEN_SHARE_RECONNECT_TIMEOUT_MS = 30000
+
+  const userData = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || '{}')
+    } catch {
+      return {}
+    }
+  }, [])
+
+  const { containerRef, renderModals, violationCount: copyViolationCount, disqualified: isCopyDisqualified } = useQuizProtection({
+    attemptId,
+    quiz: quizData,
+    initialViolationCount: quizData?.initialViolationCount || 0,
+    initialStatus: quizData?.initialStatus || 'IN_PROGRESS',
+    answers,
+    onSubmit: () => {
+      if (fsApi.element()) {
+        try { fsApi.exit() } catch {}
+      }
+      onSubmit?.(null)
+    },
+    currentQ,
+    enabled: quizData?.copyProtectionEnabled ?? true,
+    participantName: userData?.name || '',
+    participantId: String(userData?.id || ''),
+  })
+
   const questions = quizData?.questions || []
   const total = questions.length
   const q = questions[currentQ]
@@ -130,6 +170,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
       if (submitting || submittedRef.current) return
       submittedRef.current = true
       setSubmitting(true)
+      setShowConfirmSubmit(false)
       const answerArray = Object.entries(answers).map(([questionId, val]) => ({
         questionId: parseInt(questionId),
         selectedOption: val.selectedOption !== undefined ? val.selectedOption : null,
@@ -146,25 +187,38 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
         const headers = { ...getAuthHeaders(), 'Content-Type': 'application/json' }
         if (token) headers['X-Assessment-Session'] = token
 
-        const r = await fetch(`${API_BASE}/ai-quiz/participant/submit/${attemptId}`, {
+        const submitUrl = isStandardQuiz
+          ? `${API_BASE}/participant/quizzes/${quizId}/submit`
+          : `${API_BASE}/ai-quiz/participant/submit/${attemptId}`
+
+        const body = isStandardQuiz
+          ? JSON.stringify({ attemptId, answers: answerArray })
+          : JSON.stringify({ answers: answerArray })
+
+        const r = await fetch(submitUrl, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ answers: answerArray }),
+          body,
         })
         const d = await r.json()
         if (!r.ok) throw new Error(d.error || 'Submit failed')
-        // Best-effort exit fullscreen so result page renders normally.
+        
+        // Best-effort exit fullscreen so result summary renders normally.
         if (fsApi.element()) { try { await fsApi.exit() } catch { /* ignore */ } }
         if (!silent) showSuccess('Quiz submitted successfully!')
-        onSubmit?.(d.result)
+        // Don't pass score data — results are hidden until trainer publishes.
+        setResultData({ status: 'PENDING_RESULT' })
       } catch (err) {
         submittedRef.current = false
-        if (!silent) showError('Failed to submit quiz: ' + err.message)
         setSubmitting(false)
+        console.error('[QuizTaking] Submit failed:', err)
+        if (!silent) {
+          showError(err.message || 'Submission failed. Please try again.')
+        }
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [answers, attemptId, onSubmit, submitting, showError, showSuccess]
+    [answers, attemptId, isStandardQuiz, quizId, onSubmit, submitting, showError, showSuccess]
   )
 
   /* ── Auto-fullscreen on mount ────────────────────────────────────────── */
@@ -234,8 +288,141 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
     }
   }, [terminated, handleSubmit, onSubmit])
 
+  /* ── Screen share violation reporting ──────────────────────────────── */
+  const reportViolation = useCallback(async (type, message) => {
+    if (!examSession?.sessionId || !examSession?.sessionToken) return
+    console.log('[QuizTaking] Reporting violation:', type)
+    try {
+      await fetch(`${API_BASE}/proctor/sessions/${examSession.sessionId}/violation`, {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+          'X-Proctor-Session-Token': examSession.sessionToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type, message }),
+      })
+    } catch (e) {
+      console.warn('[QuizTaking] Violation report failed:', e)
+    }
+  }, [examSession])
+
+  /* ── Screen share reconnect / auto-submit ──────────────────────────── */
+  const startReconnectTimer = useCallback(() => {
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current)
+    reconnectTimeoutRef.current = setTimeout(() => {
+      console.log('[QuizTaking] Screen share not restored; auto-submitting quiz')
+      reportViolation('SCREEN_SHARE_STOPPED', 'Auto-submitted: screen share not restored in time')
+      handleSubmit({ silent: true }).finally(() => {
+        onSubmit?.(null)
+      })
+    }, SCREEN_SHARE_RECONNECT_TIMEOUT_MS)
+  }, [handleSubmit, onSubmit, reportViolation])
+
+  const resumeScreenShare = useCallback(async () => {
+    console.log('[QuizTaking] Attempting to resume screen share...')
+    try {
+      const newStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'always' },
+        audio: false,
+      })
+      const track = newStream.getVideoTracks()[0]
+      track.addEventListener('ended', () => {
+        console.log('[QuizTaking] Resumed screen share track ended again')
+        setIsScreenSharing(false)
+        setIsPaused(true)
+        setScreenShareError('Screen sharing stopped again. Please resume.')
+        reportViolation('SCREEN_SHARE_STOPPED', 'Participant stopped screen sharing again')
+        startReconnectTimer()
+      })
+      setIsScreenSharing(true)
+      setIsPaused(false)
+      setScreenShareError(null)
+      console.log('[QuizTaking] Screen share resumed')
+      onScreenShareResumed?.(newStream)
+    } catch (err) {
+      console.error('[QuizTaking] Resume screen share failed:', err)
+      setScreenShareError('Screen share required. Retry or the quiz will auto-submit.')
+    }
+  }, [onScreenShareResumed, reportViolation, startReconnectTimer])
+
+  /* ── Watch screen share stream lifecycle ───────────────────────────── */
+  useEffect(() => {
+    console.log('[QuizTaking] Mounted — waiting for screen stream')
+    return () => {
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!screenStream) {
+      setIsScreenSharing(false)
+      return
+    }
+    setIsScreenSharing(true)
+    setScreenShareError(null)
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current)
+    console.log('[QuizTaking] Screen stream attached')
+
+    const track = screenStream.getVideoTracks()[0]
+    if (!track) return
+
+    const onEnded = () => {
+      console.log('[QuizTaking] Screen share track ended')
+      setIsScreenSharing(false)
+      setIsPaused(true)
+      setScreenShareError('Screen sharing stopped. Please resume sharing to continue.')
+      reportViolation('SCREEN_SHARE_STOPPED', 'Participant stopped screen sharing')
+      startReconnectTimer()
+    }
+
+    track.addEventListener('ended', onEnded)
+
+    return () => {
+      track.removeEventListener('ended', onEnded)
+    }
+  }, [screenStream, reportViolation, startReconnectTimer])
+
+  /* ── Status verification on question change ────────────────────────── */
+  useEffect(() => {
+    if (submittedRef.current || terminated || !attemptId) return
+
+    const verifyAttemptStatus = async () => {
+      try {
+        console.log(`[QuizTaking] Verifying attempt status for attemptId: ${attemptId} on question change to: ${currentQ}`)
+        const res = await fetch(`${API_BASE}/quizzes/attempts/${attemptId}`, {
+          headers: getAuthHeaders()
+        })
+        if (!res.ok) {
+          if (res.status === 404) {
+            setAttemptInvalidMsg('This attempt was not found on the server.')
+            setTerminated(true)
+          }
+          return
+        }
+        const data = await res.json()
+        const attempt = data.attempt
+        if (attempt) {
+          if (attempt.status === 'SUBMITTED' || attempt.status === 'EVALUATED') {
+            setAttemptInvalidMsg('This attempt has already been submitted.')
+            setTerminated(true)
+          } else if (attempt.status === 'disqualified_copy_violation' || attempt.status === 'disqualified_policy_violation') {
+            setAttemptInvalidMsg('You have been disqualified for repeated policy violations.')
+            setTerminated(true)
+          }
+        }
+      } catch (err) {
+        console.error('[QuizTaking] Failed to verify attempt status:', err)
+      }
+    }
+
+    verifyAttemptStatus()
+  }, [currentQ, attemptId, terminated])
+
   /* ── Countdown timer ─────────────────────────────────────────────────── */
   useEffect(() => {
+    if (isCopyDisqualified) return
+    if (isPaused) return
     if (timeLeft <= 0) {
       handleSubmit()
       return
@@ -252,11 +439,55 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
     }, 1000)
     return () => clearInterval(timerRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCopyDisqualified, isPaused])
+
+  /* ── Autosave to localStorage ─────────────────────────────────────────── */
+  const PROGRESS_KEY = `quiz_progress_${attemptId}`
+  const autosaveTimerRef = useRef(null)
+
+  // Restore saved answers on mount
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(PROGRESS_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.answers && Object.keys(parsed.answers).length > 0) {
+          setAnswers(parsed.answers)
+        }
+        if (typeof parsed.currentQ === 'number' && parsed.currentQ > 0) {
+          setCurrentQ(parsed.currentQ)
+        }
+      }
+
+
+    } catch { /* ignore corrupt data */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Debounced save whenever answers or currentQ change
+  useEffect(() => {
+    if (submittedRef.current) return
+    clearTimeout(autosaveTimerRef.current)
+    autosaveTimerRef.current = setTimeout(() => {
+      try {
+        sessionStorage.setItem(PROGRESS_KEY, JSON.stringify({ answers, currentQ }))
+      } catch { /* storage full — ignore */ }
+    }, 2000)
+    return () => clearTimeout(autosaveTimerRef.current)
+  }, [answers, currentQ, PROGRESS_KEY])
+
+  // Clear saved progress on submit
+  useEffect(() => {
+    if (submittedRef.current) {
+      try { sessionStorage.removeItem(PROGRESS_KEY) } catch { /* ignore */ }
+    }
+  }, [PROGRESS_KEY])
+
   /* ── Helpers / derived state ─────────────────────────────────────────── */
-  const handleAnswer = (questionId, value) =>
+  const handleAnswer = (questionId, value) => {
+    if (submitting || isCopyDisqualified) return
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
+  }
 
   const answeredCount = Object.keys(answers).length
   const unansweredCount = Math.max(0, total - answeredCount)
@@ -313,6 +544,11 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
   /* ── Render ─────────────────────────────────────────────────────────── */
   return (
     <div className="qt-app" role="main" aria-label="Exam in progress">
+      <QuizWatermark
+        participantName={userData?.name || ''}
+        participantId={String(userData?.id || '')}
+      />
+      {renderModals()}
       {/* ─── HEADER ──────────────────────────────────────────────────── */}
       <header className="qt-header">
         <div className="qt-header__row">
@@ -324,16 +560,18 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
           </div>
 
           <div className="qt-header__meta">
-            {warnings > 0 && (
+            {(warnings > 0 || copyViolationCount > 0) && (
               <span
                 className={[
                   'qt-warn-badge',
-                  warnings >= 2 ? 'qt-warn-badge--danger' : 'qt-warn-badge--warn',
+                  (warnings >= 2 || copyViolationCount >= (quizData?.maxCopyWarnings || 3) - 1) ? 'qt-warn-badge--danger' : 'qt-warn-badge--warn',
                 ].join(' ')}
                 aria-live="assertive"
               >
                 <AlertTriangle size={13} aria-hidden />
-                {warnings}/{MAX_WARNINGS} warnings
+                {warnings > 0 && `Exit: ${warnings}/${MAX_WARNINGS}`}
+                {warnings > 0 && copyViolationCount > 0 && ' | '}
+                {copyViolationCount > 0 && `Copy: ${copyViolationCount}/${quizData?.maxCopyWarnings || 3}`}
               </span>
             )}
             <span
@@ -372,6 +610,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
         <main className="qt-main">
           <AnimatePresence mode="wait">
             <motion.article
+              ref={containerRef}
               key={q.id}
               initial={{ opacity: 0, x: 12 }}
               animate={{ opacity: 1, x: 0 }}
@@ -398,6 +637,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
                         <button
                           type="button"
                           role="radio"
+                          disabled={submitting || isCopyDisqualified}
                           aria-checked={selected}
                           onClick={() => handleAnswer(q.id, { selectedOption: idx })}
                           className={['qt-option', selected ? 'qt-option--selected' : ''].join(' ')}
@@ -416,6 +656,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
                 <div className="qt-fillblank-container">
                   <input
                     type="text"
+                    disabled={submitting || isCopyDisqualified}
                     className="qt-textarea"
                     style={{ height: '48px', padding: '12px 16px', resize: 'none' }}
                     placeholder="Type the word that fits the blank..."
@@ -440,6 +681,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
                           <div className="qt-matching-row__arrow" style={{ color: '#94a3b8' }}>→</div>
                           <div className="qt-matching-row__right" style={{ flex: '1.5' }}>
                             <select
+                              disabled={submitting || isCopyDisqualified}
                               value={selectedRight}
                               onChange={(e) => {
                                 const currentMatches = answers[q.id]?.matches || {};
@@ -476,6 +718,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
                 </div>
               ) : (
                 <textarea
+                  disabled={submitting || isCopyDisqualified}
                   className="qt-textarea"
                   placeholder="Type your answer here…"
                   value={answers[q.id]?.answerText || ''}
@@ -492,7 +735,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
               type="button"
               className="qt-foot__btn qt-foot__btn--ghost"
               onClick={goPrev}
-              disabled={currentQ === 0}
+              disabled={currentQ === 0 || submitting || isCopyDisqualified}
             >
               <ChevronLeft size={16} /> Previous
             </button>
@@ -502,6 +745,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
                 <button
                   key={idx}
                   type="button"
+                  disabled={submitting || isCopyDisqualified}
                   onClick={() => setCurrentQ(idx)}
                   aria-label={`Go to question ${idx + 1}`}
                   className={[
@@ -521,6 +765,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
                 type="button"
                 className="qt-foot__btn qt-foot__btn--primary"
                 onClick={goNext}
+                disabled={submitting || isCopyDisqualified}
               >
                 Next <ChevronRight size={16} />
               </button>
@@ -529,7 +774,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
                 type="button"
                 className="qt-foot__btn qt-foot__btn--primary"
                 onClick={() => setShowConfirmSubmit(true)}
-                disabled={submitting}
+                disabled={submitting || isCopyDisqualified}
               >
                 <Send size={15} /> Submit
               </button>
@@ -564,6 +809,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
                   <button
                     key={question.id}
                     type="button"
+                    disabled={submitting || isCopyDisqualified}
                     onClick={() => setCurrentQ(idx)}
                     aria-label={`Question ${idx + 1}${answered ? ' answered' : ''}${current ? ' current' : ''}`}
                     aria-current={current ? 'true' : undefined}
@@ -584,7 +830,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
             type="button"
             className="qt-submit-btn"
             onClick={() => setShowConfirmSubmit(true)}
-            disabled={submitting}
+            disabled={submitting || submittedRef.current || isCopyDisqualified}
           >
             <CheckCircle2 size={15} /> Submit quiz
           </button>
@@ -656,8 +902,8 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
                 <button
                   type="button"
                   className="qt-foot__btn qt-foot__btn--primary"
-                  onClick={() => { setShowConfirmSubmit(false); handleSubmit() }}
-                  disabled={submitting}
+                  onClick={() => { handleSubmit() }}
+                  disabled={submitting || submittedRef.current}
                 >
                   {submitting ? (<><Loader size={15} className="qt-spin" /> Submitting…</>) : (<><CheckCircle2 size={15} /> Submit now</>)}
                 </button>
@@ -730,12 +976,147 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
               </div>
               <h2 id="qt-term-title" className="qt-modal__title">Exam terminated</h2>
               <p className="qt-modal__desc">
-                You exited fullscreen {MAX_WARNINGS} times. Your attempt has been
-                automatically submitted with the answers you provided.
+                {attemptInvalidMsg || `You exited fullscreen ${MAX_WARNINGS} times. Your attempt has been automatically submitted with the answers you provided.`}
               </p>
               <div className="qt-modal__hint">
-                <Loader size={14} className="qt-spin" /> Returning to your dashboard…
+                {attemptInvalidMsg ? (
+                  <button
+                    type="button"
+                    className="qt-foot__btn qt-foot__btn--primary"
+                    onClick={() => {
+                      if (fsApi.element()) { try { fsApi.exit() } catch {} }
+                      onSubmit?.(null)
+                    }}
+                    style={{ margin: '12px auto 0', justifyContent: 'center' }}
+                  >
+                    Return to Dashboard
+                  </button>
+                ) : (
+                  <><Loader size={14} className="qt-spin" /> Returning to your dashboard…</>
+                )}
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Screen share paused overlay ───────────────────────────────── */}
+      <AnimatePresence>
+        {isPaused && !terminated && (
+          <motion.div
+            key="pause-bg"
+            className="qt-modal-bg qt-modal-bg--terminate"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              role="alertdialog"
+              aria-labelledby="qt-pause-title"
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              className="qt-modal qt-modal--terminate"
+              style={{ maxWidth: 440 }}
+            >
+              <div className="qt-modal__icon-wrap qt-modal__icon-wrap--danger">
+                <MonitorPlay size={32} />
+              </div>
+              <h2 id="qt-pause-title" className="qt-modal__title">Screen sharing paused</h2>
+              <p className="qt-modal__desc">
+                {screenShareError || 'You must share your screen to continue the assessment.'}
+              </p>
+              <p className="qt-modal__desc" style={{ fontSize: 12, color: '#94a3b8', marginTop: -8 }}>
+                The quiz will auto-submit if screen sharing is not resumed within 30 seconds.
+              </p>
+              <div className="qt-modal__actions" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
+                <button
+                  type="button"
+                  className="qt-foot__btn qt-foot__btn--primary qt-foot__btn--block"
+                  onClick={resumeScreenShare}
+                  autoFocus
+                >
+                  <MonitorPlay size={15} /> Resume Screen Sharing
+                </button>
+                <button
+                  type="button"
+                  className="qt-foot__btn qt-foot__btn--ghost qt-foot__btn--block"
+                  onClick={() => {
+                    if (fsApi.element()) { try { fsApi.exit() } catch {} }
+                    onSubmit?.(null)
+                  }}
+                >
+                  Cancel Assessment
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Post-submit success page ──────────────────────────────────── */}
+      <AnimatePresence>
+        {resultData && (
+          <motion.div
+            key="result-bg"
+            className="qt-modal-bg"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              role="dialog"
+              aria-labelledby="qt-result-title"
+              initial={{ scale: 0.95, opacity: 0, y: 16 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 16 }}
+              className="qt-modal qt-modal--result"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: 440, textAlign: 'center' }}
+            >
+              <div
+                className="qt-modal__icon-wrap"
+                style={{
+                  width: 64, height: 64, borderRadius: '50%',
+                  background: '#ecfdf5',
+                  color: '#16a34a',
+                  margin: '0 auto 16px', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <CheckCircle2 size={32} />
+              </div>
+              <h2 id="qt-result-title" className="qt-modal__title" style={{ fontSize: 20 }}>
+                Quiz Submitted Successfully
+              </h2>
+              <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6, marginTop: 12, marginBottom: 4 }}>
+                Your answers have been saved successfully.
+              </p>
+              <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>
+                Please wait until your trainer publishes the results.
+              </p>
+              <div style={{
+                background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
+                padding: '12px 16px', marginBottom: 16, display: 'inline-flex',
+                alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#92400e'
+              }}>
+                <span style={{ fontSize: 16 }}>🟡</span>
+                Waiting for Result Publication
+              </div>
+              <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.7, marginBottom: 20 }}>
+                Once the results are published, you will be able to view:<br />
+                • Your Score &amp; Percentage<br />
+                • Rank &amp; Leaderboard<br />
+                • Correct Answers (if enabled)
+              </div>
+              <button
+                type="button"
+                className="qt-foot__btn qt-foot__btn--primary"
+                onClick={() => { setResultData(null); onSubmit?.(resultData) }}
+                style={{ marginTop: 4, width: '100%', justifyContent: 'center' }}
+              >
+                Back to Dashboard
+              </button>
             </motion.div>
           </motion.div>
         )}

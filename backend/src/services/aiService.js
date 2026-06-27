@@ -81,7 +81,12 @@ function buildAIError(error) {
   if (error.response) {
     const detail = error.response.data?.detail || error.response.data?.error || '';
     if (error.response.status === 415) return new Error(`File type not supported: ${detail}`);
-    if (error.response.status === 422) return new Error(`Validation error: ${detail}`);
+    if (error.response.status === 422) {
+      if (detail && detail.includes("Document contains insufficient text")) {
+        return new Error("Document contains insufficient text.");
+      }
+      return new Error(`Validation error: ${detail}`);
+    }
     if (error.response.status === 502) return new Error(`AI generation failed: ${detail}`);
     return new Error(`AI service error (${error.response.status}): ${detail || error.response.statusText}`);
   }
@@ -138,7 +143,7 @@ const aiService = {
   async generateQuizFromText(content, numQuestions = 10, difficulty = 'MIXED') {
     const cleanContent = (content || '').toString().replace(/\u0000/g, '').trim();
     if (!cleanContent || cleanContent.length < 50) {
-      throw new Error('Document text is too short to generate a quiz. Minimum 50 characters required.');
+      throw new Error('Document contains insufficient text.');
     }
     return callRagGeneration({
       text: cleanContent,

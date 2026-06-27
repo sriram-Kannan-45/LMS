@@ -30,17 +30,25 @@ import useExamTimer from '../hooks/useExamTimer';
 import useAntiCheat from '../hooks/useAntiCheat';
 import useTabVisibility from '../hooks/useTabVisibility';
 import useFullscreen from '../hooks/useFullscreen';
+import useNetworkStatus from '../hooks/useNetworkStatus';
+import useProctoringMedia from '../hooks/useProctoringMedia';
+import useDeviceFingerprint from '../hooks/useDeviceFingerprint';
 
 import TopBar from './TopBar';
 import QuestionNavigator from './QuestionNavigator';
 import QuestionCard from './QuestionCard';
 import StatsFooter from './StatsFooter';
 
+import SecurityBanner from '../components/SecurityBanner';
+import TerminatedScreen from '../components/TerminatedScreen';
+import { WifiOff, Lock } from 'lucide-react';
+
 const AUTOSAVE_MS = 8_000;
 
 export default function ExamShell({ sessionId, onSubmitted }) {
   const navigate = useNavigate();
   const proctor = useProctor();
+  const fp = useDeviceFingerprint();
   const { success: toastSuccess, error: toastError, warning: toastWarning, info: toastInfo } = useToast();
 
   // ── Hydration state ────────────────────────────────────────────────────
@@ -89,8 +97,64 @@ export default function ExamShell({ sessionId, onSubmitted }) {
 
     (async () => {
       try {
-        const token = await ensureToken();
-        const payload = await proctorApi.getExamData(sessionId, token);
+        let token;
+        try {
+          token = await ensureToken();
+        } catch (e) {
+          // If ensureToken fails (no active session found), try to fetch the session details to see if it's expired/ended
+          console.log('[ExamShell] Active session not found; fetching details to see if we should recreate...');
+          const oldSession = await proctorApi.getSession(sessionId);
+          if (oldSession && ['EXPIRED', 'TERMINATED'].includes(oldSession.status)) {
+            console.log('[ExamShell] Session expired/terminated; recreating a new session...');
+            const newSession = await proctor.start({
+              quizId: oldSession.quizId,
+              attemptId: oldSession.attemptId,
+              fingerprintHash: fp,
+              screenSharing: true,
+            });
+            await proctor.activate(newSession.sessionId, newSession.sessionToken);
+            if (alive) {
+              navigate(`/exam/${newSession.sessionId}`, { replace: true });
+            }
+            return;
+          } else if (oldSession && oldSession.status === 'SUBMITTED') {
+            if (alive) {
+              navigate(`/exam/${sessionId}/result`, { replace: true });
+            }
+            return;
+          }
+          throw e;
+        }
+
+        let payload;
+        try {
+          payload = await proctorApi.getExamData(sessionId, token);
+        } catch (e) {
+          // If request fails because session ended/expired, try to recreate
+          if (e.status === 410 || e.status === 403) {
+            const oldSession = await proctorApi.getSession(sessionId);
+            if (oldSession && ['EXPIRED', 'TERMINATED', 'SUBMITTED'].includes(oldSession.status)) {
+              if (oldSession.status === 'SUBMITTED') {
+                if (alive) navigate(`/exam/${sessionId}/result`, { replace: true });
+                return;
+              }
+              console.log('[ExamShell] Session expired/terminated; recreating a new session...');
+              const newSession = await proctor.start({
+                quizId: oldSession.quizId,
+                attemptId: oldSession.attemptId,
+                fingerprintHash: fp,
+                screenSharing: true,
+              });
+              await proctor.activate(newSession.sessionId, newSession.sessionToken);
+              if (alive) {
+                navigate(`/exam/${newSession.sessionId}`, { replace: true });
+              }
+              return;
+            }
+          }
+          throw e;
+        }
+
         if (!alive) return;
 
         setData(payload);
@@ -119,10 +183,56 @@ export default function ExamShell({ sessionId, onSubmitted }) {
 
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, fp]);
 
   // ── 2. Server-driven countdown ────────────────────────────────────────
-  const timeLeft = useExamTimer(session?.endsAt, {
+  const isOnline = useNetworkStatus();
+  const proctorMedia = useProctoringMedia({ enabled: proctor.isActive });
+  const [offlineOffset, setOfflineOffset] = useState(0);
+  const [offlineSeconds, setOfflineSeconds] = useState(0);
+
+  // Monitor offline duration and adjust offset
+  useEffect(() => {
+    if (!proctor.isActive || isOnline) {
+      setOfflineSeconds(0);
+      return;
+    }
+
+    // Report network lost immediately when we go offline during active exam
+    proctor.report('NETWORK_LOST');
+    proctor.pushState({ isOnline: false });
+
+    const interval = setInterval(() => {
+      setOfflineOffset(prev => prev + 1000);
+      setOfflineSeconds(prev => {
+        const next = prev + 1;
+        if (next >= 30) {
+          clearInterval(interval);
+          void proctor.terminate('reconnection_timeout_exceeded');
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isOnline, proctor.isActive, proctor]);
+
+  // Sync isOnline to proctor state when it changes to true
+  useEffect(() => {
+    if (!proctor.isActive) return;
+    if (isOnline) {
+      proctor.pushState({ isOnline: true });
+    }
+  }, [isOnline, proctor.isActive, proctor]);
+
+  // Adjust endsAt based on offline offset to pause the local countdown
+  const adjustedEndsAt = useMemo(() => {
+    if (!session?.endsAt) return null;
+    if (offlineOffset === 0) return session.endsAt;
+    return new Date(new Date(session.endsAt).getTime() + offlineOffset).toISOString();
+  }, [session?.endsAt, offlineOffset]);
+
+  const timeLeft = useExamTimer(adjustedEndsAt, {
     onExpire: () => { void submitExam(); },
   });
 
@@ -146,10 +256,27 @@ export default function ExamShell({ sessionId, onSubmitted }) {
     onViolation: (type, meta) => proctor.report(type, undefined, meta),
   });
 
+  const isBlurredRef = useRef(false);
+
   useTabVisibility({
     enabled: isActive && !submitting,
-    onHidden: () => proctor.report('TAB_SWITCH'),
-    onBlur:   () => proctor.report('WINDOW_BLUR'),
+    onHidden: () => {
+      if (isBlurredRef.current) {
+        proctor.report('BROWSER_MINIMIZE', 'Browser was minimized or window lost focus.');
+      } else {
+        proctor.report('TAB_SWITCH', 'Participant switched tabs.');
+      }
+    },
+    onBlur: () => {
+      isBlurredRef.current = true;
+      proctor.report('WINDOW_BLUR', 'Exam window lost focus.');
+    },
+    onFocus: () => {
+      isBlurredRef.current = false;
+    },
+    onShown: () => {
+      isBlurredRef.current = false;
+    }
   });
 
   useFullscreen({
@@ -160,6 +287,42 @@ export default function ExamShell({ sessionId, onSubmitted }) {
       try { await document.documentElement.requestFullscreen?.(); } catch { /* user has to re-enter manually */ }
     },
   });
+
+  // MOUSE_LEAVE violation detection: mouse leaves viewport for > 1 second, rate-limited to 5s
+  useEffect(() => {
+    if (!isActive || submitting) return;
+
+    let leaveTimeout = null;
+    let lastReportTime = 0;
+
+    const handleMouseLeave = () => {
+      if (leaveTimeout) clearTimeout(leaveTimeout);
+
+      leaveTimeout = setTimeout(() => {
+        const now = Date.now();
+        if (now - lastReportTime >= 5000) {
+          proctor.report('MOUSE_LEAVE', 'Cursor left the exam environment.');
+          lastReportTime = now;
+        }
+      }, 1000);
+    };
+
+    const handleMouseEnter = () => {
+      if (leaveTimeout) {
+        clearTimeout(leaveTimeout);
+        leaveTimeout = null;
+      }
+    };
+
+    document.addEventListener('mouseleave', handleMouseLeave);
+    document.addEventListener('mouseenter', handleMouseEnter);
+
+    return () => {
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      document.removeEventListener('mouseenter', handleMouseEnter);
+      if (leaveTimeout) clearTimeout(leaveTimeout);
+    };
+  }, [isActive, submitting, proctor]);
 
   // ── 4. beforeunload guard (prevent accidental refresh losing answers) ─
   useEffect(() => {
@@ -262,6 +425,15 @@ export default function ExamShell({ sessionId, onSubmitted }) {
     }
   }, [session, answers, onSubmitted, navigate, toastSuccess, toastError]);
 
+  if (proctor.isTerminated) {
+    return (
+      <TerminatedScreen
+        reason={proctor.session?.terminationReason}
+        onExit={() => navigate('/participant')}
+      />
+    );
+  }
+
   // ── 8. Loading / error states ─────────────────────────────────────────
   if (loading) return <ExamLoading />;
   if (loadError) return <ExamError message={loadError} onRetry={() => window.location.reload()} />;
@@ -290,7 +462,8 @@ export default function ExamShell({ sessionId, onSubmitted }) {
   };
 
   return (
-    <div className="eq-shell">
+    <div className="eq-shell" style={proctor.isActive ? { paddingTop: '36px' } : {}}>
+      <SecurityBanner />
       <TopBar
         title={data.quiz?.title}
         onSubmit={() => {
@@ -347,6 +520,67 @@ export default function ExamShell({ sessionId, onSubmitted }) {
         autoSubmit={typeof timeLeft === 'number' ? 'On' : 'Off'}
         examMode={proctor.isActive ? 'Secure' : 'Standard'}
       />
+
+      {/* Floating picture-in-picture webcam self-view */}
+      {proctor.isActive && proctorMedia.stream && (
+        <div className="fixed bottom-16 right-4 z-50 overflow-hidden h-28 w-28 rounded-2xl border-2 border-white bg-black shadow-2xl ring-1 ring-slate-200/50 sm:bottom-20 sm:right-6 transition-all hover:scale-105">
+          <video
+            ref={(el) => {
+              if (el && proctorMedia.stream) {
+                el.srcObject = proctorMedia.stream;
+                el.play().catch(() => {});
+              }
+            }}
+            muted
+            playsInline
+            className="h-full w-full object-cover scale-x-[-1]"
+          />
+          {/* Subtle live indicator */}
+          <div className="absolute top-1.5 left-1.5 flex items-center gap-1 rounded-full bg-black/40 px-1.5 py-0.5 backdrop-blur-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[8px] font-bold text-white uppercase tracking-wider">Live</span>
+          </div>
+        </div>
+      )}
+
+      {/* Offline reconnecting overlay */}
+      {!isOnline && proctor.isActive && (
+        <div className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-md text-white p-6">
+          <div className="max-w-md w-full text-center bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl animate-fade-up">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-500 mb-6 animate-bounce">
+              <WifiOff className="h-8 w-8" />
+            </div>
+            <h3 className="text-2xl font-bold tracking-tight text-white">Connection Lost</h3>
+            <p className="mt-3 text-sm text-slate-400 leading-relaxed">
+              Your internet connection has been lost. The exam timer is paused while we attempt to reconnect.
+            </p>
+            <div className="mt-6 p-5 rounded-2xl bg-slate-950 border border-slate-900">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Auto-submission countdown</p>
+              <p className="mt-2 text-4xl font-black text-rose-500 font-mono tracking-tight">
+                {Math.max(0, 30 - offlineSeconds)}s
+              </p>
+            </div>
+            <p className="mt-5 text-[11px] text-slate-500 leading-normal">
+              If the connection is not restored within 30 seconds, your exam will be automatically submitted for grading.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Full-viewport blocking overlay for locked exam */}
+      {proctor.isLocked && !proctor.isTerminated && (
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-slate-950/80 backdrop-blur-md px-4">
+          <div className="max-w-md w-full rounded-3xl border border-slate-800 bg-slate-900 p-8 text-center shadow-2xl">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-500 mb-4">
+              <Lock className="h-8 w-8" />
+            </div>
+            <h2 className="text-2xl font-bold text-white">Exam Locked</h2>
+            <p className="mt-2 text-sm text-slate-400 leading-relaxed">
+              This exam is locked and no further actions can be performed. Contact your instructor for assistance.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

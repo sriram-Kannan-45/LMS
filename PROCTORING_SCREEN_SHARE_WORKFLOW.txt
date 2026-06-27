@@ -1,0 +1,178 @@
+==============================================================================
+   WAVE INIT LMS  —  PARTICIPANT TEST FLOW & SCREEN SHARE MONITORING WORKFLOW
+   (current implementation, generated 2026-06-25)
+==============================================================================
+
+This document describes the complete secure proctoring, screen-share verification,
+and trainer monitoring workflow implemented across React (frontend), Node/Express
+(backend), and Socket.IO (real-time communication channel).
+
+──────────────────────────────────────────────────────────────────────────────
+0. PRE-CONDITIONS & CONFIGURATION
+──────────────────────────────────────────────────────────────────────────────
+
+  * A trainer or admin has created a training program, course, and quiz.
+  * In the quiz configuration (AIQuiz model), secure proctoring has been enabled:
+        proctoringEnabled   = true
+        proctoringLevel     = 'HIGH' | 'MEDIUM' | 'LOW' (defines strictness)
+        gracePeriodMinutes  = N (grace time for disconnection / offline recovery)
+        copyProtection      = true (disables copy/paste and right-click)
+  * The participant is logged in (JWT token header) and approved for enrollment.
+
+──────────────────────────────────────────────────────────────────────────────
+1. THE PRE-EXAM GATING & SCREEN SHARE AUTHORIZATION
+──────────────────────────────────────────────────────────────────────────────
+
+  UI Orchestration:
+    * Sidebar → "My Trainings" → Click a course → Select secure quiz.
+    * `ParticipantCourses.jsx` checks the quiz attempts status:
+        a) If `NOT_STARTED` or `IN_PROGRESS` (Resume), the button is active.
+        b) Clicking "Start" or "Resume" makes a REST request:
+             POST /api/quizzes/:quizId/start
+        c) If `proctoringEnabled` is true in response, the participant is 
+           forced to redirect to the secure Readiness screen:
+             `/participant/exam/:quizId` (rendered by `PreExamReadiness` / exam components)
+        d) Gates the test with a mandatory readiness checklist:
+             - Fullscreen Mode check (must be toggled active).
+             - Browser Screen Share permission check.
+             - Device/Camera permission (optional, depending on level).
+
+  Acquiring Media & Locks:
+    * Browser acquires screen sharing stream using the Screen Capture API:
+        navigator.mediaDevices.getDisplayMedia({ video: true })
+    * Once media and fullscreen are locked, the client starts the session:
+        POST /api/proctor/sessions/start
+        Body: { quizId, attemptId, fingerprintHash, screenSharing: true }
+        Returns: { sessionId, sessionToken }
+
+──────────────────────────────────────────────────────────────────────────────
+2. WEBSOCKET ESTABLISHMENT & MONITORING ROOM JOINS
+──────────────────────────────────────────────────────────────────────────────
+
+  * A WebSocket connection (Socket.IO client) is opened by both Participant and Trainer.
+  * Auth mapping: `config/socket.js` parses the JWT token using decoded user ID
+    claims (`decoded.id || decoded.userId`).
+  * Joining Rooms:
+      - Participant Socket joins their session-specific room:
+          emit("proctor:join", { sessionId }) -> acknowledges success.
+      - Trainer Socket joins the quiz-wide monitoring channel:
+          emit("proctor:trainerJoin", { quizId }) -> acknowledges with the
+          list of currently active student proctor sessions.
+
+──────────────────────────────────────────────────────────────────────────────
+3. REAL-TIME MONITORED EXAM STATE
+──────────────────────────────────────────────────────────────────────────────
+
+  A. Participant Heartbeat (Interval-based: ~5s)
+     - Participant periodically emits `proctor:heartbeat` WebSocket event:
+         emit("proctor:heartbeat", { sessionId })
+     - Server updates `lastHeartbeatAt` in the DB and broadcasts to Trainer room:
+         to(`proctor_quiz_${quizId}`).emit("proctor:heartbeat", { sessionId })
+
+  B. Participant Device State Updates
+     - Participant detects change in state (e.g. exit fullscreen, lost focus) 
+       and emits state event:
+         emit("proctor:state", { sessionId, isFullscreen, isScreenSharing, isOnline })
+     - Server broadcasts state update to Trainer:
+         to(`proctor_quiz_${quizId}`).emit("proctor:update", { type: 'state', session })
+
+  C. Low-latency Anti-Cheat Violation Event
+     - Participant triggers browser checks (e.g., page visibility, blur, copy/paste):
+         emit("proctor:violation", { sessionId, type, message, metadata })
+     - Server records a row in `proctor_violations` (e.g., `TAB_SWITCH`, `FULLSCREEN_EXIT`).
+     - Server broadcasts violation to the Trainer Dashboard:
+         to(`proctor_quiz_${quizId}`).emit("proctor:update", { type: 'violation', violation })
+     - Auto-Submit Gate: If warnings exceed strict threshold, server changes 
+       session state and issues force-submission command.
+
+──────────────────────────────────────────────────────────────────────────────
+4. TWO-WAY SIGNALING & OBSERVATION CHANNEL
+──────────────────────────────────────────────────────────────────────────────
+
+  A. Trainer Warning / Messaging
+     - Trainer views list of participants and sends a warning message to a student:
+         emit("proctor:trainerMessage", { sessionId, message })
+     - Server writes a row to `proctor_violations` of type `'TRAINER_WARNING'`.
+     - Server pushes warning event directly to participant's socket:
+         to(`user_${participantId}`).emit("proctor:trainerMessage", { message })
+     - Participant UI receives the warning overlay in real-time.
+
+  B. WebRTC Live Observer request
+     - Trainer clicks "Watch Live Stream" on dashboard:
+         emit("proctor:observe", { sessionId })
+     - Server passes observe request to participant socket:
+         to(`user_${participantId}`).emit("proctor:observe-request", { viewerId })
+     - Participant client initializes peer connection (WebRTC signaling) to
+       start streaming their screen capture directly to the trainer's dashboard.
+
+──────────────────────────────────────────────────────────────────────────────
+5. DISCONNECTION & GRACE PERIOD RECOVERY
+──────────────────────────────────────────────────────────────────────────────
+
+  * If participant loses internet or closes tab, their socket disconnects:
+      - Server marks `ExamSession` status as `ACTIVE` but records `disconnectedAt`
+        and sets `gracePeriodEndsAt` based on quiz `gracePeriodMinutes` setting.
+      - Trainer receives update:
+          emit("proctor:update", { type: 'disconnected', session })
+  * If participant reconnects within grace period:
+      - Client reconnects, rejoins room via `proctor:join`.
+      - Server clears `disconnectedAt` / `gracePeriodEndsAt` and restores active status.
+      - Trainer receives update:
+          emit("proctor:update", { type: 'reconnected', session })
+  * If grace period expires without reconnection:
+      - Background job `quizAutoClose` auto-terminates the exam and submits local progress.
+
+──────────────────────────────────────────────────────────────────────────────
+6. EXAM SUBMISSION & FINALIZATION
+──────────────────────────────────────────────────────────────────────────────
+
+  * Participant finishes quiz and submits:
+      POST /api/proctor/sessions/:sessionId/finalize
+      Headers: X-Proctor-Session-Token: <token>
+      Body: { answers: [...] }
+  * Backend:
+      1. Sets ExamSession status to `SUBMITTED`.
+      2. Grades all answers (MCQ graded inline, short answer evaluated by AI service).
+      3. Calculates score, percent, and time taken.
+      4. Saves row in `quiz_results` and marks QuizAttempt as `EVALUATED`.
+      5. Broadcasts submit completion event to Trainer room:
+           emit("proctor:update", { type: 'submitted', session })
+
+──────────────────────────────────────────────────────────────────────────────
+7. CASCADE CLEANUP / RETENTION
+──────────────────────────────────────────────────────────────────────────────
+
+  * Course/Program Deletion:
+      - Admin deletes a training program or course.
+      - System cascades cleanups inside `adminCourseController.js`.
+      - Crucial Order: Destroys associated `AssessmentSession`, `ExamSession`,
+        `Violation` (including `TRAINER_WARNING` events), and `ProctorActivity`
+        rows before destroying `QuizAttempt` to avoid foreign key SQL errors.
+
+──────────────────────────────────────────────────────────────────────────────
+8. RELEVANT FILE ARCHITECTURE
+──────────────────────────────────────────────────────────────────────────────
+
+  Frontend (React):
+    - `src/pages/ParticipantCourses.jsx`          // "Resume" CTA and gate mapping
+    - `src/components/PreExamReadiness.jsx`       // Fullscreen & Screen Share checker
+    - `src/components/SecureExamScreen.jsx`       // Secure iframe/timer taking pane
+    - `src/pages/TrainerDashboard.jsx`            // Real-time grid of all sessions
+    - `src/components/trainer/ProctorLiveView.jsx` // Stream preview and violation alerts
+
+  Backend (Node + Express + Socket.IO):
+    - `src/routes/quizzesRoutes.js`              // REST endpoints for start/status
+    - `src/controllers/proctoringController.js`   // Session orchestration and endpoints
+    - `src/services/proctoringService.js`        // Business logic, states, and DB operations
+    - `src/config/socket.js`                      // JWT token validation & WebSocket listeners
+    - `src/controllers/adminCourseController.js`  // Program deletion cascade logic
+
+  Database Tables (MySQL / Sequelize):
+    - `exam_sessions`         (status, warnings, screen-sharing state, timestamps)
+    - `proctor_violations`    (sessionId, type, message, metadata)
+    - `proctor_activities`    (sessionId, eventType, payload)
+    - `assessment_sessions`   (attemptId, quizId, participantId, token, expiresAt)
+
+==============================================================================
+   END OF DOCUMENT
+==============================================================================

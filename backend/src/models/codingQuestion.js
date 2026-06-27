@@ -16,6 +16,11 @@ const CodingQuestion = sequelize.define('CodingQuestion', {
   marks: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 10 },
   tags: { type: DataTypes.JSON, allowNull: true },
   order: { type: DataTypes.INTEGER, defaultValue: 0 },
+  statement: { type: DataTypes.TEXT, allowNull: true },
+  starterCode: { type: DataTypes.TEXT, allowNull: true, field: 'starter_code' },
+  timeLimitSec: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 5, field: 'time_limit_sec' },
+  memoryLimitMb: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 256, field: 'memory_limit_mb' },
+  orderIndex: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'order_index' },
 }, {
   tableName: 'coding_questions',
   timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at',

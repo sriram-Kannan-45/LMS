@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import logging
 import requests
 from typing import Dict, Any, Optional
@@ -9,18 +10,42 @@ log = logging.getLogger("ai-quiz.gemini-client")
 class GeminiClient:
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        raw_model = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         
+        # Verify and coerce/fallback model name
+        if raw_model not in ("gemini-2.5-flash", "gemini-2.5-pro"):
+            if "pro" in raw_model.lower():
+                self.model = "gemini-2.5-pro"
+            else:
+                self.model = "gemini-2.5-flash"
+            log.warning(f"Invalid model '{raw_model}' verified and coerced to '{self.model}'.")
+        else:
+            self.model = raw_model
+            log.info(f"Model name verified: '{self.model}'")
+            
+        key_exists = bool(self.api_key and self.api_key.strip())
+        log.info(f"GEMINI_API_KEY exists: {key_exists}")
+
         # Use v1beta endpoint for flash/pro models as it is highly compatible with JSON mode
         self.base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
-    def generate_content(self, prompt: str, temperature: float = 0.2, response_json: bool = True) -> str:
+    def generate_content(
+        self,
+        prompt: str,
+        temperature: float = 0.2,
+        response_json: bool = True,
+        doc_name: str = "N/A",
+        file_size: str = "N/A",
+        extracted_text_len: int = 0,
+        first_500_chars: str = "N/A",
+    ) -> str:
         """
         Call the Gemini REST API directly using requests.
-        Implements linear backoff and retries for rate limits (429 RESOURCE_EXHAUSTED).
+        Implements exponential backoff and retries.
         """
-        if not self.api_key:
-            raise ValueError("GEMINI_API_KEY is not configured. Please check your environment variables.")
+        # Validate API key
+        if not self.api_key or not self.api_key.strip():
+            raise ValueError("GEMINI_API_KEY is null, empty, or missing from environment variables.")
 
         url = f"{self.base_url}/{self.model}:generateContent?key={self.api_key}"
         headers = {'Content-Type': 'application/json'}
@@ -35,6 +60,21 @@ class GeminiClient:
         if response_json:
             payload["generationConfig"]["responseMimeType"] = "application/json"
 
+        # Print/log the before state
+        log.info(
+            f"\nBefore Gemini:\n"
+            f"---------------------\n"
+            f"Document Name: {doc_name}\n"
+            f"File Size: {file_size}\n"
+            f"Extracted Text Length: {extracted_text_len}\n"
+            f"First 500 chars: {first_500_chars}\n"
+            f"Model Name: {self.model}\n"
+            f"Prompt Length: {len(prompt)}\n"
+            f"---------------------"
+        )
+        # Print the complete Gemini request payload (excluding API key)
+        log.info(f"Gemini Request Payload:\n{json.dumps(payload, indent=2)}")
+
         max_retries = 3
         last_error = None
         
@@ -43,19 +83,50 @@ class GeminiClient:
                 log.info(f"Sending request to Gemini model {self.model} (Attempt {attempt}/{max_retries})...")
                 response = requests.post(url, headers=headers, json=payload, timeout=90)
                 
-                # Check for rate limiting or other HTTP errors
-                if response.status_code == 429:
-                    delay = attempt * 15
-                    log.warning(f"Gemini API rate limit hit (429). Retrying in {delay} seconds...")
-                    time.sleep(delay)
-                    continue
-                    
+                status_code = response.status_code
+                response_body = response.text
+                
+                # Try parsing usage / finish reason
+                token_usage = "N/A"
+                finish_reason = "N/A"
+                res_data = None
+                try:
+                    res_data = response.json()
+                    candidates = res_data.get("candidates", [])
+                    if candidates:
+                        finish_reason = candidates[0].get("finishReason", "N/A")
+                    usage = res_data.get("usageMetadata", {})
+                    if usage:
+                        token_usage = (
+                            f"Prompt: {usage.get('promptTokenCount', 0)}, "
+                            f"Candidates: {usage.get('candidatesTokenCount', 0)}, "
+                            f"Total: {usage.get('totalTokenCount', 0)}"
+                        )
+                except Exception as parse_err:
+                    log.warning(f"Could not parse response JSON for usage/finish reason: {parse_err}")
+
+                # Print/log the after state
+                log.info(
+                    f"\nAfter Gemini:\n"
+                    f"---------------------\n"
+                    f"Status Code: {status_code}\n"
+                    f"Response Body: {response_body}\n"
+                    f"Token Usage: {token_usage}\n"
+                    f"Finish Reason: {finish_reason}\n"
+                    f"---------------------"
+                )
+                
+                # Print the complete Gemini response
+                if res_data:
+                    log.info(f"Complete Gemini Response:\n{json.dumps(res_data, indent=2)}")
+                else:
+                    log.info(f"Complete Gemini Response (raw):\n{response_body}")
+
                 response.raise_for_status()
                 
-                # Parse response JSON
-                res_data = response.json()
+                if not res_data:
+                    raise ValueError(f"Gemini API returned empty or invalid response: {response_body}")
                 
-                # Extract text response from candidates structure
                 candidates = res_data.get("candidates", [])
                 if not candidates:
                     raise ValueError(f"Gemini API returned no candidates. Full response: {res_data}")
@@ -73,16 +144,39 @@ class GeminiClient:
                 detail = he.response.text if he.response is not None else ""
                 log.error(f"HTTP error {status_code} during Gemini API call: {detail}")
                 
-                if status_code in (408, 500, 502, 503, 504):
-                    # Retry on server error or timeout
-                    time.sleep(attempt * 2)
+                if status_code in (408, 429, 500, 502, 503, 504):
+                    wait_time = 2 ** attempt
+                    log.info(f"Retrying in {wait_time} seconds on status {status_code}...")
+                    time.sleep(wait_time)
                     continue
                 break
                 
             except Exception as e:
                 last_error = e
                 log.error(f"Exception during Gemini API call on attempt {attempt}: {str(e)}")
-                time.sleep(attempt * 2)
+                wait_time = 2 ** attempt
+                log.info(f"Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
                 continue
                 
-        raise last_error or RuntimeError("Failed to generate content from Gemini API after retries.")
+        if last_error:
+            if isinstance(last_error, requests.exceptions.HTTPError):
+                status_code = last_error.response.status_code if last_error.response is not None else "Unknown"
+                api_message = ""
+                try:
+                    err_json = last_error.response.json()
+                    api_message = err_json.get("error", {}).get("message", "")
+                except Exception:
+                    pass
+                if not api_message:
+                    api_message = last_error.response.text if last_error.response is not None else str(last_error)
+                if self.api_key and self.api_key in api_message:
+                    api_message = api_message.replace(self.api_key, "HIDDEN_KEY")
+                raise RuntimeError(f"Gemini API error ({status_code}): {api_message}")
+            else:
+                err_msg = str(last_error)
+                if self.api_key and self.api_key in err_msg:
+                    err_msg = err_msg.replace(self.api_key, "HIDDEN_KEY")
+                raise RuntimeError(f"Gemini API request failed: {err_msg}")
+        raise RuntimeError("Failed to generate content from Gemini API after retries.")
+

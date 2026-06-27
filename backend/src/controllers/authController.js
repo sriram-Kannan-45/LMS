@@ -61,8 +61,15 @@ const login = async (req, res) => {
       return res.status(403).json({ error: 'Incorrect role selected. Please choose the correct role.' });
     }
 
+    const tokenPayload = {
+      id: user.id,
+      participantId: user.role === 'PARTICIPANT' ? user.id : undefined,
+      role: user.role.toLowerCase(),
+      email: user.email
+    };
+
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      tokenPayload,
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );

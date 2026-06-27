@@ -20,10 +20,21 @@ const ExamSession = sequelize.define('ExamSession', {
     autoIncrement: true,
     primaryKey: true,
   },
+  assessmentType: {
+    type: DataTypes.ENUM('quiz', 'coding_assessment'),
+    allowNull: false,
+    defaultValue: 'quiz',
+    field: 'assessment_type',
+  },
   quizId: {
     type: DataTypes.BIGINT.UNSIGNED,
-    allowNull: false,
+    allowNull: true,
     field: 'quiz_id',
+  },
+  assessmentId: {
+    type: DataTypes.BIGINT.UNSIGNED,
+    allowNull: true,
+    field: 'assessment_id',
   },
   attemptId: {
     type: DataTypes.BIGINT.UNSIGNED,
@@ -127,7 +138,29 @@ const ExamSession = sequelize.define('ExamSession', {
   lastHeartbeatAt: {
     type: DataTypes.DATE,
     allowNull: true,
-    field: 'last_heartbeat_at',
+    field: 'last_heartbeat_at'
+  },
+  disconnectedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'disconnected_at'
+  },
+  gracePeriodEndsAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'grace_period_ends_at'
+  },
+  proctoringLevel: {
+    type: DataTypes.ENUM('LOW', 'MEDIUM', 'HIGH'),
+    allowNull: false,
+    defaultValue: 'MEDIUM',
+    field: 'proctoring_level'
+  },
+  gracePeriodMinutes: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 2,
+    field: 'grace_period_minutes'
   },
 }, {
   tableName: 'exam_sessions',

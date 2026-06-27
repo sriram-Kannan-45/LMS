@@ -9,6 +9,9 @@ const CodingAttempt = sequelize.define('CodingAttempt', {
   score: { type: DataTypes.FLOAT, allowNull: false, defaultValue: 0 },
   violationCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'violation_count' },
   submittedAt: { type: DataTypes.DATE, allowNull: true, field: 'submitted_at' },
+  sessionId: { type: DataTypes.STRING, allowNull: true, field: 'session_id' },
+  startedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW, field: 'started_at' },
+  totalScore: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'total_score' },
 }, {
   tableName: 'coding_attempts',
   timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at',

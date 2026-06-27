@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Pencil, Trash2, Eye, Send, Sparkles, ListChecks, Search,
-  X, Save, Check, AlertTriangle, ChevronDown, ChevronUp, BookOpen,
+  X, Save, Check, AlertTriangle, ChevronDown, ChevronUp, BookOpen, Trophy,
+  BarChart3,
 } from 'lucide-react'
 import { API } from '../../api/api'
 import { useToast } from '../Toast'
@@ -274,22 +276,33 @@ function QuizBuilder({ user, courseId, lessons, existingQuiz, onClose, onSaved }
 // ════════════════════════════════════════════════════════════════════════════
 function PublishDialog({ user, courseId, quiz, onClose, onPublished }) {
   const { success, error: showError } = useToast()
-  const [stats, setStats] = useState(null)
+  const [stats, setStats]           = useState(null)
+  const [loading, setLoading]       = useState(true)
   const [publishing, setPublishing] = useState(false)
-  const [forceMode, setForceMode] = useState(false)
+  const [forceMode, setForceMode]   = useState(false)
+  const [reason, setReason]         = useState('')
 
   const auth = () => ({ Authorization: `Bearer ${user.token}`, 'Content-Type': 'application/json' })
 
+  // ── Fetch LIVE summary every time the modal opens ──────────────────────
   useEffect(() => {
     let aborted = false
+    setLoading(true)
+    setStats(null)
+    setForceMode(false)
+    setReason('')
     ;(async () => {
       try {
-        const r = await fetch(API.TRAINER_COURSES.QUIZ_DASHBOARD(courseId, quiz.id), {
+        // Use the new /results-summary endpoint that always queries DB fresh.
+        // Never use stale dashboard data or props.
+        const r = await fetch(API.TRAINER_COURSES.RESULTS_SUMMARY(quiz.id), {
           headers: { Authorization: `Bearer ${user.token}` },
         })
         const d = await r.json()
         if (!aborted && d.success) setStats(d)
-      } catch {}
+        else if (!aborted) setStats(null)
+      } catch { if (!aborted) setStats(null) }
+      finally  { if (!aborted) setLoading(false) }
     })()
     return () => { aborted = true }
   }, [quiz.id])
@@ -297,106 +310,120 @@ function PublishDialog({ user, courseId, quiz, onClose, onPublished }) {
   const publish = async () => {
     try {
       setPublishing(true)
-      const r = await fetch(API.TRAINER_COURSES.PUBLISH_QUIZ(courseId, quiz.id), {
+      // Use the full publish-result endpoint (state-machine aware, audit-logged)
+      const r = await fetch(API.TRAINER_COURSES.PUBLISH_ALL_RESULTS(quiz.id), {
         method: 'POST',
         headers: auth(),
-        body: JSON.stringify({ force: forceMode }),
+        body: JSON.stringify({ override: forceMode, reason: reason.trim() || undefined }),
       })
       const d = await r.json()
-      if (!r.ok || d.success === false) { showError(d.error || 'Publish failed'); return }
-      success('Quiz results published — participants notified')
+      if (!r.ok || d.success === false) { showError(d.error || d.message || 'Publish failed'); return }
+      success(`Results published to ${d.enrolled ?? stats?.enrolled ?? 0} participants ✓`)
       onPublished?.()
       onClose()
     } catch (e) { showError(e.message) }
     finally { setPublishing(false) }
   }
 
-  const ready = stats && stats.enrolled > 0 && stats.pending === 0
+  const ready    = stats && stats.enrolled > 0 && stats.pending === 0
+  const canClick = !publishing && !!stats && stats.enrolled > 0 && (stats.pending === 0 || forceMode)
 
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       onClick={() => !publishing && onClose()}
       style={{
-        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)',
+        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)',
         zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
       }}
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         onClick={(e) => e.stopPropagation()}
-        style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 460, padding: 22 }}
+        style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 500, padding: 26,
+          boxShadow: '0 24px 64px rgba(0,0,0,0.18)' }}
       >
-        <h3 style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
           Publish Quiz Results
         </h3>
-        <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
-          {quiz.title}
-        </p>
+        <p style={{ margin: '0 0 20px', fontSize: 13, color: '#64748b' }}>{quiz.title}</p>
 
-        {!stats ? (
-          <div style={{ height: 100, background: '#f1f5f9', borderRadius: 10, marginTop: 16 }} />
-        ) : (
+        {/* ── Stats skeleton while loading ── */}
+        {loading && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
+            {[0,1,2].map(i => (
+              <div key={i} style={{ height: 64, borderRadius: 10, background: '#f1f5f9',
+                animation: 'pulse 1.5s ease-in-out infinite' }} />
+            ))}
+          </div>
+        )}
+
+        {!loading && !stats && (
+          <div style={{ padding: 14, background: '#fef2f2', color: '#dc2626', borderRadius: 8,
+            fontSize: 13, marginBottom: 20 }}>
+            Failed to load quiz data. Please close and try again.
+          </div>
+        )}
+
+        {!loading && stats && (
           <>
-            <div style={{
-              display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10,
-              margin: '18px 0', textAlign: 'center',
-            }}>
-              <div style={statCard('#eef2ff', '#4f46e5')}>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{stats.enrolled}</div>
-                <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.8 }}>ENROLLED</div>
-              </div>
-              <div style={statCard('#dcfce7', '#15803d')}>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{stats.completed}</div>
-                <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.8 }}>COMPLETED</div>
-              </div>
-              <div style={statCard('#fef3c7', '#92400e')}>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{stats.pending}</div>
-                <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.8 }}>PENDING</div>
-              </div>
+            {/* ── 5-card grid ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 18 }}>
+              <StatCard label="ENROLLED"  value={stats.enrolled}  color="#4f46e5" bg="#eef2ff" />
+              <StatCard label="COMPLETED" value={stats.completed} color="#15803d" bg="#dcfce7" />
+              <StatCard label="PENDING"   value={stats.pending}   color="#92400e" bg="#fef3c7" />
+              {stats.averageScore != null && (
+                <StatCard label="AVG SCORE" value={`${stats.averageScore}%`} color="#0e7490" bg="#ecfeff" />
+              )}
+              {stats.passRate != null && (
+                <StatCard label="PASS RATE" value={`${stats.passRate}%`} color="#7c3aed" bg="#f5f3ff" />
+              )}
             </div>
 
+            {/* ── Status banner ── */}
             {ready ? (
-              <div style={{
-                padding: 12, background: '#dcfce7', color: '#15803d',
-                borderRadius: 8, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
-              }}>
+              <div style={{ padding: '11px 14px', background: '#dcfce7', color: '#15803d',
+                borderRadius: 9, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
                 <Check size={16} /> All participants completed. Ready to publish.
               </div>
             ) : stats.enrolled === 0 ? (
-              <div style={{
-                padding: 12, background: '#f1f5f9', color: '#475569',
-                borderRadius: 8, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
-              }}>
+              <div style={{ padding: '11px 14px', background: '#f1f5f9', color: '#475569',
+                borderRadius: 9, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
                 <AlertTriangle size={16} /> No enrolled participants — nothing to notify.
               </div>
             ) : (
-              <div style={{
-                padding: 12, background: '#fef3c7', color: '#92400e',
-                borderRadius: 8, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ padding: '11px 14px', background: '#fef3c7', color: '#92400e',
+                borderRadius: 9, fontSize: 13, marginBottom: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                   <AlertTriangle size={16} />
                   <span><strong>{stats.pending}</strong> participant{stats.pending !== 1 ? 's' : ''} haven't completed yet.</span>
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 4 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer' }}>
                   <input type="checkbox" checked={forceMode} onChange={(e) => setForceMode(e.target.checked)} />
-                  <span>Publish anyway (override)</span>
+                  Publish anyway (override)
                 </label>
+                {forceMode && (
+                  <textarea
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="Reason for override (recommended for audit trail)…"
+                    rows={2}
+                    style={{ marginTop: 8, width: '100%', fontSize: 12, padding: '6px 8px',
+                      border: '1px solid #fbbf24', borderRadius: 6, resize: 'vertical',
+                      fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none' }}
+                  />
+                )}
               </div>
             )}
           </>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose} disabled={publishing} style={btnSecondary}>Cancel</button>
           <button
             onClick={publish}
-            disabled={publishing || !stats || (stats.enrolled === 0 && !forceMode) || (stats.pending > 0 && !forceMode)}
-            style={{
-              ...btnPrimary,
-              opacity: (!stats || (stats.enrolled === 0 && !forceMode) || (stats.pending > 0 && !forceMode)) ? 0.5 : 1,
-            }}
+            disabled={!canClick}
+            style={{ ...btnPrimary, opacity: canClick ? 1 : 0.45 }}
           >
             <Send size={14} style={{ marginRight: 6 }} />
             {publishing ? 'Publishing…' : 'Publish Results'}
@@ -404,6 +431,15 @@ function PublishDialog({ user, courseId, quiz, onClose, onPublished }) {
         </div>
       </motion.div>
     </motion.div>
+  )
+}
+
+function StatCard({ label, value, color, bg }) {
+  return (
+    <div style={{ padding: '12px 10px', background: bg, borderRadius: 10, textAlign: 'center' }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
+      <div style={{ fontSize: 10, fontWeight: 600, color, opacity: 0.75, letterSpacing: 0.4 }}>{label}</div>
+    </div>
   )
 }
 
@@ -478,6 +514,7 @@ function QuizPreview({ quiz, onClose }) {
 // Main tab
 // ════════════════════════════════════════════════════════════════════════════
 export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
+  const navigate = useNavigate()
   const { success, error: showError, info } = useToast()
   const [quizzes, setQuizzes] = useState([])
   const [lessons, setLessons] = useState([])
@@ -489,6 +526,9 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
   const [previewQuiz, setPreviewQuiz] = useState(null)
   const [publishQuiz, setPublishQuiz] = useState(null)
   const [showGenerator, setShowGenerator] = useState(false)
+  const [leaderboardQuiz, setLeaderboardQuiz] = useState(null)
+  const [leaderboardData, setLeaderboardData] = useState([])
+  const [sendingQuizId, setSendingQuizId] = useState(null)
 
   const handleQuizGenerated = (questions, title) => {
     if (questions === null) {
@@ -535,7 +575,7 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
     try {
       const r = await fetch(API.TRAINER_COURSES.QUIZ(courseId, q.id), { method: 'DELETE', headers: auth() })
       const d = await r.json()
-      if (!r.ok || d.success === false) { showError(d.error || 'Delete failed'); return }
+      if (!r.ok || d.success === false) { showError(d.message || d.error || 'Delete failed'); return }
       success('Quiz deleted')
       await fetchAll()
       onCountChange?.()
@@ -550,6 +590,29 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
   const openPreview = async (q) => {
     const full = await fetchQuizForEdit(q.id)
     if (full) setPreviewQuiz(full)
+  }
+
+  const sendQuiz = async (q) => {
+    if (!window.confirm(`Send "${q.title}" to enrolled participants?`)) return
+    setSendingQuizId(q.id)
+    try {
+      const r = await fetch(API.TRAINER_COURSES.SEND_QUIZ(q.id), { method: 'POST', headers: auth() })
+      const d = await r.json()
+      if (!r.ok || d.success === false) { showError(d.error || d.message || 'Send failed'); return }
+      success(`Quiz sent to ${d.assignedCount || 0} participant(s)`)
+      await fetchAll()
+    } catch (e) { showError(e.message) }
+    finally { setSendingQuizId(null) }
+  }
+
+  const openLeaderboard = async (q) => {
+    try {
+      const r = await fetch(API.TRAINER_COURSES.QUIZ_LEADERBOARD(q.id), { headers: auth() })
+      const d = await r.json()
+      if (d.success) setLeaderboardData(d.leaderboard || [])
+      else setLeaderboardData([])
+    } catch { setLeaderboardData([]) }
+    setLeaderboardQuiz(q)
   }
 
   // Question bank — flatten ALL questions across all quizzes (uses preview API)
@@ -670,17 +733,38 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
                       <button title="Edit" onClick={() => openEdit(q)} style={iconBtn('#eef2ff', '#4f46e5')}>
                         <Pencil size={12} />
                       </button>
-                      <button
-                        title={q.resultStatus === 'PUBLISHED' ? 'Already published' : 'Publish results'}
-                        onClick={() => q.resultStatus !== 'PUBLISHED' && setPublishQuiz(q)}
-                        disabled={q.resultStatus === 'PUBLISHED'}
-                        style={{
-                          ...iconBtn('#dcfce7', '#15803d'),
-                          opacity: q.resultStatus === 'PUBLISHED' ? 0.4 : 1,
-                          cursor: q.resultStatus === 'PUBLISHED' ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        <Send size={12} />
+                      {q.status === 'DRAFT' ? (
+                        <button title="Send to participants" onClick={() => sendQuiz(q)}
+                          disabled={sendingQuizId === q.id}
+                          style={{
+                            ...iconBtn('#dcfce7', '#15803d'),
+                            opacity: sendingQuizId === q.id ? 0.5 : 1,
+                            cursor: sendingQuizId === q.id ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          <Send size={12} />
+                        </button>
+                      ) : (
+                        <button
+                          title={q.resultStatus === 'PUBLISHED' ? 'Already published' : 'Publish results'}
+                          onClick={() => q.resultStatus !== 'PUBLISHED' && setPublishQuiz(q)}
+                          disabled={q.resultStatus === 'PUBLISHED'}
+                          style={{
+                            ...iconBtn('#dcfce7', '#15803d'),
+                            opacity: q.resultStatus === 'PUBLISHED' ? 0.4 : 1,
+                            cursor: q.resultStatus === 'PUBLISHED' ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          <Send size={12} />
+                        </button>
+                      )}
+                      <button title="Manage" onClick={() => navigate(`/trainer/quiz/${q.id}`)}
+                        style={iconBtn('#e0e7ff', '#4338ca')}>
+                        <BarChart3 size={12} />
+                      </button>
+                      <button title="Leaderboard" onClick={() => openLeaderboard(q)}
+                        style={iconBtn('#fef3c7', '#92400e')}>
+                        <Trophy size={12} />
                       </button>
                       <button title="Delete" onClick={() => remove(q)} style={iconBtn('#fee2e2', '#dc2626')}>
                         <Trash2 size={12} />
@@ -779,6 +863,13 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
         {previewQuiz && (
           <QuizPreview quiz={previewQuiz} onClose={() => setPreviewQuiz(null)} />
         )}
+        {leaderboardQuiz && (
+          <LeaderboardModal
+            quiz={leaderboardQuiz}
+            data={leaderboardData}
+            onClose={() => setLeaderboardQuiz(null)}
+          />
+        )}
       </AnimatePresence>
     </div>
   )
@@ -810,13 +901,14 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
     }
     setGenerating(true)
     try {
-      const response = await fetch(API.TRAINER_COURSES.GENERATE_FROM_PROMPT, {
+      const response = await fetch(API.AI_QUIZ.GENERATE_FROM_PROMPT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${user.token}`
         },
         body: JSON.stringify({
+          courseId: courseId,
           trainingId: courseId,
           prompt: promptText.trim(),
           questionCount: parseInt(questionCount, 10),
@@ -828,20 +920,8 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
         throw new Error(data.error || 'Failed to generate quiz')
       }
       
-      // Map AI response format to QuizBuilder format:
-      // AI returns: { success: true, questions: [{ question, optionA, optionB, optionC, optionD, correctAnswer, explanation }] }
-      const formatted = data.questions.map(q => {
-        const options = [q.optionA, q.optionB, q.optionC, q.optionD]
-        return {
-          questionText: q.question,
-          options: options,
-          correctAnswer: q.correctAnswer,
-          explanation: q.explanation || ''
-        }
-      })
-      
-      success('AI Quiz questions generated successfully! Loading preview...')
-      onGenerated(formatted, `AI Quiz: ${promptText.substring(0, 30)}`)
+      success('Quiz Created Successfully')
+      onGenerated(null) // trigger reload
       onClose()
     } catch (err) {
       showError(err.message)
@@ -862,11 +942,11 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
     formData.append('file', file)
     formData.append('courseId', courseId)
     formData.append('trainingId', courseId)
-    formData.append('numQuestions', questionCount)
-    formData.append('difficulty', difficulty.toUpperCase())
+    formData.append('questionCount', questionCount)
+    formData.append('difficulty', difficulty)
 
     try {
-      const response = await fetch(API.AI_QUIZ.TRAINER_UPLOAD, {
+      const response = await fetch(API.AI_QUIZ.GENERATE_FROM_DOCUMENT, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${user.token}`
@@ -878,7 +958,7 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
         throw new Error(data.error || 'Failed to generate quiz from document')
       }
       
-      success('Quiz generated from document successfully!')
+      success('Quiz Created Successfully')
       onGenerated(null) // trigger reload
       onClose()
     } catch (err) {
@@ -1074,6 +1154,80 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
                 </div>
               </form>
             )}
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Leaderboard modal
+// ════════════════════════════════════════════════════════════════════════════
+function LeaderboardModal({ quiz, data, onClose }) {
+  const sorted = [...data].sort((a, b) => (b.score || 0) - (a.score || 0))
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)',
+        zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 500, padding: 22, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
+            <Trophy size={18} style={{ verticalAlign: 'middle', marginRight: 8, color: '#f59e0b' }} />
+            Leaderboard — {quiz.title}
+          </h3>
+          <button onClick={onClose} style={iconBtn('#f1f5f9', '#475569')}><X size={14} /></button>
+        </div>
+
+        {sorted.length === 0 ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
+            No submissions yet.
+          </div>
+        ) : (
+          <div style={{ overflow: 'auto', flex: 1 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                  <th style={{ ...th, width: 40 }}>#</th>
+                  <th style={th}>Participant</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Score</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Percentage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((entry, i) => (
+                  <tr key={entry.participantId || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: i < 3 ? '#f59e0b' : '#94a3b8', fontSize: 13 }}>
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+                    </td>
+                    <td style={{ ...td, fontWeight: 600, color: '#0f172a', fontSize: 13 }}>
+                      {entry.participantName || 'Anonymous'}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#475569', fontSize: 13 }}>
+                      {entry.score ?? '-'}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right' }}>
+                      <span style={{
+                        padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                        background: (entry.percentage || 0) >= 80 ? '#dcfce7' : (entry.percentage || 0) >= 50 ? '#fef3c7' : '#fee2e2',
+                        color: (entry.percentage || 0) >= 80 ? '#15803d' : (entry.percentage || 0) >= 50 ? '#92400e' : '#dc2626',
+                      }}>
+                        {entry.percentage != null ? `${Math.round(entry.percentage)}%` : '-'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </motion.div>

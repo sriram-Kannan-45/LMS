@@ -7,6 +7,7 @@ const TestCase = sequelize.define('TestCase', {
   input: { type: DataTypes.TEXT, allowNull: true },
   expectedOutput: { type: DataTypes.TEXT, allowNull: true, field: 'expected_output' },
   isHidden: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'is_hidden' },
+  orderIndex: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'order_index' },
 }, {
   tableName: 'coding_test_cases',
   timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at',

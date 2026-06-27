@@ -748,7 +748,12 @@ def safe_json_parse(text: str) -> Tuple[List[Dict], List[str]]:
 
 # ── LLM Setup (Gemini only — Groq removed) ────────────
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+raw_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+if raw_model not in ("gemini-2.5-flash", "gemini-2.5-pro"):
+    GEMINI_MODEL = "gemini-2.5-pro" if "pro" in raw_model.lower() else "gemini-2.5-flash"
+    log.warning(f"Global invalid model '{raw_model}' coerced to '{GEMINI_MODEL}'.")
+else:
+    GEMINI_MODEL = raw_model
 llm = None
 llm_type = "None"
 
@@ -1593,7 +1598,7 @@ async def generate_quiz(request: QuizRequest):
         if not request.text or len(request.text.strip()) < 50:
             raise HTTPException(
                 status_code=422,
-                detail="Text content is too short. Please provide at least 50 characters of text."
+                detail="Document contains insufficient text."
             )
 
         if request.num_questions < 1 or request.num_questions > 50:

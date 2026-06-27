@@ -1,3 +1,7 @@
+import { getAuthHeaders } from './request';
+
+export { getAuthHeaders };
+
 /**
  * Centralized API configuration.
  *
@@ -73,13 +77,8 @@ export const API = {
   AI_HEALTH: `${API_BASE}/ai/health`,
 
   AI_QUIZ: {
-    TRAINER_UPLOAD:     `${API_BASE}/ai-quiz/trainer/upload-document`,
-    TRAINER_QUIZZES:    `${API_BASE}/ai-quiz/trainer/quizzes`,
-    TRAINER_UPDATE_QUIZ:(id) => `${API_BASE}/ai-quiz/trainer/quiz/${id}`,
-    PARTICIPANT_QUIZZES:`${API_BASE}/ai-quiz/participant/quizzes`,
-    START:              (quizId)   => `${API_BASE}/ai-quiz/participant/start/${quizId}`,
-    SUBMIT:             (attemptId)=> `${API_BASE}/ai-quiz/participant/submit/${attemptId}`,
-    LEADERBOARD:        (quizId)   => `${API_BASE}/ai-quiz/leaderboard/${quizId}`
+    GENERATE_FROM_PROMPT:   `${API_BASE}/ai-quiz/generate-from-prompt`,
+    GENERATE_FROM_DOCUMENT: `${API_BASE}/ai-quiz/generate-from-document`,
   },
 
   /** Lesson workflow: lessons + quiz/assessment gating, results & dashboards */
@@ -102,7 +101,12 @@ export const API = {
     COMPLETE_QUIZ:      (lessonQuizId) => `${API_BASE}/lessons/quizzes/${lessonQuizId}/complete`,
     SUBMIT_ASSESSMENT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/submit`,
     QUIZ_RESULT:        (lessonQuizId) => `${API_BASE}/lessons/quizzes/${lessonQuizId}/result`,
-    ASSESSMENT_RESULT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/result`
+    ASSESSMENT_RESULT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/result`,
+    // Coding assessment
+    ATTACH_CODING:          (lessonId) => `${API_BASE}/lessons/${lessonId}/coding-assessments`,
+    PUBLISH_CODING:         (lessonCodingId) => `${API_BASE}/lessons/coding-assessments/${lessonCodingId}/publish`,
+    COMPLETE_CODING:        (lessonCodingId) => `${API_BASE}/lessons/coding-assessments/${lessonCodingId}/complete`,
+    CODING_RESULT:          (lessonCodingId) => `${API_BASE}/lessons/coding-assessments/${lessonCodingId}/result`
   },
 
   /**
@@ -131,11 +135,22 @@ export const API = {
     REORDER_MATERIALS:(lessonId)       => `${API_BASE}/trainer/lessons/${lessonId}/materials/reorder`,
 
     QUIZ_MANUAL:   (courseId)          => `${API_BASE}/trainer/courses/${courseId}/quiz/manual`,
-    GENERATE_FROM_PROMPT:              `${API_BASE}/trainer/quiz/generate-from-prompt`,
     QUIZZES:       (courseId)          => `${API_BASE}/trainer/courses/${courseId}/quizzes`,
     QUIZ:          (courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}`,
+    SEND_QUIZ:     (quizId)            => `${API_BASE}/quizzes/${quizId}/send`,
     PUBLISH_QUIZ:  (courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}/publish`,
     QUIZ_DASHBOARD:(courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}/dashboard`,
+    QUIZ_LEADERBOARD:(quizId)          => `${API_BASE}/ai-quiz/leaderboard/${quizId}`,
+    QUIZ_RESULTS:    (quizId)          => `${API_BASE}/quizzes/${quizId}/results`,
+    PUBLISH_RESULT:  (quizId, pId)     => `${API_BASE}/quizzes/${quizId}/publish-participant/${pId}`,
+    PUBLISH_ALL_RESULTS: (quizId)      => `${API_BASE}/quizzes/${quizId}/publish-result`,
+    QUIZ_DETAIL:         (quizId)      => `${API_BASE}/quizzes/${quizId}`,
+    QUIZ_QUESTIONS:      (quizId)      => `${API_BASE}/quizzes/${quizId}/questions`,
+    QUIZ_QUESTION:       (qId)         => `${API_BASE}/questions/${qId}`,
+    QUIZ_REORDER:        (quizId)      => `${API_BASE}/quizzes/${quizId}/questions/reorder`,
+    QUIZ_PARTICIPANTS:   (quizId)      => `${API_BASE}/quizzes/${quizId}/participants`,
+    PUBLISH_QUIZ_NOW:    (quizId)      => `${API_BASE}/quizzes/${quizId}/publish`,
+    RESULTS_SUMMARY:     (quizId)      => `${API_BASE}/quizzes/${quizId}/results-summary`,
 
     PARTICIPANTS:  (courseId)          => `${API_BASE}/trainer/courses/${courseId}/participants`,
     PARTICIPANT:   (courseId, userId)  => `${API_BASE}/trainer/courses/${courseId}/participants/${userId}`,
@@ -173,6 +188,14 @@ export const API = {
   },
 
   /** Coding Assessment module (Judge0 sandbox + AI gen/review + plagiarism) */
+  RECORDINGS: {
+    LIST:        `${API_BASE}/recordings`,
+    DETAIL:      (id) => `${API_BASE}/recordings/${id}`,
+    STREAM:      (id) => `${API_BASE}/recordings/${id}/stream`,
+    UPLOAD:      `${API_BASE}/recordings/upload`,
+    DELETE:      (id) => `${API_BASE}/recordings/${id}`,
+  },
+
   CODING: {
     // Trainer
     ASSESSMENTS:          `${API_BASE}/coding/assessments`,
@@ -191,6 +214,27 @@ export const API = {
     REVIEW:      (subId) => `${API_BASE}/coding/participant/submissions/${subId}/review`,
     VIOLATION:(attemptId)=> `${API_BASE}/coding/participant/attempts/${attemptId}/violation`,
   }
+};
+
+export const codingAssessmentApi = {
+  create: (data) => fetch(`${API_BASE}/coding-assessments`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data) }),
+  list: () => fetch(`${API_BASE}/coding-assessments`, { headers: getAuthHeaders() }),
+  get: (id) => fetch(`${API_BASE}/coding-assessments/${id}`, { headers: getAuthHeaders() }),
+  update: (id, data) => fetch(`${API_BASE}/coding-assessments/${id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(data) }),
+  delete: (id) => fetch(`${API_BASE}/coding-assessments/${id}`, { method: 'DELETE', headers: getAuthHeaders() }),
+  publish: (id) => fetch(`${API_BASE}/coding-assessments/${id}/publish`, { method: 'POST', headers: getAuthHeaders() }),
+  close: (id) => fetch(`${API_BASE}/coding-assessments/${id}/close`, { method: 'POST', headers: getAuthHeaders() }),
+};
+
+export const codingAttemptApi = {
+  start: (assessmentId) => fetch(`${API_BASE}/coding-attempts/start`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ assessmentId }) }),
+  get: (id) => fetch(`${API_BASE}/coding-attempts/${id}`, { headers: getAuthHeaders() }),
+  submit: (id) => fetch(`${API_BASE}/coding-attempts/${id}/submit`, { method: 'POST', headers: getAuthHeaders() }),
+};
+
+export const codeExecutionApi = {
+  run: (data) => fetch(`${API_BASE}/code/run`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data) }),
+  submit: (data) => fetch(`${API_BASE}/code/submit`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data) }),
 };
 
 export { API_BASE, BACKEND_ORIGIN };

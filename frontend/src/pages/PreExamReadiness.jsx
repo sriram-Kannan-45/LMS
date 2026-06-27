@@ -143,7 +143,10 @@ function PreExamInner({ quizId, attemptId, quizData }) {
     onStop: () => proctor.report?.('SCREEN_SHARE_STOPPED'),
     onDenied: () => proctor.report?.('SCREEN_SHARE_DENIED'),
   });
-  useEffect(() => { streamRef.current = screenShare.stream; }, [screenShare.stream]);
+  useEffect(() => {
+    streamRef.current = screenShare.stream;
+    proctor.setScreenStream(screenShare.stream);
+  }, [screenShare.stream, proctor]);
 
   const fullscreen = useFullscreen({
     onExit: () => proctor.report?.('FULLSCREEN_EXIT'),
@@ -156,7 +159,9 @@ function PreExamInner({ quizId, attemptId, quizData }) {
   useEffect(() => {
     return () => {
       const s = streamRef.current;
-      if (s) try { s.getTracks().forEach((t) => t.stop()); } catch { /* swallow */ }
+      if (s && !justActivated.current) {
+        try { s.getTracks().forEach((t) => t.stop()); } catch { /* swallow */ }
+      }
       if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
     };
   }, []);
@@ -249,12 +254,12 @@ function PreExamInner({ quizId, attemptId, quizData }) {
         if (!ok) throw new Error('Fullscreen permission was denied');
       }
       // 3. INSERT exam_sessions row on the server
-      await proctor.start({
+      const s = await proctor.start({
         quizId, attemptId, fingerprintHash: fp, screenSharing: true,
       });
       // 4. PENDING -> ACTIVE
       justActivated.current = true;
-      await proctor.activate();
+      await proctor.activate(s.sessionId, s.sessionToken);
       // 5. useEffect on proctor.isActive will navigate
     } catch (e) {
       if (stuckTimerRef.current) { clearTimeout(stuckTimerRef.current); stuckTimerRef.current = null; }

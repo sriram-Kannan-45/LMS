@@ -113,4 +113,10 @@ export const proctorApi = {
     request(`/sessions/${sessionId}/force-terminate`, {
       method: 'POST', body: { reason },
     }),
+
+  getQuizReport: (quizId) =>
+    request(`/quiz/${quizId}/report`),
+
+  getQuizReportCSVUrl: (quizId) =>
+    `${API_BASE}/proctor/quiz/${quizId}/report/csv`,
 };

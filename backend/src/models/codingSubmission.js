@@ -14,6 +14,10 @@ const CodingSubmission = sequelize.define('CodingSubmission', {
   totalCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'total_count' },
   isFinal: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'is_final' },
   aiReview: { type: DataTypes.JSON, allowNull: true, field: 'ai_review' },
+  code: { type: DataTypes.TEXT, allowNull: true },
+  testsPassed: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'tests_passed' },
+  testsTotal: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'tests_total' },
+  submittedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW, field: 'submitted_at' },
 }, {
   tableName: 'coding_submissions',
   timestamps: true, createdAt: 'created_at', updatedAt: 'updated_at',

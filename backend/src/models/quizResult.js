@@ -47,6 +47,22 @@ const QuizResult = sequelize.define('QuizResult', {
     type: DataTypes.DATE,
     allowNull: true,
     field: 'evaluated_at'
+  },
+  resultPublished: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'result_published'
+  },
+  publishedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'published_at'
+  },
+  publishedBy: {
+    type: DataTypes.BIGINT.UNSIGNED,
+    allowNull: true,
+    field: 'published_by'
   }
 }, {
   tableName: 'quiz_results',

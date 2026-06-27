@@ -1,4 +1,4 @@
-const { LiveSession, Attendance, ChatMessage, User } = require('../models');
+const { LiveSession, Attendance, ChatMessage, User } = require('../../models');
 const logger = require('../../utils/logger');
 
 // Store active users per room for analytics

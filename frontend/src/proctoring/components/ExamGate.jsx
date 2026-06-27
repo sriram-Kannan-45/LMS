@@ -17,7 +17,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, AlertTriangle, Loader2, Clock, Lock, Eye, Wifi, MonitorPlay, Maximize2 } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, Loader2, Clock, Lock, Eye, Wifi, MonitorPlay, Maximize2, ShieldAlert } from 'lucide-react';
 
 import { useProctor } from '../ProctorContext';
 import useAuthUser from '../hooks/useAuthUser';
@@ -25,13 +25,16 @@ import useDeviceFingerprint from '../hooks/useDeviceFingerprint';
 import useScreenShare from '../hooks/useScreenShare';
 import useFullscreen from '../hooks/useFullscreen';
 import useNetworkStatus from '../hooks/useNetworkStatus';
+import { PROCTORING_LEVELS } from '../constants';
 
-const Step = ({ icon: Icon, label, ok, active, hint }) => (
+const Step = ({ icon: Icon, label, ok, active, hint, onClick }) => (
   <div
-    className="flex items-start gap-3 rounded-lg border px-4 py-3 transition"
+    onClick={onClick}
+    className="flex items-start gap-3 rounded-lg border px-4 py-3 transition select-none"
     style={{
       borderColor: ok ? '#a7f3d0' : active ? '#c7d2fe' : '#e2e8f0',
       background: ok ? '#ecfdf5' : active ? '#eef2ff' : '#f8fafc',
+      cursor: onClick ? 'pointer' : 'default',
     }}
   >
     <span
@@ -56,6 +59,8 @@ const Step = ({ icon: Icon, label, ok, active, hint }) => (
   </div>
 );
 
+import useProctoringMedia from '../hooks/useProctoringMedia';
+
 export default function ExamGate({ quizId, quizTitle, attemptId, onReady, onCancel }) {
   const proctor = useProctor();
   const { userId, ready: authReady } = useAuthUser();
@@ -63,16 +68,31 @@ export default function ExamGate({ quizId, quizTitle, attemptId, onReady, onCanc
   const isOnline = useNetworkStatus();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [consentChecked, setConsentChecked] = useState(false);
   const justActivated = useRef(false);
+
+  const proctorMedia = useProctoringMedia({ enabled: false });
+
+  // Sync screen stream to global context so WebRTC can access it
+  useEffect(() => {
+    proctor.setScreenStream(screenShare.stream);
+  }, [screenShare.stream, proctor.setScreenStream]);
 
   const screenShare = useScreenShare({
     onStop: () => proctor.report?.('SCREEN_SHARE_STOPPED'),
     onDenied: () => proctor.report?.('SCREEN_SHARE_DENIED'),
+    onInvalidShare: (e) => setError(e?.message || 'Please share your entire screen'),
   });
 
   const fullscreen = useFullscreen({
     onExit: () => proctor.report?.('FULLSCREEN_EXIT'),
   });
+
+  // Request permissions automatically on load
+  useEffect(() => {
+    proctorMedia.request();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Only navigate after the user explicitly clicked Begin (justActivated flag)
   useEffect(() => {
@@ -82,9 +102,14 @@ export default function ExamGate({ quizId, quizTitle, attemptId, onReady, onCanc
   }, [proctor.isActive, proctor.session?.sessionId, onReady]);
 
   const checksPassed =
-    !!fp && screenShare.isSharing && fullscreen.isFullscreen && isOnline;
+    !!fp &&
+    screenShare.isSharing &&
+    fullscreen.isFullscreen &&
+    isOnline &&
+    proctorMedia.cameraGranted &&
+    proctorMedia.micGranted;
   const canBegin =
-    authReady && !!userId && !!quizId && checksPassed && !busy;
+    authReady && !!userId && !!quizId && checksPassed && consentChecked && !busy;
 
   const handleBegin = async () => {
     setError(null);
@@ -152,16 +177,32 @@ export default function ExamGate({ quizId, quizTitle, attemptId, onReady, onCanc
             </p>
           </div>
 
-          {/* Shield illustration */}
+          {/* Live camera feed preview */}
           <div className="my-8 hidden items-center justify-center lg:flex">
             <div className="relative">
               <div className="absolute -inset-8 rounded-full bg-blue-200/40 blur-3xl" aria-hidden />
-              <div className="relative flex h-56 w-56 items-center justify-center rounded-full border border-blue-100 bg-white shadow-[0_30px_60px_-30px_rgba(30,64,175,0.4)]">
-                <ShieldCheck className="h-24 w-24 text-blue-600" strokeWidth={1.4} />
+              <div className="relative overflow-hidden h-56 w-56 rounded-2xl border border-blue-100 bg-black shadow-[0_30px_60px_-30px_rgba(30,64,175,0.4)] flex items-center justify-center">
+                {proctorMedia.stream ? (
+                  <video
+                    ref={(el) => {
+                      if (el && proctorMedia.stream) {
+                        el.srcObject = proctorMedia.stream;
+                        el.play().catch(() => {});
+                      }
+                    }}
+                    muted
+                    playsInline
+                    className="h-full w-full object-cover scale-x-[-1]"
+                  />
+                ) : (
+                  <ShieldCheck className="h-24 w-24 text-blue-600" strokeWidth={1.4} />
+                )}
               </div>
-              <div className="absolute -right-3 -top-3 h-10 w-10 rounded-full bg-emerald-500 text-white shadow-lg flex items-center justify-center">
-                <Lock className="h-4 w-4" />
-              </div>
+              {proctorMedia.cameraGranted && (
+                <div className="absolute -right-3 -top-3 h-10 w-10 rounded-full bg-emerald-500 text-white shadow-lg flex items-center justify-center">
+                  <Lock className="h-4 w-4" />
+                </div>
+              )}
             </div>
           </div>
 
@@ -176,9 +217,10 @@ export default function ExamGate({ quizId, quizTitle, attemptId, onReady, onCanc
                 <p className="text-sm font-semibold text-slate-900">Exam Rules</p>
                 <ul className="mt-2 space-y-1 text-xs leading-relaxed text-slate-600">
                   <li>• You must remain in fullscreen the entire time.</li>
+                  <li>• You must share your <strong>entire screen</strong> (not a tab or window).</li>
                   <li>• Tab switching, copy/paste, and dev-tools are disabled.</li>
-                  <li>• 3 fullscreen exits or 5 warnings auto-submit your exam.</li>
-                  <li>• Your screen is shared with your instructor.</li>
+                  <li>• Your screen is streamed live to your instructor for monitoring.</li>
+                  <li>• If disconnected, you have a 2-minute grace period to reconnect before the exam auto-submits.</li>
                   <li>• Answers autosave every few seconds — refreshing won't lose progress.</li>
                 </ul>
               </div>
@@ -200,7 +242,7 @@ export default function ExamGate({ quizId, quizTitle, attemptId, onReady, onCanc
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-900">Readiness checklist</h2>
               <span className="text-xs font-medium text-slate-500">
-                {[!!userId, !!fp, isOnline, screenShare.isSharing, fullscreen.isFullscreen].filter(Boolean).length}/5
+                {[!!userId, !!fp, isOnline, proctorMedia.cameraGranted && proctorMedia.micGranted, screenShare.isSharing, fullscreen.isFullscreen].filter(Boolean).length}/6
               </span>
             </div>
 
@@ -227,6 +269,18 @@ export default function ExamGate({ quizId, quizTitle, attemptId, onReady, onCanc
                 hint={isOnline ? 'Connected' : 'Waiting for connection'}
               />
               <Step
+                icon={Eye}
+                label="Camera & Microphone access"
+                ok={proctorMedia.cameraGranted && proctorMedia.micGranted}
+                active={!proctorMedia.cameraGranted && isOnline}
+                onClick={proctorMedia.request}
+                hint={
+                  proctorMedia.cameraGranted && proctorMedia.micGranted
+                    ? 'Camera and microphone feeds authorized'
+                    : 'Click to allow camera and microphone access'
+                }
+              />
+              <Step
                 icon={MonitorPlay}
                 label="Screen sharing active"
                 ok={screenShare.isSharing}
@@ -246,15 +300,36 @@ export default function ExamGate({ quizId, quizTitle, attemptId, onReady, onCanc
               />
             </div>
 
+            {/* Proctoring level badge */}
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2">
+              <ShieldAlert className="h-4 w-4 text-blue-600" />
+              <span className="text-xs font-medium text-blue-700">
+                Proctoring Level: {proctor.session?.proctoringLevel || 'MEDIUM'}
+              </span>
+            </div>
+
+            <div className="mt-3 flex items-start gap-2 border border-slate-100 bg-slate-50/50 rounded-lg p-3">
+              <input
+                type="checkbox"
+                id="consent-check"
+                checked={consentChecked}
+                onChange={e => setConsentChecked(e.target.checked)}
+                className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="consent-check" className="text-xs text-slate-600 leading-relaxed cursor-pointer select-none">
+                I consent to my entire screen being shared and streamed live to my instructor, periodic webcam photo sampling, and background microphone monitoring for proctoring review in compliance with GDPR/CCPA.
+              </label>
+            </div>
+
             <AnimatePresence>
-              {(error || proctor.errorMessage) && (
+              {(error || proctor.errorMessage || proctorMedia.error) && (
                 <motion.p
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
                 >
-                  {error || proctor.errorMessage}
+                  {error || proctor.errorMessage || proctorMedia.error}
                 </motion.p>
               )}
             </AnimatePresence>

@@ -43,7 +43,7 @@ const User = sequelize.define('User', {
     defaultValue: 'PARTICIPANT'
   },
   status: {
-    type: DataTypes.ENUM('PENDING', 'APPROVED'),
+    type: DataTypes.ENUM('PENDING', 'APPROVED', 'INACTIVE'),
     allowNull: false,
     defaultValue: 'PENDING'
   },

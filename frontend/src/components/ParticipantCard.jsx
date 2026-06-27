@@ -1,79 +1,91 @@
-import React from 'react'
-import { Trash2, Edit, Eye } from 'lucide-react'
-import StatusBadge from './StatusBadge'
+import { useMemo } from 'react';
+import { assetUrl } from '../api/api';
 
-function ParticipantCard({ 
-  type = 'participant',
-  name = '',
-  email = '',
-  phone = '',
-  status = 'PENDING',
-  date = '',
-  avatar = '',
-  onView = null,
-  onEdit = null,
-  onDelete = null,
-  metadata = {}
-}) {
-  const getInitials = (fullName) => {
-    if (!fullName) return '?'
-    return fullName
-      .trim()
-      .split(' ')
-      .map(n => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2)
-  }
+function formatTime(totalSeconds) {
+  if (totalSeconds == null || totalSeconds < 0) return '--:--';
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '-'
-    try {
-      return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    } catch {
-      return dateStr
-    }
-  }
+function statusBadge(status) {
+  const map = {
+    'Not Started': 'bg-slate-100 text-slate-600',
+    'In Progress': 'bg-green-100 text-green-700',
+    Submitted: 'bg-blue-100 text-blue-700',
+    Flagged: 'bg-red-100 text-red-700',
+    Disqualified: 'bg-red-100 text-red-700',
+  };
+  return map[status] || 'bg-slate-100 text-slate-600';
+}
+
+export default function ParticipantCard({ participant, latestScreenshot, onClick }) {
+  const imageSrc = useMemo(() => {
+    if (latestScreenshot?.startsWith('data:')) return latestScreenshot;
+    if (latestScreenshot) return assetUrl(latestScreenshot);
+    return null;
+  }, [latestScreenshot]);
+
+  const highlighted = participant.violationCount > 3;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-lg transition-shadow duration-200">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-sm">
-            {avatar || getInitials(name)}
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-gray-800">{name || '-'}</h3>
-            <p className="text-sm text-gray-500">{email}</p>
-          </div>
+    <div
+      onClick={onClick}
+      className={`relative cursor-pointer overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md ${
+        highlighted ? 'border-2 border-red-500 ring-2 ring-red-100' : 'border-slate-200'
+      }`}
+    >
+      {/* Violation count badge */}
+      {participant.violationCount > 0 && (
+        <div className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white">
+          {participant.violationCount}
         </div>
-        <StatusBadge status={status} size="sm" />
+      )}
+
+      <div className="mb-3 flex items-center gap-3">
+        {participant.avatar ? (
+          <img
+            src={assetUrl(participant.avatar)}
+            alt={participant.name}
+            className="h-10 w-10 rounded-full object-cover"
+          />
+        ) : (
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700">
+            {participant.name?.charAt(0).toUpperCase() || '?'}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-slate-900">{participant.name}</p>
+          <span
+            className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusBadge(
+              participant.status
+            )}`}
+          >
+            {participant.status}
+          </span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-sm mb-4 pb-4 border-b">
-        {phone && <p className="text-gray-600"><span className="font-medium">Phone:</span> {phone}</p>}
-        {date && <p className="text-gray-600"><span className="font-medium">Date:</span> {formatDate(date)}</p>}
+      <div className="mb-3">
+        <p className="text-xs text-slate-500">Time remaining</p>
+        <p className="font-mono text-lg font-semibold text-slate-800">
+          {formatTime(participant.timeRemaining)}
+        </p>
       </div>
 
-      <div className="flex gap-2 justify-end">
-        {onView && (
-          <button onClick={onView} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" aria-label="View details">
-            <Eye className="w-4 h-4" />
-          </button>
-        )}
-        {onEdit && (
-          <button onClick={onEdit} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition" aria-label="Edit">
-            <Edit className="w-4 h-4" />
-          </button>
-        )}
-        {onDelete && (
-          <button onClick={onDelete} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" aria-label="Delete">
-            <Trash2 className="w-4 h-4" />
-          </button>
+      <div className="aspect-video overflow-hidden rounded-lg bg-slate-100">
+        {imageSrc ? (
+          <img
+            src={imageSrc}
+            alt="Latest screenshot"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">
+            No screenshot yet
+          </div>
         )}
       </div>
     </div>
-  )
+  );
 }
-
-export default ParticipantCard
