@@ -128,8 +128,15 @@ exports.list = async (req, res) => {
       const recJson = rec.toJSON();
       let violationCount = 0;
       try {
+        const sessionWhere = recJson.assessmentType === 'coding_assessment'
+          ? {
+              assessmentType: 'coding_assessment',
+              assessmentId: recJson.codingAttempt?.assessmentId,
+              participantId: recJson.participantId,
+            }
+          : { quizId: recJson.quizId, participantId: recJson.participantId };
         const sessions = await ExamSession.findAll({
-          where: { quizId: rec.quizId, participantId: rec.participantId },
+          where: sessionWhere,
           attributes: ['id']
         });
         if (sessions.length > 0) {
@@ -198,8 +205,15 @@ exports.getOne = async (req, res) => {
 
     let violations = [];
     try {
+      const sessionWhere = recording.assessmentType === 'coding_assessment'
+        ? {
+            assessmentType: 'coding_assessment',
+            assessmentId: recording.codingAttempt?.assessmentId,
+            participantId: recording.participantId,
+          }
+        : { quizId: recording.quizId, participantId: recording.participantId };
       const sessions = await ExamSession.findAll({
-        where: { quizId: recording.quizId, participantId: recording.participantId },
+        where: sessionWhere,
         attributes: ['id'],
       });
       if (sessions.length > 0) {
@@ -252,7 +266,7 @@ exports.stream = async (req, res) => {
       return fail(res, 403, 'Access denied');
     }
 
-    if (userRole === 'PARTICIPANT') {
+    if (userRole === 'PARTICIPANT' && recording.participantId !== userId) {
       return fail(res, 403, 'Access denied');
     }
 

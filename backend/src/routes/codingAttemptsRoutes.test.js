@@ -125,6 +125,11 @@ const mockUser = {
   findByPk: jest.fn((id) => Promise.resolve({ id })),
 };
 
+const mockExamSession = {
+  findOne: jest.fn(() => Promise.resolve(null)),
+  create: jest.fn((data) => Promise.resolve({ ...data, sessionToken: 'mock-session-token' })),
+};
+
 const enrollments = [];
 
 jest.mock('../models', () => ({
@@ -135,6 +140,7 @@ jest.mock('../models', () => ({
   TestCase: mockTestCase,
   Enrollment: mockEnrollment,
   User: mockUser,
+  ExamSession: mockExamSession,
 }));
 
 const codingAttemptsRoutes = require('./codingAttemptsRoutes');

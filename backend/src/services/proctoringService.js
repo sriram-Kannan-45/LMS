@@ -14,10 +14,12 @@ const {
   ProctorActivity,
   AIQuiz,
   QuizAttempt,
+  CodingAttempt,
   User,
 } = require('../models');
 const { encrypt, decrypt, newSessionToken } = require('../utils/crypto');
 const logger = require('../utils/logger');
+const aiQuizService = require('./aiQuizService');
 
 // ── Tunables ────────────────────────────────────────────────────────────────
 const DEFAULT_MAX_FULLSCREEN_EXITS = 3;
@@ -156,13 +158,68 @@ async function getActiveSessionForUser(userId) {
   return session;
 }
 
-async function startSession({ userId, quizId, attemptId, fingerprintHash, ipAddress, userAgent, screenSharing }) {
-  const quiz = await getQuizOrThrow(quizId);
+async function startSession({ userId, quizId, assessmentType, assessmentId, attemptId, fingerprintHash, ipAddress, userAgent, screenSharing }) {
+  const isCoding = assessmentType === 'coding_assessment';
 
   // Single-device enforcement: if any other ACTIVE session for this user, terminate it.
   const existingActive = await ExamSession.findOne({
     where: { participantId: userId, status: { [Op.in]: ['PENDING', 'ACTIVE'] } },
   });
+
+  if (isCoding) {
+    if (existingActive && (existingActive.assessmentType !== 'coding_assessment' || existingActive.assessmentId !== Number(assessmentId))) {
+      await terminateSession({
+        session: existingActive,
+        reason: 'Started exam on another device or assessment',
+        type: 'MULTIPLE_LOGIN',
+      });
+    }
+
+    const existingCoding = await ExamSession.findOne({
+      where: { participantId: userId, assessmentType: 'coding_assessment', assessmentId, status: { [Op.in]: ['PENDING', 'ACTIVE'] } },
+      order: [['created_at', 'DESC']],
+    });
+
+    if (existingCoding) {
+      await populateViolationCounts(existingCoding);
+      return { session: existingCoding, resumed: true };
+    }
+
+    const device = await registerDevice({
+      userId, fingerprintHash, ipAddress, userAgent,
+      label: 'Exam device',
+    });
+
+    const attempt = attemptId ? await CodingAttempt.findByPk(attemptId) : null;
+
+    const startedAt = new Date();
+    const session = await ExamSession.create({
+      assessmentType: 'coding_assessment',
+      assessmentId,
+      attemptId: attempt ? attempt.id : null,
+      participantId: userId,
+      sessionToken: newSessionToken(),
+      deviceFingerprintId: device ? device.id : null,
+      status: 'PENDING',
+      isScreenSharing: !!screenSharing,
+      ipAddress,
+      userAgent,
+      startedAt,
+      endsAt: null,
+      encryptedPayload: encrypt({ seed: Date.now(), userId, assessmentId }),
+      lastHeartbeatAt: startedAt,
+      gracePeriodEndsAt: null,
+      disconnectedAt: null,
+      proctoringLevel: 'MEDIUM',
+      gracePeriodMinutes: GRACE_PERIOD_DEFAULT_MINUTES,
+    });
+
+    await populateViolationCounts(session);
+
+    return { session, resumed: false };
+  }
+
+  const quiz = await getQuizOrThrow(quizId);
 
   if (existingActive && existingActive.quizId !== Number(quizId)) {
     await terminateSession({
@@ -279,6 +336,13 @@ async function terminateSession({ session, reason, type = 'TERMINATED' }) {
   session.endedAt = new Date();
   await session.save();
 
+  // Record activity for exam terminated
+  await recordActivity({
+    session,
+    eventType: 'EXAM_TERMINATED',
+    payload: { reason, endedAt: session.endedAt }
+  });
+
   await Violation.create({
     sessionId: session.id,
     participantId: session.participantId,
@@ -288,15 +352,30 @@ async function terminateSession({ session, reason, type = 'TERMINATED' }) {
     message: reason,
   });
 
-  // Best-effort: mark attempt submitted so existing AI quiz scoring picks it up
+  // Best-effort: auto-submit and grade the linked QuizAttempt.
+  // No answers are available server-side at this point, so the attempt is
+  // graded with an empty submission (zero score) for violation-based termination.
   if (session.attemptId) {
     try {
-      await QuizAttempt.update(
-        { status: 'SUBMITTED', submittedAt: new Date() },
-        { where: { id: session.attemptId, status: 'IN_PROGRESS' } },
-      );
+      const attempt = await QuizAttempt.findOne({
+        where: { id: session.attemptId, status: 'IN_PROGRESS' },
+      });
+      if (attempt) {
+        console.log(`[proctoringService] Auto-submitting attempt ${attempt.id} on session termination`);
+        await aiQuizService.submitAndGradeAttempt(attempt, [], { autoSubmit: true });
+        console.log(`[proctoringService] Auto-submitted attempt ${attempt.id}`);
+      }
     } catch (e) {
-      logger.warn('Failed to flag attempt SUBMITTED on terminate', { err: e.message });
+      logger.warn('Failed to auto-submit attempt on terminate', { err: e.message });
+      // Fallback: just flag as submitted so scoring can be retried later
+      try {
+        await QuizAttempt.update(
+          { status: 'SUBMITTED', submittedAt: new Date() },
+          { where: { id: session.attemptId, status: 'IN_PROGRESS' } },
+        );
+      } catch (e2) {
+        logger.warn('Failed to flag attempt SUBMITTED on terminate', { err: e2.message });
+      }
     }
   }
 
@@ -310,6 +389,14 @@ async function submitSession(session) {
   session.status = 'SUBMITTED';
   session.endedAt = new Date();
   await session.save();
+
+  // Record activity for exam submitted
+  await recordActivity({
+    session,
+    eventType: 'EXAM_SUBMITTED',
+    payload: { submittedAt: session.endedAt }
+  });
+
   await populateViolationCounts(session);
   return session;
 }

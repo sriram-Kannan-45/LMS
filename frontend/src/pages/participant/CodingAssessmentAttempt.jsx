@@ -45,8 +45,8 @@ function CodingAssessmentAttemptInner({ user }) {
   const [errorMsg, setErrorMsg] = useState(null);
   const [consented, setConsented] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [sessionToken, setSessionToken] = useState(null);
 
-  const sessionId = `coding_${assessmentId}_${Date.now()}`;
   const {
     stream: screenStream,
     startRecording,
@@ -57,7 +57,7 @@ function CodingAssessmentAttemptInner({ user }) {
     assessmentId,
     codingAttemptId: attempt?.id,
     participantId: user?.id,
-    sessionId,
+    sessionId: sessionToken,
     userToken: user?.token,
     autoStop: false,
   });
@@ -103,6 +103,11 @@ function CodingAssessmentAttemptInner({ user }) {
           throw new Error('No attempt id returned from start endpoint.');
         }
 
+        const returnedToken = attemptData?.sessionToken || attemptData?.data?.sessionToken || null;
+        if (returnedToken) {
+          setSessionToken(returnedToken);
+        }
+
         sessionStorage.setItem(`coding_attempt_${assessmentId}`, String(attemptId));
 
         const fullAttemptRes = await codingAttemptApi.get(attemptId);
@@ -112,6 +117,10 @@ function CodingAssessmentAttemptInner({ user }) {
         }
 
         const attemptObj = normalizeAttempt(fullAttemptData);
+
+        if (attemptObj?.sessionId && !returnedToken) {
+          setSessionToken(attemptObj.sessionId);
+        }
 
         setAssessment(assessmentObj);
         setAttempt(attemptObj);
@@ -156,7 +165,8 @@ function CodingAssessmentAttemptInner({ user }) {
         proctor.setScreenStream(screenStream);
 
         const session = await proctor.start({
-          quizId: Number(assessmentId),
+          assessmentType: 'coding_assessment',
+          assessmentId: Number(assessmentId),
           attemptId: Number(attempt.id),
           fingerprintHash,
           screenSharing: true,

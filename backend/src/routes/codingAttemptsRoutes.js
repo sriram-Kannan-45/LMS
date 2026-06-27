@@ -7,12 +7,55 @@ const {
   TestCase,
   Enrollment,
   User,
+  ExamSession,
 } = require('../models');
 const authenticateToken = require('../middleware/auth');
+const { newSessionToken } = require('../utils/crypto');
+const { Op } = require('sequelize');
 
 const router = express.Router();
 
 router.use(authenticateToken);
+
+function clientIp(req) {
+  return (
+    req.headers['x-forwarded-for']?.split(',')[0] ||
+    req.socket?.remoteAddress ||
+    null
+  );
+}
+
+async function getOrCreateCodingSession({ participantId, assessmentId, attemptId, ipAddress, userAgent }) {
+  let session = await ExamSession.findOne({
+    where: {
+      assessmentType: 'coding_assessment',
+      assessmentId,
+      participantId,
+      attemptId,
+      status: { [Op.in]: ['PENDING', 'ACTIVE'] },
+    },
+  });
+
+  if (session) return session;
+
+  session = await ExamSession.create({
+    assessmentType: 'coding_assessment',
+    assessmentId,
+    attemptId,
+    participantId,
+    sessionToken: newSessionToken(),
+    status: 'PENDING',
+    isScreenSharing: true,
+    ipAddress,
+    userAgent,
+    startedAt: new Date(),
+    lastHeartbeatAt: new Date(),
+    proctoringLevel: 'MEDIUM',
+    gracePeriodMinutes: 2,
+  });
+
+  return session;
+}
 
 function isSubmitted(status) {
   return status === 'SUBMITTED' || status === 'AUTO_SUBMITTED';
@@ -86,10 +129,18 @@ router.post('/start', async (req, res) => {
       if (isSubmitted(existingAttempt.status)) {
         return res.status(409).json({ error: 'Already submitted' });
       }
+      const session = await getOrCreateCodingSession({
+        participantId,
+        assessmentId,
+        attemptId: existingAttempt.id,
+        ipAddress: clientIp(req),
+        userAgent: req.headers['user-agent'],
+      });
       return res.json({
         success: true,
         attemptId: existingAttempt.id,
         status: existingAttempt.status,
+        sessionToken: session.sessionToken,
       });
     }
 
@@ -100,10 +151,21 @@ router.post('/start', async (req, res) => {
       startedAt: new Date(),
     });
 
+    const session = await getOrCreateCodingSession({
+      participantId,
+      assessmentId,
+      attemptId: attempt.id,
+      ipAddress: clientIp(req),
+      userAgent: req.headers['user-agent'],
+    });
+
+    await attempt.update({ sessionId: session.sessionToken });
+
     return res.status(201).json({
       success: true,
       attemptId: attempt.id,
       status: attempt.status,
+      sessionToken: session.sessionToken,
     });
   } catch (error) {
     console.error('Error starting coding attempt:', error);

@@ -32,12 +32,16 @@ function emitTrainerUpdate(req, quizId, payload) {
 exports.startSession = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { quizId, attemptId, fingerprintHash, screenSharing = false } = req.body;
-    if (!quizId) return fail(res, 400, 'quizId is required');
+    const { quizId, attemptId, fingerprintHash, screenSharing = false, assessmentType, assessmentId } = req.body;
+    const isCoding = assessmentType === 'coding_assessment';
+    if (!isCoding && !quizId) return fail(res, 400, 'quizId is required');
+    if (isCoding && !assessmentId) return fail(res, 400, 'assessmentId is required for coding assessments');
 
     const { session, resumed } = await proctoring.startSession({
       userId,
       quizId,
+      assessmentType,
+      assessmentId,
       attemptId,
       fingerprintHash,
       ipAddress: clientIp(req),
@@ -45,10 +49,12 @@ exports.startSession = async (req, res, next) => {
       screenSharing,
     });
 
-    emitTrainerUpdate(req, quizId, {
-      type: resumed ? 'resumed' : 'started',
-      session: proctoring.buildClientView(session),
-    });
+    if (!isCoding) {
+      emitTrainerUpdate(req, quizId, {
+        type: resumed ? 'resumed' : 'started',
+        session: proctoring.buildClientView(session),
+      });
+    }
 
     ok(res, { ...proctoring.buildClientView(session), resumed });
   } catch (err) { next(err); }
