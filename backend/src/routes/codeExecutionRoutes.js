@@ -4,6 +4,7 @@ const {
   TestCase,
   CodingAttempt,
   CodingSubmission,
+  CodingAssessment,
 } = require('../models');
 const authenticateToken = require('../middleware/auth');
 const { runTests, calculateScore } = require('../services/codeExecutionService');
@@ -31,6 +32,39 @@ function deriveStatus(passed, total) {
   return 'PARTIAL';
 }
 
+function redactHiddenTestCases(results, testCases) {
+  return results.map((r, idx) => {
+    const tc = testCases[idx];
+    if (tc && tc.isHidden) {
+      return {
+        isHidden: true,
+        passed: r.status === 'OK',
+        status: r.status,
+        timeMs: r.timeMs,
+      };
+    }
+    return r;
+  });
+}
+
+async function canExecuteCode(req, question) {
+  const role = req.user.role;
+  if (role === 'ADMIN' || role === 'TRAINER') return true;
+
+  const assessment = await CodingAssessment.findByPk(question.assessmentId);
+  if (!assessment || assessment.status !== 'PUBLISHED') return false;
+
+  const attempt = await CodingAttempt.findOne({
+    where: {
+      assessmentId: question.assessmentId,
+      participantId: req.user.id,
+      status: ['IN_PROGRESS', 'SUBMITTED', 'AUTO_SUBMITTED'],
+    },
+  });
+
+  return !!attempt;
+}
+
 // POST /api/code/run
 router.post('/run', async (req, res) => {
   try {
@@ -43,6 +77,11 @@ router.post('/run', async (req, res) => {
     const question = await CodingQuestion.findByPk(problemId);
     if (!question) {
       return res.status(404).json({ error: 'Question not found' });
+    }
+
+    const canRun = await canExecuteCode(req, question);
+    if (!canRun) {
+      return res.status(403).json({ error: 'Access denied' });
     }
 
     const testCases = await getTestCases(problemId, 'sample');
@@ -134,10 +173,12 @@ router.post('/submit', async (req, res) => {
       .filter((_, idx) => allTestCases[idx]?.isHidden)
       .filter((r) => r.status === 'OK').length;
 
+    const safeResults = redactHiddenTestCases(results, allTestCases);
+
     return res.json({
       success: true,
       score,
-      results,
+      results: safeResults,
       hiddenTestsPassed: hiddenPassed,
       hiddenTestsTotal: hiddenTestCases.length,
       submissionId: submission.id,

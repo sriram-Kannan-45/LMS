@@ -8,6 +8,7 @@ const {
   TestCase,
   Training,
   User,
+  Enrollment,
 } = require('../models');
 const authenticateToken = require('../middleware/auth');
 const roleMiddleware = require('../middleware/roles');
@@ -16,6 +17,69 @@ const router = express.Router();
 
 // All endpoints require authentication and TRAINER/ADMIN role.
 router.use(authenticateToken);
+
+// GET /api/coding-assessments/:id/participant
+// Participant-safe read endpoint: visible test cases only, published + enrolled.
+router.get('/:id/participant', async (req, res) => {
+  try {
+    const assessmentId = req.params.id;
+    const userId = req.user.id;
+
+    const assessment = await CodingAssessment.findByPk(assessmentId, {
+      attributes: [
+        'id',
+        'title',
+        'description',
+        'durationMinutes',
+        'passingScore',
+        'difficulty',
+        'language',
+        'isProctored',
+        'maxViolations',
+        'status',
+        'trainingId',
+      ],
+      include: [
+        {
+          model: CodingQuestion,
+          as: 'questions',
+          order: [['order_index', 'ASC']],
+          include: [
+            {
+              model: TestCase,
+              as: 'testCases',
+              where: { isHidden: false },
+              required: false,
+              order: [['order_index', 'ASC']],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!assessment || assessment.status !== 'PUBLISHED') {
+      return res.status(404).json({ error: 'Assessment not found' });
+    }
+
+    const enrollment = await Enrollment.findOne({
+      where: {
+        participantId: userId,
+        trainingId: assessment.trainingId,
+        status: 'ENROLLED',
+      },
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({ error: 'You are not enrolled in this training' });
+    }
+
+    return res.json({ assessment });
+  } catch (error) {
+    console.error('Error fetching participant coding assessment:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 router.use(roleMiddleware('TRAINER', 'ADMIN'));
 
 async function verifyTrainerAccess(req, res, assessment) {

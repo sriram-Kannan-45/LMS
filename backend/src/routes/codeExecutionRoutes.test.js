@@ -20,12 +20,14 @@ jest.mock('../services/codeExecutionService', () => ({
 
 const questions = {};
 const attempts = {};
+const assessments = {};
 const submissions = [];
 let nextSubmissionId = 1;
 
 function resetStore() {
   Object.keys(questions).forEach((key) => delete questions[key]);
   Object.keys(attempts).forEach((key) => delete attempts[key]);
+  Object.keys(assessments).forEach((key) => delete assessments[key]);
   Object.keys(testCasesByQuestion).forEach((key) => delete testCasesByQuestion[key]);
   submissions.length = 0;
   nextSubmissionId = 1;
@@ -36,6 +38,7 @@ function addQuestion(id, attrs) {
     id,
     title: 'Q' + id,
     marks: 10,
+    assessmentId: 1,
     ...attrs,
   };
 }
@@ -45,6 +48,8 @@ function addAttempt(id, attrs) {
     id,
     participantId: 1,
     totalScore: 0,
+    assessmentId: 1,
+    status: 'IN_PROGRESS',
     ...attrs,
     update: jest.fn(function (updates) {
       Object.assign(this, updates);
@@ -109,6 +114,20 @@ const mockTestCase = {
 
 const mockCodingAttempt = {
   findByPk: jest.fn((id) => Promise.resolve(attempts[id] || null)),
+  findOne: jest.fn(({ where }) => {
+    const list = Object.values(attempts);
+    const found = list.find(
+      (a) =>
+        a.assessmentId === where.assessmentId &&
+        a.participantId === where.participantId &&
+        (where.status === undefined || where.status.includes(a.status)),
+    );
+    return Promise.resolve(found || null);
+  }),
+};
+
+const mockCodingAssessment = {
+  findByPk: jest.fn((id) => Promise.resolve(assessments[id] || { id, status: 'PUBLISHED' })),
 };
 
 const mockCodingSubmission = {
@@ -143,6 +162,7 @@ jest.mock('../models', () => ({
   TestCase: mockTestCase,
   CodingAttempt: mockCodingAttempt,
   CodingSubmission: mockCodingSubmission,
+  CodingAssessment: mockCodingAssessment,
 }));
 
 const codeExecutionRoutes = require('./codeExecutionRoutes');
@@ -162,10 +182,10 @@ describe('Code Execution Routes', () => {
     mockActiveUser = { id: 1, role: 'PARTICIPANT', email: 'participant@test.com' };
     jest.clearAllMocks();
 
-    addQuestion(1, { marks: 10, timeLimitSec: 2 });
-    addQuestion(2, { marks: 20, timeLimitSec: 3 });
-    addAttempt(1, { participantId: 1 });
-    addAttempt(2, { participantId: 2 });
+    addQuestion(1, { marks: 10, timeLimitSec: 2, assessmentId: 1 });
+    addQuestion(2, { marks: 20, timeLimitSec: 3, assessmentId: 2 });
+    addAttempt(1, { participantId: 1, assessmentId: 1, status: 'IN_PROGRESS' });
+    addAttempt(2, { participantId: 2, assessmentId: 2, status: 'IN_PROGRESS' });
 
     addTestCase(1, { input: '1 2', expectedOutput: '3', isHidden: false });
     addTestCase(1, { input: '3 4', expectedOutput: '7', isHidden: true });

@@ -28,6 +28,25 @@ async function canViewAttempt(req, attempt) {
   return false;
 }
 
+function sanitizeParticipantAttempt(attempt) {
+  const plain = attempt.get ? attempt.get({ plain: true }) : attempt;
+
+  if (plain.assessment && Array.isArray(plain.assessment.questions)) {
+    plain.assessment.questions = plain.assessment.questions.map((q) => ({
+      ...q,
+      testCases: Array.isArray(q.testCases)
+        ? q.testCases.filter((tc) => tc.isHidden !== true)
+        : q.testCases,
+    }));
+  }
+
+  if (Array.isArray(plain.submissions)) {
+    plain.submissions = plain.submissions.filter((s) => s.isFinal === true);
+  }
+
+  return plain;
+}
+
 // POST /api/coding-attempts/start
 router.post('/start', async (req, res) => {
   try {
@@ -129,7 +148,12 @@ router.get('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    return res.json({ attempt });
+    const isParticipantOwner = req.user.role === 'PARTICIPANT' && attempt.participantId === req.user.id;
+    const responseAttempt = isParticipantOwner
+      ? sanitizeParticipantAttempt(attempt)
+      : attempt;
+
+    return res.json({ attempt: responseAttempt });
   } catch (error) {
     console.error('Error fetching coding attempt:', error);
     return res.status(500).json({ error: error.message });
