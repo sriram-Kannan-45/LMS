@@ -2,7 +2,9 @@ const express = require('express');
 const { sequelize } = require('../config/db');
 const {
   CodingAssessment,
+  CodingAttempt,
   CodingQuestion,
+  CodingSubmission,
   TestCase,
   Training,
   User,
@@ -443,6 +445,62 @@ router.post('/:id/close', async (req, res) => {
     res.json({ message: 'Assessment closed successfully', assessment: fullAssessment });
   } catch (error) {
     console.error('Error closing coding assessment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/coding-assessments/:id/results
+router.get('/:id/results', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
+  try {
+    const assessment = await CodingAssessment.findByPk(req.params.id);
+    if (!assessment) {
+      return res.status(404).json({ error: 'Assessment not found' });
+    }
+
+    const hasAccess = await verifyTrainerAccess(req, res, assessment);
+    if (!hasAccess) return;
+
+    const attempts = await CodingAttempt.findAll({
+      where: { assessmentId: assessment.id },
+      include: [
+        {
+          model: User,
+          as: 'participant',
+          attributes: ['id', 'name', 'email'],
+        },
+        {
+          model: CodingSubmission,
+          as: 'submissions',
+          where: { isFinal: true },
+          required: false,
+        },
+      ],
+      order: [['totalScore', 'DESC']],
+    });
+
+    res.json({ success: true, results: attempts, assessment });
+  } catch (error) {
+    console.error('Error fetching coding assessment results:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/coding-assessments/:id/publish-result
+router.post('/:id/publish-result', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
+  try {
+    const assessment = await CodingAssessment.findByPk(req.params.id);
+    if (!assessment) {
+      return res.status(404).json({ error: 'Assessment not found' });
+    }
+
+    const hasAccess = await verifyTrainerAccess(req, res, assessment);
+    if (!hasAccess) return;
+
+    await assessment.update({ resultStatus: 'PUBLISHED' });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error publishing coding assessment results:', error);
     res.status(500).json({ error: error.message });
   }
 });

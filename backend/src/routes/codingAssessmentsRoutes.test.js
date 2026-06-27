@@ -40,9 +40,14 @@ function resetStore() {
   assessments.length = 0;
   questions.length = 0;
   testCases.length = 0;
+  participants.length = 0;
+  attempts.length = 0;
+  submissions.length = 0;
   nextAssessmentId = 1;
   nextQuestionId = 1;
   nextTestCaseId = 1;
+  nextAttemptId = 1;
+  nextSubmissionId = 1;
 }
 
 function makeAssessment(data) {
@@ -79,8 +84,17 @@ const mockTraining = {
   }),
 };
 
+let participants = [];
 const mockUser = {
   findByPk: jest.fn((id) => Promise.resolve({ id, name: 'User ' + id, email: 'user' + id + '@test.com' })),
+  findAll: jest.fn(({ where }) => {
+    let list = participants;
+    if (where && where.id !== undefined) {
+      const ids = Array.isArray(where.id) ? where.id : [where.id];
+      list = participants.filter((p) => ids.includes(p.id));
+    }
+    return Promise.resolve(list);
+  }),
 };
 
 const mockCodingAssessment = {
@@ -168,9 +182,45 @@ const mockTestCase = {
   }),
 };
 
+let attempts = [];
+let submissions = [];
+let nextAttemptId = 1;
+let nextSubmissionId = 1;
+
+const mockCodingAttempt = {
+  findAll: jest.fn(({ where, include, order }) => {
+    let list = attempts.filter((a) => a.assessmentId === where.assessmentId);
+    list = list.map((a) => ({
+      ...a,
+      participant: participants.find((p) => p.id === a.participantId) || null,
+      submissions: submissions.filter((s) => s.attemptId === a.id && s.isFinal),
+    }));
+    if (Array.isArray(order) && order[0][0] === 'totalScore' && order[0][1] === 'DESC') {
+      list.sort((x, y) => (y.totalScore || 0) - (x.totalScore || 0));
+    }
+    return Promise.resolve(list);
+  }),
+};
+
+const mockCodingSubmission = {
+  findAll: jest.fn(({ where }) => {
+    let list = submissions;
+    if (where && where.attemptId !== undefined) {
+      const ids = Array.isArray(where.attemptId) ? where.attemptId : [where.attemptId];
+      list = submissions.filter((s) => ids.includes(s.attemptId));
+    }
+    if (where && where.isFinal !== undefined) {
+      list = list.filter((s) => s.isFinal === where.isFinal);
+    }
+    return Promise.resolve(list);
+  }),
+};
+
 jest.mock('../models', () => ({
   CodingAssessment: mockCodingAssessment,
+  CodingAttempt: mockCodingAttempt,
   CodingQuestion: mockCodingQuestion,
+  CodingSubmission: mockCodingSubmission,
   TestCase: mockTestCase,
   Training: mockTraining,
   User: mockUser,
@@ -414,6 +464,69 @@ describe('Coding Assessments Routes', () => {
       app = buildApp();
       const res = await request(app).post(`/api/coding-assessments/${a.id}/close`);
       expect(res.statusCode).toBe(400);
+    });
+  });
+
+  describe('GET /api/coding-assessments/:id/results', () => {
+    it('returns attempts ordered by total score with participants and final submissions', async () => {
+      const a = makeAssessment({ trainerId: 1, trainingId: 1, title: 'Result Assessment', durationMinutes: 60 });
+      participants.push({ id: 10, name: 'Alice', email: 'alice@test.com' });
+      participants.push({ id: 11, name: 'Bob', email: 'bob@test.com' });
+      attempts.push({ id: nextAttemptId++, assessmentId: a.id, participantId: 10, totalScore: 80 });
+      attempts.push({ id: nextAttemptId++, assessmentId: a.id, participantId: 11, totalScore: 95 });
+      submissions.push({ id: nextSubmissionId++, attemptId: attempts[0].id, isFinal: true, score: 80 });
+      submissions.push({ id: nextSubmissionId++, attemptId: attempts[1].id, isFinal: true, score: 95 });
+      submissions.push({ id: nextSubmissionId++, attemptId: attempts[0].id, isFinal: false, score: 50 });
+      app = buildApp();
+      const res = await request(app).get(`/api/coding-assessments/${a.id}/results`);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.assessment.id).toBe(a.id);
+      expect(res.body.results).toHaveLength(2);
+      expect(res.body.results[0].totalScore).toBe(95);
+      expect(res.body.results[0].participant.email).toBe('bob@test.com');
+      expect(res.body.results[0].submissions).toHaveLength(1);
+      expect(res.body.results[0].submissions[0].isFinal).toBe(true);
+      expect(res.body.results[1].totalScore).toBe(80);
+    });
+
+    it('returns 404 for missing assessment', async () => {
+      app = buildApp();
+      const res = await request(app).get('/api/coding-assessments/999/results');
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 403 when trainer accesses another trainer assessment', async () => {
+      const a = makeAssessment({ trainerId: 2, trainingId: 1, title: 'Other', durationMinutes: 60 });
+      app = buildApp();
+      const res = await request(app).get(`/api/coding-assessments/${a.id}/results`);
+      expect(res.statusCode).toBe(403);
+      expect(res.body.error).toBe('Unauthorized');
+    });
+  });
+
+  describe('POST /api/coding-assessments/:id/publish-result', () => {
+    it('publishes the assessment result status', async () => {
+      const a = makeAssessment({ trainerId: 1, trainingId: 1, title: 'Result Pub', durationMinutes: 60 });
+      app = buildApp();
+      const res = await request(app).post(`/api/coding-assessments/${a.id}/publish-result`);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(a.resultStatus).toBe('PUBLISHED');
+    });
+
+    it('returns 404 for missing assessment', async () => {
+      app = buildApp();
+      const res = await request(app).post('/api/coding-assessments/999/publish-result');
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 403 when trainer accesses another trainer assessment', async () => {
+      const a = makeAssessment({ trainerId: 2, trainingId: 1, title: 'Other', durationMinutes: 60 });
+      app = buildApp();
+      const res = await request(app).post(`/api/coding-assessments/${a.id}/publish-result`);
+      expect(res.statusCode).toBe(403);
+      expect(res.body.error).toBe('Unauthorized');
     });
   });
 });
