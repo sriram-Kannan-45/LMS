@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Calendar, Users, Star, FileText, CheckCircle, Clock, MessageSquare,
+  Calendar, Users, UserPlus, Star, FileText, CheckCircle, Clock, MessageSquare,
   TrendingUp, BookOpen, Award, ArrowRight, Activity, Video, Plus, Code, Layers, Sparkles, Coffee
 } from 'lucide-react'
 import NotesSection from '../components/trainer/notes/NotesSection'
@@ -464,6 +464,26 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
                 </div>
               )}
             </div>
+          </div>
+        </motion.div>
+      )}
+
+      {tab === 'assignments' && (
+        <motion.div variants={item}>
+          <div className="bg-white dark:bg-slate-900 rounded-[20px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden p-12 text-center">
+            <UserPlus size={48} className="mx-auto text-slate-300 mb-4" style={{ color: '#10B981' }} />
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>Enrollment Requests</h2>
+            <p className="text-sm text-slate-500 mt-2">All enrollment requests have been processed. No pending approvals.</p>
+          </div>
+        </motion.div>
+      )}
+
+      {tab === 'interviews' && (
+        <motion.div variants={item}>
+          <div className="bg-white dark:bg-slate-900 rounded-[20px] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden p-12 text-center">
+            <Video size={48} className="mx-auto text-slate-300 mb-4" style={{ color: '#10B981' }} />
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>My Interviews</h2>
+            <p className="text-sm text-slate-500 mt-2">No interviews or video sessions scheduled yet.</p>
           </div>
         </motion.div>
       )}

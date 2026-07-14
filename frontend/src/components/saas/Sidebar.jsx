@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   Award, BookOpen, BookPlus, ClipboardList, Code, FileText, GraduationCap, Home,
   LayoutDashboard, LogOut, Menu, MessageSquare, Search, Bell, Settings, Shield,
-  Sparkles, Trophy, User, UserPlus, Users, X, ChevronRight, Moon, Plus,
+  Sparkles, Trophy, User, UserPlus, Users, X, ChevronRight, ChevronLeft, Moon, Plus, Video,
 } from 'lucide-react'
 import { colors } from '../../theme/tokens'
 import ProfileDropdown from './ProfileDropdown'
@@ -36,6 +36,7 @@ export const iconMap = {
   'UserPlus': <UserPlus size={22} />,
   'Enrollment Requests': <UserPlus size={22} />,
   'Trainer Reports': <ClipboardList size={22} />,
+  'My Interviews': <Video size={22} />,
 }
 
 export const navGroups = {
@@ -61,10 +62,33 @@ export const navGroups = {
     },
   ],
   TRAINER: [
-    { title: 'Overview', items: [{ key: 'overview', label: 'Dashboard', icon: 'Dashboard' }, { key: 'courses', label: 'Trainings', icon: 'Trainings' }] },
-    { title: 'Content', items: [{ key: 'notes', label: 'Notes', icon: 'Notes' }, { key: 'assignments', label: 'Assignments', icon: 'ClipboardList' }] },
-    { title: 'Reports', items: [{ key: 'reports', label: 'Trainer Reports', icon: 'Trainer Reports' }, { key: 'feedback', label: 'Feedback Received', icon: 'Feedback' }] },
-    { title: 'Settings', items: [{ key: 'profile', label: 'My Profile', icon: 'My Profile' }] },
+    {
+      title: 'DASHBOARD',
+      items: [
+        { key: 'courses', label: 'Trainings', icon: 'Trainings' }
+      ]
+    },
+    {
+      title: 'MANAGEMENT',
+      items: [
+        { key: 'assignments', label: 'Enrollment Requests', icon: 'Enrollment Requests' },
+        { key: 'reports', label: 'Trainer Reports', icon: 'Trainer Reports' }
+      ]
+    },
+    {
+      title: 'CONTENT',
+      items: [
+        { key: 'notes', label: 'Notes & Resources', icon: 'Notes' },
+        { key: 'interviews', label: 'My Interviews', icon: 'My Interviews' },
+        { key: 'feedback', label: 'Feedback Received', icon: 'Feedback' }
+      ]
+    },
+    {
+      title: 'USER',
+      items: [
+        { key: 'profile', label: 'My Profile', icon: 'My Profile' }
+      ]
+    }
   ],
   PARTICIPANT: [
     { title: 'Overview', items: [{ key: 'overview', label: 'Overview', icon: 'Overview' }] },
@@ -134,7 +158,8 @@ export default function Sidebar({ user, activeTab, onTabChange, onLogout, onClos
             className="sidebar-logo"
             style={{
               width: 36, height: 36, borderRadius: 10,
-              background: `linear-gradient(135deg, ${colors.brand.indigo}, ${colors.brand.violet})`,
+              background: user.role === 'TRAINER' ? '#10B981' : `linear-gradient(135deg, ${colors.brand.indigo}, ${colors.brand.violet})`,
+              boxShadow: user.role === 'TRAINER' ? '0 0 12px rgba(16, 185, 129, 0.4)' : 'none',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: '#fff', fontWeight: 800, fontSize: 16, flexShrink: 0,
             }}
@@ -156,12 +181,13 @@ export default function Sidebar({ user, activeTab, onTabChange, onLogout, onClos
               <div className="sidebar-nav-label">{group.title}</div>
               {group.items.map((item) => {
                 const isActive = activeTab === item.key
+                const isTrainer = user.role === 'TRAINER'
                 return (
                   <motion.button
                     key={item.key}
                     className={`sidebar-nav-item${isActive ? ' active' : ''}`}
                     onClick={() => {
-                      if (item.key === 'profile' && user?.role === 'TRAINER') {
+                      if (item.key === 'profile' && isTrainer) {
                         onTabChange('profile')
                       } else {
                         onTabChange(item.key)
@@ -169,23 +195,74 @@ export default function Sidebar({ user, activeTab, onTabChange, onLogout, onClos
                       onCloseSidebar && onCloseSidebar()
                     }}
                     whileTap={{ scale: 0.98 }}
-                    style={isActive ? {
-                      background: `linear-gradient(135deg, ${colors.brand.blueDark} 0%, ${colors.brand.blue} 100%)`,
-                      borderRadius: '14px',
-                      color: '#fff',
-                      boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
-                    } : undefined}
+                    style={
+                      isActive
+                        ? isTrainer
+                          ? {
+                              background: 'rgba(16, 185, 129, 0.08)',
+                              borderRadius: '12px',
+                              color: '#10B981',
+                              position: 'relative',
+                              paddingLeft: '24px'
+                            }
+                          : {
+                              background: `linear-gradient(135deg, ${colors.brand.blueDark} 0%, ${colors.brand.blue} 100%)`,
+                              borderRadius: '14px',
+                              color: '#fff',
+                              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                            }
+                        : undefined
+                    }
                   >
-                    <span className="nav-icon" style={isActive ? { color: '#fff' } : undefined}>
+                    {isActive && isTrainer && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: '20%',
+                          bottom: '20%',
+                          width: '4px',
+                          borderRadius: '0 4px 4px 0',
+                          backgroundColor: '#10B981'
+                        }}
+                      />
+                    )}
+                    <span className="nav-icon" style={isActive ? { color: isTrainer ? '#10B981' : '#fff' } : undefined}>
                       {iconMap[item.icon]}
                     </span>
-                    <span>{item.label}</span>
+                    <span style={{ fontWeight: isActive ? 700 : 500 }}>{item.label}</span>
                   </motion.button>
                 )
               })}
             </div>
           ))}
         </nav>
+
+        {user.role === 'TRAINER' && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+            <button
+              onClick={onCloseSidebar}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                color: '#94A3B8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                outline: 'none'
+              }}
+              className="hover:bg-slate-800 hover:text-white"
+              title="Collapse"
+            >
+              <ChevronLeft size={16} />
+            </button>
+          </div>
+        )}
 
         <div className="sidebar-footer">
           {isParticipant ? (

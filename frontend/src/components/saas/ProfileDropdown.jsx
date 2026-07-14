@@ -15,6 +15,71 @@ export default function ProfileDropdown({ user, onProfile, onLogout }) {
     ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : 'U'
 
+  const isTrainer = user?.role === 'TRAINER'
+
+  if (isTrainer) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          padding: '12px 14px',
+          borderRadius: 14,
+          border: '1px solid rgba(255,255,255,0.08)',
+          background: 'rgba(255,255,255,0.05)',
+          fontFamily: 'inherit'
+        }}
+      >
+        <div 
+          onClick={onProfile}
+          style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', flex: 1, minWidth: 0 }}
+        >
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: '#10B981',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13, fontWeight: 700, color: '#fff',
+            }}>
+              {initials}
+            </div>
+            <span style={{ position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderRadius: '50%', background: '#10B981', border: '2px solid rgba(255,255,255,0.1)' }} />
+          </div>
+          <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {user?.name || 'User'}
+            </div>
+            <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.8)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {user?.role || 'TRAINER'}
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={onLogout}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'rgba(148,163,184,0.8)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '6px',
+            borderRadius: '8px',
+            transition: 'all 0.2s',
+            outline: 'none'
+          }}
+          className="hover:bg-slate-800 hover:text-white"
+          title="Log Out"
+        >
+          <LogOut size={16} />
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div style={{ position: 'relative' }}>
       <button
