@@ -46,12 +46,14 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
       />
 
       <div className="main-content">
-        <TopNavbar
-          user={user}
-          currentPageLabel={currentPageLabel}
-          onOpenCreate={handleOpenCreate}
-          onProfile={handleProfile}
-        />
+        {user.role !== 'TRAINER' && (
+          <TopNavbar
+            user={user}
+            currentPageLabel={currentPageLabel}
+            onOpenCreate={handleOpenCreate}
+            onProfile={handleProfile}
+          />
+        )}
 
         <motion.main
           className="page-content"

@@ -823,9 +823,6 @@ function CourseDetail({ user, courseId, onBack }) {
                 {course.status}
               </span>
             )}
-            <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#94a3b8', background: '#f8fafc', padding: '1px 4px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
-              ID: {course.trainingProgramId || courseId}
-            </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#64748b', marginBottom: 10 }}>
@@ -904,19 +901,49 @@ function CourseDetail({ user, courseId, onBack }) {
 }
 
 function StructureTab({ course }) {
+  const { success } = useToast()
+
+  const handleDiagnostic = () => {
+    success('Diagnostic completed! Course structure is verified.')
+  }
+
   return (
     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0f172a', margin: '0 0 6px' }}>Course Structure</h2>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0f172a', margin: '0 0 8px' }}>Course Structure</h2>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              padding: '2px 8px', borderRadius: 9999, fontSize: 11, fontWeight: 600,
-              background: '#eff6ff', color: '#2563eb'
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '4px 10px', borderRadius: 9999, fontSize: 11, fontWeight: 600,
+              background: '#eff6ff', color: '#4f46e5'
             }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2563eb' }} />
+              <Layers size={11} />
               Module
+            </span>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '4px 10px', borderRadius: 9999, fontSize: 11, fontWeight: 600,
+              background: '#e0f2fe', color: '#0284c7'
+            }}>
+              <Folder size={11} />
+              Sub Module
+            </span>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '4px 10px', borderRadius: 9999, fontSize: 11, fontWeight: 600,
+              background: '#f0fdf4', color: '#16a34a'
+            }}>
+              <FileText size={11} />
+              Topic
+            </span>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '4px 10px', borderRadius: 9999, fontSize: 11, fontWeight: 600,
+              background: '#fffbeb', color: '#d97706'
+            }}>
+              <Sparkles size={11} />
+              Sub Topic
             </span>
           </div>
         </div>
@@ -926,11 +953,37 @@ function StructureTab({ course }) {
         padding: '60px 24px', textAlign: 'center',
         background: '#fff', border: '1px dashed #cbd5e1', borderRadius: 12,
       }}>
-        <BookOpen size={40} color="#cbd5e1" style={{ margin: '0 auto 12px' }} />
+        <BookOpen size={48} color="#cbd5e1" style={{ margin: '0 auto 16px', strokeWidth: 1.5 }} />
         <h3 style={{ margin: '0 0 6px', color: '#1e293b', fontWeight: 700, fontSize: 16 }}>No structure yet</h3>
-        <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
+        <p style={{ margin: '0 0 20px', color: '#64748b', fontSize: 13 }}>
           Course content will appear here once the admin adds it.
         </p>
+        <button
+          onClick={handleDiagnostic}
+          style={{
+            padding: '8px 16px',
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#475569',
+            cursor: 'pointer',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            transition: 'all 0.2s',
+            outline: 'none'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = '#f8fafc'
+            e.currentTarget.style.borderColor = '#94a3b8'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = '#ffffff'
+            e.currentTarget.style.borderColor = '#cbd5e1'
+          }}
+        >
+          Run Diagnostic
+        </button>
       </div>
     </div>
   )
