@@ -189,74 +189,129 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="max-w-[1440px] mx-auto px-6 py-6 min-h-screen" style={{ fontFamily: "'Inter', sans-serif" }}>
       {/* ── Welcome Banner & KPI Cards only on Overview tab ── */}
+      {/* ── Welcome Banner & KPI Cards ── */}
       {tab === 'overview' && (
-        <>
-          {/* Welcome Banner */}
-          <HeroBanner
-            name={user.name}
-            subtitle="Here's what's happening with your trainings today."
-            onViewReports={() => onTabChange('reports')}
-            onViewProfile={() => onTabChange('profile')}
-          />
+        <div style={{ marginBottom: 24 }}>
+          {/* Header breadcrumb & title area */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div>
+              <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>My Trainings</h1>
+              <p style={{ fontSize: '14px', color: '#64748B', margin: '4px 0 0' }}>Manage your assigned courses and track your progress.</p>
+            </div>
+          </div>
 
-          {/* KPI Cards */}
-          <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <KpiCard icon={BookOpen} label="Total Courses" value={stats.totalTrainings} bgIcon="rgba(37, 99, 235, 0.08)" colorIcon="#3B82F6" sparkPoints="0,18 8,14 16,16 24,10 32,12 40,6 48,8 56,4 64,2" />
-            <KpiCard icon={Users} label="Active Learners" value={stats.totalLearners} bgIcon="rgba(16, 185, 129, 0.08)" colorIcon="#16A34A" sparkPoints="0,16 8,12 16,14 24,8 32,10 40,5 48,7 56,3 64,2" />
-            <KpiCard icon={Star} label="Average Rating" value={stats.avgTrainerRating ? Number(stats.avgTrainerRating).toFixed(1) : '—'} bgIcon="rgba(245, 158, 11, 0.08)" colorIcon="#F59E0B" sparkPoints="0,10 8,10 16,10 24,10 32,10 40,10 48,10 56,10 64,10" />
-            <KpiCard icon={MessageSquare} label="Feedback Received" value={stats.totalFeedbacks} bgIcon="rgba(124, 58, 237, 0.08)" colorIcon="#7C3AED" sparkPoints="0,18 8,16 16,17 24,15 32,16 40,14 48,15 56,13 64,14" />
+          {/* 5 KPI Cards Row */}
+          <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+            <KpiCard icon={BookOpen} label="Total Trainings" value="12" bgIcon="rgba(37, 99, 235, 0.08)" colorIcon="#2563EB" sparkPoints="0,18 8,14 16,16 24,10 32,12 40,6 48,8 56,4 64,2" trend="↑ 20% from last month" trendColor="#10B981" />
+            <KpiCard icon={Activity} label="In Progress" value="5" bgIcon="rgba(16, 185, 129, 0.08)" colorIcon="#10B981" sparkPoints="0,16 8,12 16,14 24,8 32,10 40,5 48,7 56,3 64,2" trend="↑ 10% from last month" trendColor="#10B981" />
+            <KpiCard icon={CheckCircle} label="Completed" value="7" bgIcon="rgba(245, 158, 11, 0.08)" colorIcon="#F59E0B" sparkPoints="0,10 8,8 16,10 24,6 32,8 40,4 48,6 56,2 64,1" trend="↑ 30% from last month" trendColor="#10B981" />
+            <KpiCard icon={Clock} label="Total Hours" value="48h" bgIcon="rgba(59, 130, 246, 0.08)" colorIcon="#3B82F6" sparkPoints="0,18 8,16 16,17 24,15 32,16 40,14 48,15 56,13 64,14" trend="↑ 15% from last month" trendColor="#10B981" />
+            <KpiCard icon={Award} label="Certificates" value="4" bgIcon="rgba(124, 58, 237, 0.08)" colorIcon="#7C3AED" sparkPoints="0,12 8,10 16,9 24,11 32,7 40,8 48,5 56,4 64,2" trend="↑ 25% from last month" trendColor="#10B981" />
           </motion.div>
-        </>
+        </div>
       )}
 
-      {/* Overview Grid Layout */}
+      {/* Main Grid Layout */}
       {tab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
           {/* Left Column (8 of 12 columns) */}
           <div className="lg:col-span-8 space-y-8">
             
-            {/* My Trainings Section */}
+            {/* Continue Learning Section */}
             <div className="bg-white border border-[#E5E7EB] rounded-[20px] shadow-sm p-6 space-y-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>My Trainings</h2>
-                  <p style={{ fontSize: '14px', color: '#6B7280', margin: '4px 0 0' }}>Quick access to your active courses</p>
-                </div>
-                <button onClick={() => onTabChange('courses')} className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                  View all courses <ArrowRight size={12} />
-                </button>
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Continue Learning</h2>
+                <button onClick={() => onTabChange('courses')} className="text-xs font-bold text-blue-600 hover:text-blue-700">View all</button>
               </div>
 
               {/* Course Cards Grid */}
-              {trainings.length === 0 ? (
-                <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                  <BookOpen size={32} className="mx-auto text-slate-300 mb-2" />
-                  <p className="text-xs text-slate-500">No courses assigned yet.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {trainings.slice(0, 2).map((c) => (
-                    <CourseCard
-                      key={c.id}
-                      course={c}
-                      artwork={getCourseArtwork(c.title)}
-                      onManage={() => onTabChange('courses')}
-                      onPreview={() => onTabChange('courses')}
-                      onMore={() => onTabChange('courses')}
-                    />
+              <div className="relative">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {[
+                    {
+                      title: 'Python Programming',
+                      tech: 'PYTHON / ML',
+                      lessons: '8 of 12 lessons',
+                      progress: 65,
+                      bg: 'url("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=600&auto=format&fit=crop") center/cover'
+                    },
+                    {
+                      title: 'Machine Learning Basics',
+                      tech: 'AI / ML',
+                      lessons: '5 of 12 lessons',
+                      progress: 40,
+                      bg: 'url("https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=600&auto=format&fit=crop") center/cover'
+                    },
+                    {
+                      title: 'DevOps Fundamentals',
+                      tech: 'DEVOPS',
+                      lessons: '3 of 15 lessons',
+                      progress: 20,
+                      bg: 'url("https://images.unsplash.com/photo-1618477388954-7852f32655ec?q=80&w=600&auto=format&fit=crop") center/cover'
+                    }
+                  ].map((c, idx) => (
+                    <div key={idx} className="bg-white border border-slate-200 rounded-[18px] overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1 group" style={{ height: 290 }}>
+                      {/* Top: Cover image with overlays */}
+                      <div style={{ position: 'relative', height: 140, background: c.bg }}>
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)' }} />
+                        {/* Top Left Badge */}
+                        <div style={{ position: 'absolute', top: 12, left: 12, padding: '3px 8px', borderRadius: 6, background: '#2563EB', color: '#fff', fontSize: 9, fontWeight: 700 }}>
+                          {c.tech}
+                        </div>
+                        {/* Top Right Badge */}
+                        <div style={{ position: 'absolute', top: 12, right: 12, padding: '3px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: 10, fontWeight: 600 }}>
+                          0 Learners
+                        </div>
+                        {/* Circular Progress Overlay */}
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ position: 'relative', width: 64, height: 64 }}>
+                            <svg width="64" height="64" viewBox="0 0 64 64">
+                              <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="4" />
+                              <circle cx="32" cy="32" r="26" fill="none" stroke="#2563EB" strokeWidth="4" strokeDasharray="163" strokeDashoffset={163 - (163 * c.progress) / 100} strokeLinecap="round" transform="rotate(-90 32 32)" />
+                            </svg>
+                            <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700 }}>
+                              {c.progress}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Bottom Body */}
+                      <div className="p-4 flex flex-col justify-between" style={{ height: 150 }}>
+                        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: '0 0 16px', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {c.title}
+                        </h3>
+                        <div>
+                          {/* Progress Line */}
+                          <div style={{ height: 6, width: '100%', background: '#F1F5F9', borderRadius: 99, marginBottom: 8, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${c.progress}%`, background: '#2563EB', borderRadius: 99 }} />
+                          </div>
+                          {/* Progress Text */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748B', fontWeight: 500 }}>
+                            <span>{c.progress}% Complete</span>
+                            <span>{c.lessons}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
-              )}
+                {/* Floating slider right arrow */}
+                <button style={{
+                  position: 'absolute', right: -12, top: '50%', transform: 'translateY(-50%)',
+                  width: 32, height: 32, borderRadius: '50%', background: '#fff', border: '1px solid #E5E7EB',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)', cursor: 'pointer', zIndex: 10
+                }} className="hover:text-blue-600">
+                  <ChevronRight size={16} />
+                </button>
+              </div>
             </div>
 
-            {/* Learning Analytics Overview */}
+            {/* Learning Progress & Overall Progress Row */}
             <div className="bg-white border border-[#E5E7EB] rounded-[20px] shadow-sm p-6">
               <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>Learning Analytics Overview</h2>
-                  <p style={{ fontSize: '14px', color: '#6B7280', margin: '4px 0 0' }}>Performance insights across all active tracks</p>
-                </div>
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Learning Progress</h2>
                 <select className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold bg-white text-slate-700 outline-none cursor-pointer">
                   <option>This Month</option>
                   <option>This Week</option>
@@ -264,117 +319,255 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
                 </select>
               </div>
 
-              {/* Analytics Mini Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { label: 'Enrollments', value: '12', trend: '+12%', color: '#3b82f6', sparkPoints: '0,18 8,14 16,16 24,10 32,12 40,6 48,8 56,4 64,2' },
-                  { label: 'Completions', value: '7', trend: '+8%', color: '#10b981', sparkPoints: '0,16 8,12 16,14 24,8 32,10 40,5 48,7 56,3 64,2' },
-                  { label: 'Avg. Quiz Score', value: '78%', trend: '+15%', color: '#f59e0b', sparkPoints: '0,10 8,10 16,10 24,10 32,10 40,10 48,10 56,10 64,10' },
-                  { label: 'Attendance Rate', value: '85%', trend: '+10%', color: '#7c3aed', sparkPoints: '0,18 8,16 16,17 24,15 32,16 40,14 48,15 56,13 64,14' }
-                ].map((m, idx) => (
-                  <div key={idx} className="border border-slate-100 rounded-xl p-4 flex justify-between items-center bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                    <div>
-                      <span style={{ fontSize: '13px', color: '#6b7280', fontWeight: 500, display: 'block' }}>{m.label}</span>
-                      <span style={{ fontSize: '24px', color: '#0f172a', fontWeight: 700, display: 'block', margin: '4px 0' }}>{m.value}</span>
-                      <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>{m.trend}</span>
-                    </div>
-                    <svg width="60" height="24" viewBox="0 0 64 24" style={{ overflow: 'visible', opacity: 0.8 }} aria-hidden="true">
-                      <polyline
-                        points={m.sparkPoints}
-                        fill="none"
-                        stroke={m.color}
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+                {/* Left Area Chart (60%) */}
+                <div className="md:col-span-7" style={{ minHeight: 200 }}>
+                  <svg viewBox="0 0 500 200" width="100%" height="200" style={{ overflow: 'visible' }}>
+                    <defs>
+                      <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#2563EB" stopOpacity="0.2"/>
+                        <stop offset="100%" stopColor="#2563EB" stopOpacity="0.0"/>
+                      </linearGradient>
+                    </defs>
+                    <line x1="0" y1="0" x2="500" y2="0" stroke="#F1F5F9" strokeWidth="1" />
+                    <line x1="0" y1="50" x2="500" y2="50" stroke="#F1F5F9" strokeWidth="1" />
+                    <line x1="0" y1="100" x2="500" y2="100" stroke="#F1F5F9" strokeWidth="1" />
+                    <line x1="0" y1="150" x2="500" y2="150" stroke="#F1F5F9" strokeWidth="1" />
+                    <line x1="0" y1="200" x2="500" y2="200" stroke="#E2E8F0" strokeWidth="1.5" />
+                    
+                    <path
+                      d="M 0 150 Q 50 140 100 120 T 200 110 T 300 80 T 400 90 T 500 50 L 500 200 L 0 200 Z"
+                      fill="url(#areaGradient)"
+                    />
+                    <path
+                      d="M 0 150 Q 50 140 100 120 T 200 110 T 300 80 T 400 90 T 500 50"
+                      fill="none"
+                      stroke="#2563EB"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                    <circle cx="300" cy="80" r="6" fill="#2563EB" stroke="#FFFFFF" strokeWidth="2" />
+                    <text x="300" y="55" textAnchor="middle" fill="#0F172A" style={{ fontSize: 11, fontWeight: 700 }}>65%</text>
+                  </svg>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, fontSize: 10, color: '#64748B', fontWeight: 600 }}>
+                    <span>May 1</span>
+                    <span>May 5</span>
+                    <span>May 10</span>
+                    <span>May 15</span>
+                    <span>May 20</span>
+                    <span>May 25</span>
+                    <span>May 30</span>
                   </div>
-                ))}
+                </div>
+
+                {/* Right Progress Ring & Stats (40%) */}
+                <div className="md:col-span-5 border-l border-slate-100 pl-0 md:pl-8 space-y-6">
+                  <div className="text-center">
+                    <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', margin: '0 0 12px' }}>Overall Progress</h3>
+                    <div style={{ position: 'relative', width: 100, height: 100, margin: '0 auto' }}>
+                      <svg width="100" height="100" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="#F1F5F9" strokeWidth="8" />
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="#2563EB" strokeWidth="8" strokeDasharray="264" strokeDashoffset={264 - (264 * 65) / 100} strokeLinecap="round" transform="rotate(-90 50 50)" />
+                      </svg>
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, color: '#0F172A' }}>
+                        65%
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '11px', color: '#64748B', margin: '10px 0 0', lineHeight: 1.4 }}>
+                      Your average completion across all trainings
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 500 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981' }} />
+                        <span>Completed</span>
+                      </div>
+                      <span style={{ fontWeight: 700, color: '#0F172A' }}>7</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 500 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2563EB' }} />
+                        <span>In Progress</span>
+                      </div>
+                      <span style={{ fontWeight: 700, color: '#0F172A' }}>5</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-          </div>
-
-          {/* Right Column (4 of 12 columns - Activity Sidebar) */}
-          <div className="lg:col-span-4 space-y-6">
-            
-            {/* Upcoming Sessions Card */}
-            <div className="bg-white border border-[#E5E7EB] rounded-[20px] shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#0F172A', margin: 0 }}>Upcoming Sessions</h3>
-                <button onClick={() => onTabChange('courses')} className="text-xs font-semibold text-blue-600 hover:text-blue-700">View All</button>
+            {/* Upcoming Tasks */}
+            <div className="bg-white border border-[#E5E7EB] rounded-[20px] shadow-sm p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Upcoming Tasks</h2>
+                <button onClick={() => onTabChange('assignments')} className="text-xs font-bold text-blue-600 hover:text-blue-700">View all</button>
               </div>
-              
+
               <div className="space-y-4">
                 {[
-                  { date: '16', month: 'JUL', title: 'React Advanced Concepts', time: '10:00 AM - 12:00 PM' },
-                  { date: '18', month: 'JUL', title: 'Node.js Best Practices', time: '02:00 PM - 04:00 PM' },
-                  { date: '20', month: 'JUL', title: 'Java Collections Framework', time: '11:00 AM - 01:00 PM' }
-                ].map((s, idx) => (
-                  <div key={idx} className="flex gap-4 items-center p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100">
-                    <div className="w-12 h-12 rounded-lg bg-blue-50 text-blue-600 flex flex-col items-center justify-center font-bold text-center shrink-0">
-                      <span className="text-[10px] uppercase leading-none font-semibold mb-0.5">{s.month}</span>
-                      <span className="text-base leading-none">{s.date}</span>
+                  { title: 'Complete Quiz', course: 'Python Programming', due: 'Due Tomorrow', color: '#EF4444', bg: '#FEF2F2' },
+                  { title: 'Assessment', course: 'Machine Learning Basics', due: 'Due May 16', color: '#3B82F6', bg: '#EFF6FF' },
+                  { title: 'Submit Assignment', course: 'DevOps Fundamentals', due: 'Due May 18', color: '#10B981', bg: '#ECFDF5' },
+                  { title: 'Feedback Session', course: 'Web Development', due: 'Due May 20', color: '#8B5CF6', bg: '#F5F3FF' }
+                ].map((task, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-4 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: task.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <FileText size={16} style={{ color: task.color }} />
+                      </div>
+                      <div>
+                        <h4 style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', margin: 0 }}>{task.title}</h4>
+                        <span style={{ fontSize: 12, color: '#64748B' }}>{task.course}</span>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-semibold text-slate-800 truncate mb-0.5">{s.title}</h4>
-                      <span className="text-xs text-slate-400 font-medium">{s.time}</span>
-                    </div>
-                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5 uppercase shrink-0">
-                      + Live
+                    <span style={{ padding: '4px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, color: task.color, background: task.bg }}>
+                      {task.due}
                     </span>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Recent Activity Card */}
-            <div className="bg-white border border-[#E5E7EB] rounded-[20px] shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#0F172A', margin: 0 }}>Recent Activity</h3>
-                <button onClick={() => onTabChange('courses')} className="text-xs font-semibold text-blue-600 hover:text-blue-700">View All</button>
-              </div>
-
-              {/* Vertical timeline */}
-              {recentActivity.length === 0 ? (
-                <EmptyState icon={Activity} title="No activity yet" description="Activity will appear here." />
-              ) : (
-                <div className="relative pl-6 space-y-5">
-                  <div className="absolute left-2.5 top-2.5 bottom-2.5 w-[1.5px] bg-slate-100 pointer-events-none" />
-
-                  {recentActivity.slice(0, 4).map((act) => (
-                    <div key={act.id} className="relative flex flex-col gap-0.5">
-                      <div className="absolute -left-6 top-1.5 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white ring-4 ring-slate-50" />
-                      <p className="text-[13px] font-medium text-slate-700 leading-snug">{act.message}</p>
-                      <span className="text-[11px] text-slate-400 font-medium">{fmtTimeAgo(act.time)}</span>
-                    </div>
-                  ))}
+            {/* Pro Tip Banner */}
+            <div style={{
+              background: '#0F172A', borderRadius: '18px', padding: '16px 24px',
+              display: 'flex', alignItems: 'center', justifyBetween: 'space-between',
+              justifyContent: 'space-between', flexWrap: 'wrap', gap: 16
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 20 }}>💡</span>
+                <div>
+                  <h4 style={{ fontSize: 12, fontWeight: 700, color: '#94A3B8', margin: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>Pro Tip</h4>
+                  <p style={{ fontSize: 13, color: '#E2E8F0', margin: 0 }}>Set weekly learning goals to track your progress better and stay consistent.</p>
                 </div>
-              )}
+              </div>
+              <button
+                onClick={() => success('Launch goals manager!')}
+                style={{
+                  padding: '8px 16px', background: '#2563EB', color: '#fff',
+                  border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer', transition: 'background 0.2s'
+                }}
+                className="hover:bg-blue-700"
+              >
+                Set Goals
+              </button>
             </div>
 
-            {/* Quick Actions Card */}
-            <div className="bg-white border border-[#E5E7EB] rounded-[20px] shadow-sm p-6">
-              <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#0F172A', margin: '0 0 16px' }}>Quick Actions</h3>
-              
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Create Course', icon: Plus, bg: 'bg-blue-50 text-blue-600', hover: 'hover:bg-blue-100/50', action: () => { onTabChange('courses'); setTimeout(() => { window.dispatchEvent(new CustomEvent('open-create-course')) }, 100); } },
-                  { label: 'Live Session', icon: Video, bg: 'bg-green-50 text-green-600', hover: 'hover:bg-green-100/50', action: () => { window.location.href = '/trainer/monitoring'; } },
-                  { label: 'Create Quiz', icon: Sparkles, bg: 'bg-amber-50 text-amber-600', hover: 'hover:bg-amber-100/50', action: () => { success('Launch AI Quiz generator from any Course structure!'); } },
-                  { label: 'New Assignment', icon: FileText, bg: 'bg-purple-50 text-purple-600', hover: 'hover:bg-purple-100/50', action: () => { success('Open Assignments editor from Course Details page'); } }
-                ].map((act, idx) => (
-                  <button
-                    key={idx}
-                    onClick={act.action}
-                    className="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-100 bg-slate-50/20 hover:border-slate-200 transition-all text-center group cursor-pointer"
-                  >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${act.bg} mb-2 group-hover:scale-105 transition-transform`}>
-                      <act.icon size={18} />
-                    </div>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>{act.label}</span>
-                  </button>
+          </div>
+
+          {/* Right Column (4 of 12 columns) */}
+          <div className="lg:col-span-4 space-y-6">
+            
+            {/* Calendar */}
+            <div className="bg-white border border-[#E5E7EB] rounded-[20px] shadow-sm p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Calendar</h2>
+                <button onClick={() => onTabChange('calendar')} className="text-xs font-bold text-blue-600 hover:text-blue-700">View full calendar</button>
+              </div>
+
+              {/* Month Header */}
+              <div className="text-center font-bold text-sm text-slate-800 flex justify-between items-center">
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}><ChevronLeft size={16} /></button>
+                <span>May 2025</span>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}><ChevronRight size={16} /></button>
+              </div>
+
+              {/* Dates Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '10px 4px', textAlign: 'center' }}>
+                {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(d => (
+                  <span key={d} style={{ fontSize: 9, fontWeight: 700, color: '#94A3B8' }}>{d}</span>
                 ))}
+                
+                {/* Mock dates */}
+                {Array.from({ length: 31 }, (_, i) => {
+                  const day = i + 1
+                  const isToday = day === 14
+                  return (
+                    <div key={day} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{
+                        width: 28, height: 28, borderRadius: '50%',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 12, fontWeight: isToday ? 700 : 500,
+                        background: isToday ? '#2563EB' : 'transparent',
+                        color: isToday ? '#fff' : '#475569',
+                        cursor: 'pointer'
+                      }} className={isToday ? '' : 'hover:bg-slate-100'}>
+                        {day}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Day Event */}
+              <div className="pt-4 border-t border-slate-100">
+                <h4 style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>Today, May 14, 2025</h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#F5F3FF', borderRadius: 10, borderLeft: '3px solid #8B5CF6' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#6D28D9' }}>Weekly Trainer Meeting</span>
+                  <span style={{ fontSize: 11, color: '#8B5CF6', fontWeight: 600 }}>3:00 PM - 4:00 PM</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div className="bg-white border border-[#E5E7EB] rounded-[20px] shadow-sm p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Recent Activity</h2>
+                <button onClick={() => onTabChange('overview')} className="text-xs font-bold text-blue-600 hover:text-blue-700">View all</button>
+              </div>
+
+              <div className="space-y-4">
+                {[
+                  { msg: 'Completed lesson "Functions in Python"', time: '2 hours ago', icon: CheckCircle, color: '#10B981', bg: '#ECFDF5' },
+                  { msg: 'Submitted quiz "Python Basics Quiz"', time: '1 day ago', icon: FileText, color: '#3B82F6', bg: '#EFF6FF' },
+                  { msg: 'Downloaded resource "Python Cheat Sheet"', time: '2 days ago', icon: BookOpen, color: '#F59E0B', bg: '#FFFBEB' },
+                  { msg: 'Earned certificate "Python Basics"', time: '3 days ago', icon: Award, color: '#8B5CF6', bg: '#F5F3FF' }
+                ].map((act, idx) => (
+                  <div key={idx} className="flex gap-3 items-start">
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: act.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                      <act.icon size={13} style={{ color: act.color }} />
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: '#475569', margin: '0 0 2px', lineHeight: 1.4 }}>{act.msg}</p>
+                      <span style={{ fontSize: 10, color: '#94A3B8', fontWeight: 500 }}>{act.time}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Achievements */}
+            <div className="bg-white border border-[#E5E7EB] rounded-[20px] shadow-sm p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Achievements</h2>
+                <button onClick={() => onTabChange('certificates')} className="text-xs font-bold text-blue-600 hover:text-blue-700">View all</button>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {[
+                  { label: 'Quick Learner', color: '#3B82F6', bg: '#EFF6FF' },
+                  { label: 'Consistent', color: '#10B981', bg: '#ECFDF5' },
+                  { label: 'Problem Solver', color: '#F59E0B', bg: '#FFFBEB' },
+                  { label: 'Top Performer', color: '#8B5CF6', bg: '#F5F3FF' }
+                ].map((ach, idx) => (
+                  <div key={idx} className="text-center" style={{ width: 50 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: ach.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px' }}>
+                      <Award size={18} style={{ color: ach.color }} />
+                    </div>
+                    <span style={{ fontSize: 9, fontWeight: 600, color: '#64748B', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ach.label}</span>
+                  </div>
+                ))}
+                
+                {/* +2 More */}
+                <div className="text-center" style={{ width: 50 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: '#F8FAFC', border: '1px dashed #CBD5E1', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px', fontSize: 11, fontWeight: 700, color: '#64748B' }}>
+                    +2
+                  </div>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: '#64748B', display: 'block' }}>More</span>
+                </div>
               </div>
             </div>
 

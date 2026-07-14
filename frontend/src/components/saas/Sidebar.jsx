@@ -37,6 +37,10 @@ export const iconMap = {
   'Enrollment Requests': <UserPlus size={22} />,
   'Trainer Reports': <ClipboardList size={22} />,
   'My Interviews': <Video size={22} />,
+  'My Learning': <BookOpen size={22} />,
+  'Calendar': <Calendar size={22} />,
+  'Certificates': <Award size={22} />,
+  'Settings': <Settings size={22} />,
 }
 
 export const navGroups = {
@@ -65,13 +69,16 @@ export const navGroups = {
     {
       title: 'DASHBOARD',
       items: [
-        { key: 'courses', label: 'Trainings', icon: 'Trainings' }
+        { key: 'overview', label: 'Trainings', icon: 'Trainings' },
+        { key: 'courses', label: 'My Learning', icon: 'My Learning' },
+        { key: 'calendar', label: 'Calendar', icon: 'Calendar' },
+        { key: 'certificates', label: 'Certificates', icon: 'Certificates' }
       ]
     },
     {
       title: 'MANAGEMENT',
       items: [
-        { key: 'assignments', label: 'Enrollment Requests', icon: 'Enrollment Requests' },
+        { key: 'assignments', label: 'Enrollment Requests', icon: 'Enrollment Requests', badge: 5 },
         { key: 'reports', label: 'Trainer Reports', icon: 'Trainer Reports' }
       ]
     },
@@ -86,7 +93,8 @@ export const navGroups = {
     {
       title: 'USER',
       items: [
-        { key: 'profile', label: 'My Profile', icon: 'My Profile' }
+        { key: 'profile', label: 'My Profile', icon: 'My Profile' },
+        { key: 'settings', label: 'Settings', icon: 'Settings' }
       ]
     }
   ],
@@ -230,13 +238,76 @@ export default function Sidebar({ user, activeTab, onTabChange, onLogout, onClos
                     <span className="nav-icon" style={isActive ? { color: isTrainer ? '#10B981' : '#fff' } : undefined}>
                       {iconMap[item.icon]}
                     </span>
-                    <span style={{ fontWeight: isActive ? 700 : 500 }}>{item.label}</span>
+                    <span style={{ fontWeight: isActive ? 700 : 500, flex: 1, textAlign: 'left' }}>{item.label}</span>
+                    {item.badge !== undefined && (
+                      <span style={{
+                        marginLeft: 'auto',
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        background: '#2563EB',
+                        color: '#fff',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        lineHeight: 1
+                      }}>
+                        {item.badge}
+                      </span>
+                    )}
                   </motion.button>
                 )
               })}
             </div>
           ))}
         </nav>
+
+        {user.role === 'TRAINER' && (
+          <div style={{
+            padding: '16px',
+            margin: '12px 16px',
+            borderRadius: '16px',
+            background: 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)',
+            boxShadow: '0 8px 24px rgba(30,58,138,0.2)',
+            color: '#fff'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.15)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <Award size={14} style={{ color: '#FCD34D' }} />
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>Keep learning!</span>
+            </div>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', margin: '0 0 12px', lineHeight: 1.4 }}>
+              Complete more courses and earn new badges.
+            </p>
+            <button
+              onClick={() => onTabChange('courses')}
+              style={{
+                width: '100%',
+                padding: '6px 12px',
+                background: '#2563EB',
+                border: 'none',
+                borderRadius: '8px',
+                color: '#fff',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                textAlign: 'center',
+                transition: 'background 0.2s',
+                outline: 'none'
+              }}
+              className="hover:bg-blue-700"
+            >
+              View My Progress →
+            </button>
+          </div>
+        )}
 
         {user.role === 'TRAINER' && (
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>

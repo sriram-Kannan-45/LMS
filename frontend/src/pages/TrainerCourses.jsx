@@ -728,7 +728,17 @@ function CourseDetail({ user, courseId, onBack }) {
       showError(e.message)
     } finally { setLoading(false) }
   }
-  useEffect(() => { fetchCourse() }, [courseId])
+
+  useEffect(() => {
+    fetchCourse()
+  }, [courseId])
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('course-detail-opened'))
+    return () => {
+      window.dispatchEvent(new CustomEvent('course-detail-closed'))
+    }
+  }, [])
 
   if (loading) {
     return (

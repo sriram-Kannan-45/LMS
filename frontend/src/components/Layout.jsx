@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Sidebar, { navGroups, pageDescriptions } from './saas/Sidebar'
@@ -7,11 +7,23 @@ import TopNavbar from './saas/TopNavbar'
 function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }) {
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
   const groups = navGroups[user.role] || []
   const isParticipant = user.role === 'PARTICIPANT'
 
   const closeSidebar = () => setSidebarOpen(false)
   const openSidebar = () => setSidebarOpen(true)
+
+  useEffect(() => {
+    const handleOpen = () => setIsDetailOpen(true)
+    const handleClose = () => setIsDetailOpen(false)
+    window.addEventListener('course-detail-opened', handleOpen)
+    window.addEventListener('course-detail-closed', handleClose)
+    return () => {
+      window.removeEventListener('course-detail-opened', handleOpen)
+      window.removeEventListener('course-detail-closed', handleClose)
+    }
+  }, [])
 
   const currentPageLabel = (() => {
     for (const group of groups) {
@@ -46,7 +58,7 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
       />
 
       <div className="main-content">
-        {user.role !== 'TRAINER' && (
+        {(!isDetailOpen || user.role !== 'TRAINER') && (
           <TopNavbar
             user={user}
             currentPageLabel={currentPageLabel}
