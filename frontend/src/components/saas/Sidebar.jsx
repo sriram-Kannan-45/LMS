@@ -69,8 +69,7 @@ export const navGroups = {
     {
       title: 'DASHBOARD',
       items: [
-        { key: 'overview', label: 'Trainings', icon: 'Trainings' },
-        { key: 'courses', label: 'My Learning', icon: 'My Learning' },
+        { key: 'courses', label: 'Trainings', icon: 'Trainings' },
         { key: 'calendar', label: 'Calendar', icon: 'Calendar' },
         { key: 'certificates', label: 'Certificates', icon: 'Certificates' }
       ]
