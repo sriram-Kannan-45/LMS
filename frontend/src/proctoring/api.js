@@ -113,4 +113,20 @@ export const proctorApi = {
     request(`/sessions/${sessionId}/force-terminate`, {
       method: 'POST', body: { reason },
     }),
+
+  getQuizReport: (quizId) =>
+    request(`/quiz/${quizId}/report`),
+
+  getQuizReportCSVUrl: (quizId) =>
+    `${API_BASE}/proctor/quiz/${quizId}/report/csv`,
+
+  // ── Recording endpoints ──────────────────────────────────────────────
+  getRecordings: (sessionId) =>
+    request(`/sessions/${sessionId}/recordings`),
+
+  getRecordingStreamUrl: (sessionId, recordingId) =>
+    `${API_BASE}/proctor/recordings/${recordingId}/stream`,
+
+  getRecordingDownloadUrl: (sessionId, recordingId) =>
+    `${API_BASE}/proctor/recordings/${recordingId}/download`,
 };

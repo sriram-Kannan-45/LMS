@@ -1,25 +1,21 @@
-/**
- * useScreenShare — request and monitor a screen-share stream via
- * navigator.mediaDevices.getDisplayMedia. Detects if the user
- * stops sharing (the "Stop" pill in Chrome) and fires onStop.
- *
- *   const { stream, isSharing, request, stop, error } =
- *       useScreenShare({ onStop, onDenied });
- */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export default function useScreenShare({ onStop, onDenied } = {}) {
+export default function useScreenShare({ onStop, onDenied, onInvalidShare } = {}) {
   const [stream, setStream] = useState(null);
   const [isSharing, setIsSharing] = useState(false);
   const [error, setError] = useState(null);
   const onStopRef = useRef(onStop);
   const onDeniedRef = useRef(onDenied);
+  const onInvalidShareRef = useRef(onInvalidShare);
+  const trackRef = useRef(null);
 
   useEffect(() => { onStopRef.current = onStop; }, [onStop]);
   useEffect(() => { onDeniedRef.current = onDenied; }, [onDenied]);
+  useEffect(() => { onInvalidShareRef.current = onInvalidShare; }, [onInvalidShare]);
 
   const request = useCallback(async () => {
     setError(null);
+    console.log('[useScreenShare] Requesting display media...');
     if (!navigator.mediaDevices?.getDisplayMedia) {
       const e = new Error('Screen sharing is not supported in this browser');
       setError(e); onDeniedRef.current?.(e);
@@ -27,23 +23,82 @@ export default function useScreenShare({ onStop, onDenied } = {}) {
     }
     try {
       const s = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: 'monitor' },
+        video: { cursor: 'always' },
         audio: false,
       });
+
+      const track = s.getVideoTracks()[0];
+      if (!track) {
+        s.getTracks().forEach(t => t.stop());
+        const e = new Error('No video track available');
+        setError(e); onDeniedRef.current?.(e);
+        return null;
+      }
+
+      trackRef.current = track;
+
+      let surface = track?.getSettings?.().displaySurface;
+      if (surface && surface === 'browser') {
+        s.getTracks().forEach(t => t.stop());
+        const e = new Error('Please share your entire screen or an application window, not a browser tab.');
+        setError(e);
+        onInvalidShareRef.current?.(e);
+        return null;
+      }
+
+      await new Promise((resolve) => {
+        if (track.readyState === 'live' && !track.muted) {
+          resolve();
+        } else {
+          const onUnmute = () => {
+            if (track.readyState === 'live') {
+              track.removeEventListener('unmute', onUnmute);
+              resolve();
+            }
+          };
+          track.addEventListener('unmute', onUnmute);
+          setTimeout(resolve, 1000);
+        }
+      });
+
       setStream(s);
       setIsSharing(true);
+      console.log('[useScreenShare] Stream acquired and active, surface:', surface || 'unknown');
 
-      // The user can stop sharing at any time via the browser UI.
-      s.getVideoTracks().forEach(track => {
-        track.addEventListener('ended', () => {
-          setIsSharing(false);
-          setStream(null);
-          onStopRef.current?.();
-        });
-      });
+      const handleEnded = () => {
+        console.log('[useScreenShare] Track ended by user/browser');
+        setIsSharing(false);
+        setStream(null);
+        onStopRef.current?.();
+      };
+
+      const handleMute = () => {
+        console.log('[useScreenShare] Track muted');
+      };
+
+      const handleUnmute = () => {
+        console.log('[useScreenShare] Track unmuted');
+      };
+
+      track.addEventListener('ended', handleEnded);
+      track.addEventListener('mute', handleMute);
+      track.addEventListener('unmute', handleUnmute);
+
+      const cleanup = () => {
+        track.removeEventListener('ended', handleEnded);
+        track.removeEventListener('mute', handleMute);
+        track.removeEventListener('unmute', handleUnmute);
+      };
+
+      const origStop = track.stop.bind(track);
+      track.stop = function() {
+        cleanup();
+        origStop();
+      };
 
       return s;
     } catch (err) {
+      console.error('[useScreenShare] getDisplayMedia failed:', err);
       setError(err);
       onDeniedRef.current?.(err);
       return null;
@@ -51,15 +106,22 @@ export default function useScreenShare({ onStop, onDenied } = {}) {
   }, []);
 
   const stop = useCallback(() => {
-    if (stream) stream.getTracks().forEach(t => t.stop());
+    const track = trackRef.current;
+    if (track) {
+      track.stop();
+    }
     setStream(null);
     setIsSharing(false);
-  }, [stream]);
+  }, []);
 
-  // Cleanup on unmount
-  useEffect(() => () => {
-    if (stream) stream.getTracks().forEach(t => t.stop());
-  }, [stream]);
+  useEffect(() => {
+    const track = trackRef.current;
+    return () => {
+      if (track && track.readyState === 'live') {
+        track.stop();
+      }
+    };
+  }, []);
 
   return { stream, isSharing, request, stop, error };
 }

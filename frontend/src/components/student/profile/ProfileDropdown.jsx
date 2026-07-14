@@ -1,154 +1,80 @@
-import { useEffect, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import {
-  ChevronDown, User as UserIcon, Settings, Award, BookOpen,
-  Trophy, LogOut,
-} from 'lucide-react'
-import useParticipantProfile from '../../../hooks/useParticipantProfile'
-import { assetUrl } from '../../../api/api'
+import { useState } from 'react'
+import { User, Settings, LogOut, ChevronDown } from 'lucide-react'
 
-/**
- * ProfileDropdown — compact avatar+name button in the page header that opens
- * an animated menu with quick-links into the dashboard tabs.
- *
- * Props:
- *   user           — auth user
- *   onTabChange    — fn(tabKey) → switch dashboard tab
- *   onLogout       — fn()
- *   onOpenSettings — fn() → optional, opens edit-profile modal externally
- */
-export default function ProfileDropdown({ user, onTabChange, onLogout, onOpenSettings }) {
-  const { profile, initials } = useParticipantProfile(user)
+export default function ProfileDropdown({ user, onTabChange, onLogout }) {
   const [open, setOpen] = useState(false)
-  const wrapRef = useRef(null)
 
-  // Click outside to close
-  useEffect(() => {
-    if (!open) return
-    const onDoc = (e) => {
-      if (!wrapRef.current?.contains(e.target)) setOpen(false)
-    }
-    const onKey = (e) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  const go = (tab) => {
-    onTabChange?.(tab)
-    setOpen(false)
-  }
-
-  // Open the Edit Profile modal owned by <ProfileSection />. We can't pass
-  // props directly because the dropdown lives in <Layout>, not inside the
-  // section. A custom event keeps this loose-coupled and works regardless
-  // of which dashboard tab is currently mounted (we navigate first, then
-  // dispatch on the next tick so the section is mounted to receive it).
-  const openEditProfile = () => {
-    onTabChange?.('profile')
-    setOpen(false)
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('wave:profile:edit'))
-    }, 150)
-  }
-
-  const displayName = profile?.displayName || user?.name || 'Participant'
+  const initials = user?.name
+    ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'U'
 
   return (
-    <div ref={wrapRef} className="pf-dd">
+    <div style={{ position: 'relative' }}>
       <button
-        type="button"
-        className="pf-dd__trigger"
-        onClick={() => setOpen((p) => !p)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="Open profile menu"
+        onClick={() => setOpen(!open)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+          padding: '10px 14px', borderRadius: 10, border: 'none',
+          background: open ? 'var(--bg-hover)' : 'transparent',
+          color: 'var(--text-primary)', cursor: 'pointer',
+          transition: 'background 0.2s', fontFamily: 'inherit',
+        }}
+        onMouseEnter={e => { if (!open) e.currentTarget.style.background = 'var(--bg-hover)' }}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.background = 'transparent' }}
       >
-        <span className="pf-dd__avatar">
-          {profile?.avatarUrl ? (
-            <img src={assetUrl(profile.avatarUrl)} alt={`${displayName}'s avatar`} />
-          ) : (
-            <span>{initials}</span>
-          )}
-        </span>
-        <span className="pf-dd__name">{displayName}</span>
-        <motion.span
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: 0.18 }}
-          style={{ display: 'inline-flex', color: 'var(--academic-text-muted)' }}
-        >
-          <ChevronDown size={14} />
-        </motion.span>
+        <div style={{
+          width: 34, height: 34, borderRadius: 10,
+          background: 'linear-gradient(135deg, var(--accent), var(--accent-hover))',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0,
+        }}>
+          {initials}
+        </div>
+        <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {user?.name || 'User'}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            {user?.role || 'PARTICIPANT'}
+          </div>
+        </div>
+        <ChevronDown size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            key="menu"
-            role="menu"
-            className="pf-dd__menu"
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <div className="pf-dd__header">
-              <span className="pf-dd__avatar" style={{ width: 36, height: 36, fontSize: 14 }}>
-                {profile?.avatarUrl ? (
-                  <img src={assetUrl(profile.avatarUrl)} alt="" />
-                ) : (
-                  <span>{initials}</span>
-                )}
-              </span>
-              <div style={{ minWidth: 0 }}>
-                <div className="pf-dd__header-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {displayName}
-                </div>
-                {user?.email && (
-                  <div className="pf-dd__header-email" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {user.email}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <button role="menuitem" type="button" className="pf-dd__item" onClick={() => go('profile')}>
-              <UserIcon size={15} /> View profile
+      {open && (
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 10 }}
+            onClick={() => setOpen(false)}
+          />
+          <div style={{
+            position: 'absolute', bottom: '100%', left: 0, right: 0, zIndex: 11,
+            marginBottom: 4, borderRadius: 10, overflow: 'hidden',
+            background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+          }}>
+            <button
+              onClick={() => { setOpen(false); onTabChange?.('profile') }}
+              style={dropdownItemStyle}
+            >
+              <User size={14} /> My Profile
             </button>
-            <button role="menuitem" type="button" className="pf-dd__item" onClick={() => { onOpenSettings ? onOpenSettings() : openEditProfile() }}>
-              <Settings size={15} /> Edit profile
+            <button
+              onClick={() => { setOpen(false); onLogout?.() }}
+              style={{ ...dropdownItemStyle, color: 'var(--danger)', borderTop: '1px solid var(--border-muted)' }}
+            >
+              <LogOut size={14} /> Sign Out
             </button>
-            <button role="menuitem" type="button" className="pf-dd__item" onClick={() => go('myEnrollments')}>
-              <BookOpen size={15} /> My courses
-            </button>
-            <button role="menuitem" type="button" className="pf-dd__item" onClick={() => go('achievements')}>
-              <Award size={15} /> Achievements
-            </button>
-            <button role="menuitem" type="button" className="pf-dd__item" onClick={() => go('leaderboard')}>
-              <Trophy size={15} /> Leaderboard
-            </button>
-
-            {onLogout && (
-              <>
-                <div className="pf-dd__sep" />
-                <button
-                  role="menuitem"
-                  type="button"
-                  className="pf-dd__item pf-dd__item--danger"
-                  onClick={() => { setOpen(false); onLogout() }}
-                >
-                  <LogOut size={15} /> Sign out
-                </button>
-              </>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </>
+      )}
     </div>
   )
+}
+
+const dropdownItemStyle = {
+  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+  padding: '10px 16px', border: 'none', background: 'transparent',
+  color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13,
+  fontFamily: 'inherit', transition: 'background 0.15s',
 }

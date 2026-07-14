@@ -3,10 +3,10 @@ import { Trophy, MessageSquare, BookOpen, Search, Users } from 'lucide-react'
 
 const VARIANTS = {
   'no-trainings': {
-    Icon: BookOpen, color: '#6366f1',
+    Icon: BookOpen, color: '#0D9488',
     title: 'No Trainings Yet',
     body: 'No training programs are available right now. Check back soon!',
-    bg: 'bg-indigo-50', border: 'border-indigo-200',
+    bg: 'bg-primary-50', border: 'border-primary-200',
   },
   'no-enrollments': {
     Icon: BookOpen, color: '#059669',
@@ -33,10 +33,10 @@ const VARIANTS = {
     bg: 'bg-blue-50', border: 'border-blue-200',
   },
   'no-participants': {
-    Icon: Users, color: '#7c3aed',
+    Icon: Users, color: '#0D9488',
     title: 'No Participants',
     body: 'There are no participants matching your current filters.',
-    bg: 'bg-violet-50', border: 'border-violet-200',
+    bg: 'bg-primary-50', border: 'border-primary-200',
   },
 }
 

@@ -32,7 +32,7 @@ export default function ExamResultPage() {
   if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#FAFAF8]">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-primary-600" />
       </div>
     );
   }
@@ -50,14 +50,14 @@ export default function ExamResultPage() {
             <button
               onClick={() => navigate('/participant', { replace: true })}
               className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white"
-              style={{ background: '#4f46e5', borderRadius: 6 }}
+              style={{ background: '#0D9488', borderRadius: 6 }}
             >
               Back to dashboard <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </div>
         ) : !data ? (
           <div className="flex justify-center py-20">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-primary-600" />
           </div>
         ) : (
           <ResultBody data={data} onExit={() => navigate('/participant', { replace: true })} />

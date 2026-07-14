@@ -12,6 +12,11 @@ export function AppThemeProvider({ children }) {
   useEffect(() => {
     const root = document.documentElement
     root.setAttribute('data-theme', theme)
+    if (theme === 'dark') {
+      root.classList.add('dark')
+    } else {
+      root.classList.remove('dark')
+    }
     localStorage.setItem(STORAGE_KEY, theme)
   }, [theme])
 

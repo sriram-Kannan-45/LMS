@@ -14,7 +14,6 @@ router.post('/', trainer, c.createLesson);
 router.get('/trainer', trainer, c.getTrainerLessons);
 router.post('/:lessonId/quizzes', trainer, c.attachQuiz);
 router.post('/:lessonId/assessments', trainer, c.createAssessment);
-
 // ── Trainer: dashboard + publishing ──
 router.get('/:lessonId/dashboard', trainer, c.getLessonDashboard);
 router.post('/quizzes/:lessonQuizId/publish', trainer, c.publishQuizResults);

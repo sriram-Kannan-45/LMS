@@ -17,8 +17,9 @@ import AchievementsSection from '../components/student/achievements/Achievements
 import LessonsSection from '../components/student/lessons/LessonsSection'
 import ProfileSection from '../components/student/profile/ProfileSection'
 import ParticipantCourses from './ParticipantCourses'
-import ParticipantCodingList from '../components/coding-assessment/ParticipantCodingList'
 import { useContinueLearning } from '../hooks/useContinueLearning'
+import { Button, Badge, Table, PageHeader, EmptyState, StatCard, ProgressBar } from '../components/ui'
+import { useSocketEvent } from '../hooks/useSocket'
 
 const fadeVariant = {
   initial: { opacity: 0, y: 8 },
@@ -114,6 +115,14 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       console.error('fetchQuizzes error:', e.message)
     }
   }, [auth, handleResponse])
+
+  useSocketEvent('quiz:published', () => {
+    fetchQuizzes()
+  }, [fetchQuizzes])
+
+  useSocketEvent('quiz:results:published', () => {
+    fetchQuizzes()
+  }, [fetchQuizzes])
 
   const fetchAll = useCallback(() => {
     fetchTrainings(); fetchEnrollments(); fetchFeedbacks(); fetchQuizzes(); fetchParticipantReport()
@@ -266,12 +275,6 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       {tab === 'ai-quizzes' && (
         <motion.div key="ai-quizzes" {...fadeVariant} transition={{ duration: 0.25 }}>
           <AIQuizList user={user} onStartQuiz={handleStartQuiz} />
-        </motion.div>
-      )}
-
-      {tab === 'coding' && (
-        <motion.div key="coding" {...fadeVariant} transition={{ duration: 0.25 }}>
-          <ParticipantCodingList />
         </motion.div>
       )}
 
@@ -443,82 +446,68 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       )}
 
       {tab === 'certificates' && (
-        <motion.div key="certificates" {...fadeVariant} transition={{ duration: 0.25 }} style={{ padding: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-            <div>
-              <h2 style={{ margin: 0, fontFamily: "'Poppins', sans-serif" }}>My Certificates</h2>
-              <p style={{ color: 'var(--academic-text-muted)', fontSize: 13, margin: '4px 0 0' }}>View and download your official completion certificates.</p>
-            </div>
-            <button className="ac-btn ac-btn-secondary" onClick={fetchParticipantReport}>Refresh</button>
-          </div>
+        <motion.div key="certificates" {...fadeVariant} transition={{ duration: 0.25 }} className="space-y-6">
+          <PageHeader
+            title="My Certificates"
+            subtitle="View and download your official completion certificates."
+            action={<Button variant="secondary" size="sm" onClick={fetchParticipantReport}>Refresh</Button>}
+          />
 
           {!participantReport ? (
-            <div className="ac-card" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-              <span style={{ color: 'var(--academic-text-muted)' }}>Loading certificates...</span>
-            </div>
+            <div className="p-8 text-center text-slate-400">Loading certificates...</div>
           ) : (!participantReport.certificates || participantReport.certificates.length === 0) ? (
-            <div className="ac-card" style={{ padding: 40, textAlign: 'center' }}>
-              <p style={{ color: 'var(--academic-text-muted)' }}>No certificates earned yet. Complete 100% of your course requirements, quizzes, and assessments to earn your certificate!</p>
-            </div>
+            <EmptyState
+              icon={FileText}
+              title="No certificates earned yet"
+              description="Complete 100% of your course requirements, quizzes, and assessments to earn your certificate!"
+            />
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24 }}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {participantReport.certificates.map((cert, idx) => (
-                <div key={idx} className="ac-card" style={{
-                  padding: 24,
-                  border: '2px solid var(--academic-primary)',
-                  background: 'linear-gradient(135deg, rgba(79, 70, 229, 0.05) 0%, rgba(255,255,255,0.02) 100%)',
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}>
-                  {/* Certificate Frame Effect */}
-                  <div style={{
-                    border: '1px solid rgba(79, 70, 229, 0.2)',
-                    padding: 20,
-                    borderRadius: 8,
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--academic-primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>
+                <div key={idx} className="bg-white dark:bg-slate-900 border-2 border-primary-500/30 dark:border-primary-500/20 rounded-2xl p-6 shadow-md bg-gradient-to-br from-primary-500/5 to-white dark:to-slate-900 relative overflow-hidden">
+                  <div className="border border-primary-500/20 p-5 rounded-xl text-center space-y-4">
+                    <div className="text-xs font-bold text-primary-500 dark:text-primary-400 uppercase tracking-widest">
                       Wave Init LMS Certificate
                     </div>
-                    <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Poppins', sans-serif", color: 'var(--academic-text)', marginBottom: 8 }}>
+                    <div className="text-xl font-bold text-slate-800 dark:text-slate-100">
                       Certificate of Completion
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--academic-text-secondary)', marginBottom: 16 }}>
+                    <div className="text-xs text-slate-400">
                       This is proudly presented to
                     </div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--academic-text)', textDecoration: 'underline', marginBottom: 16, fontFamily: "'Poppins', sans-serif" }}>
+                    <div className="text-lg font-bold text-slate-800 dark:text-slate-100 underline decoration-primary-500 decoration-2 underline-offset-4">
                       {user.name}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--academic-text-secondary)', marginBottom: 8 }}>
+                    <div className="text-xs text-slate-400">
                       for successfully completing all requirements for
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--academic-text)', marginBottom: 20 }}>
+                    <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                       {cert.title}
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--academic-text-muted)', borderTop: '1px solid var(--academic-border)', paddingTop: 12 }}>
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-3">
                       <div>
-                        <strong>Date Issued:</strong> {new Date(cert.issuedAt).toLocaleDateString()}
+                        <strong>Issued:</strong> {new Date(cert.issuedAt).toLocaleDateString()}
                       </div>
                       <div>
-                        <strong>Verification Code:</strong> {cert.certificateCode}
+                        <strong>Verify:</strong> {cert.certificateCode}
                       </div>
                     </div>
                   </div>
-                  <button
-                    className="ac-btn ac-btn-primary"
-                    style={{ width: '100%', marginTop: 16 }}
+                  <Button
+                    variant="primary"
+                    className="w-full mt-4"
                     onClick={() => {
                       const printContent = `
                         <html>
                           <head>
                             <title>Certificate - ${cert.title}</title>
                             <style>
-                              body { font-family: 'Poppins', 'Poppins', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #fff; color: #000; }
-                              .cert-container { border: 15px double #4f46e5; padding: 50px; width: 650px; text-align: center; border-radius: 4px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
+                              body { font-family: 'Poppins', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #fff; color: #000; }
+                              .cert-container { border: 15px double #0D9488; padding: 50px; width: 650px; text-align: center; border-radius: 4px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
                               .title { font-size: 32px; font-weight: 700; color: #1e1b4b; margin-bottom: 10px; }
                               .subtitle { font-size: 16px; color: #4b5563; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 2px; }
                               .presented { font-size: 14px; font-style: italic; color: #6b7280; margin-bottom: 20px; }
-                              .name { font-size: 28px; font-weight: 700; color: #4f46e5; border-bottom: 2px solid #e5e7eb; display: inline-block; padding-bottom: 5px; margin-bottom: 30px; }
+                              .name { font-size: 28px; font-weight: 700; color: #0D9488; border-bottom: 2px solid #e5e7eb; display: inline-block; padding-bottom: 5px; margin-bottom: 30px; }
                               .reason { font-size: 14px; color: #4b5563; line-height: 1.6; margin-bottom: 40px; }
                               .course-title { font-size: 20px; font-weight: 600; color: #1f2937; }
                               .footer { display: flex; justify-content: space-between; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 20px; }
@@ -547,7 +536,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
                     }}
                   >
                     Print Certificate
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>

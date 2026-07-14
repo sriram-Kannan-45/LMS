@@ -64,6 +64,12 @@ const AIQuestion = sequelize.define('AIQuestion', {
   order: {
     type: DataTypes.INTEGER,
     defaultValue: 0
+  },
+  marks: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 1,
+    comment: 'Points this question is worth'
   }
 }, {
   tableName: 'ai_questions',

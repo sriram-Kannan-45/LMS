@@ -50,3 +50,7 @@ ai-service/vector_store/
 
 # Uploaded documents
 backend/uploads/ai-docs/
+
+# Recordings & screenshots (binary, generated at runtime)
+backend/storage/recordings/
+backend/uploads/screenshots/

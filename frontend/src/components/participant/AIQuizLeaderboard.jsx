@@ -83,7 +83,7 @@ export default function AIQuizLeaderboard() {
       y: Math.random() * canvas.height * -1,
       w: Math.random() * 10 + 5,
       h: Math.random() * 6 + 3,
-      color: ['#7c3aed', '#a78bfa', '#f59e0b', '#c084fc', '#6366f1', '#e879f9'][Math.floor(Math.random() * 6)],
+      color: ['#0D9488', '#2DD4BF', '#f59e0b', '#c084fc', '#14B8A6', '#e879f9'][Math.floor(Math.random() * 6)],
       vx: (Math.random() - 0.5) * 4,
       vy: Math.random() * 3 + 2,
       rot: Math.random() * 360,
@@ -158,18 +158,18 @@ export default function AIQuizLeaderboard() {
           100% { opacity: 1; transform: translateY(0); }
         }
         @keyframes pulseGlow {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.3); }
-          50% { box-shadow: 0 0 20px 4px rgba(124,58,237,0.2); }
+          0%, 100% { box-shadow: 0 0 0 0 rgba(13,148,136,0.3); }
+          50% { box-shadow: 0 0 20px 4px rgba(13,148,136,0.2); }
         }
         .lb-row {
           transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
         .lb-row:hover {
           transform: translateY(-2px);
-          box-shadow: 0 4px 20px rgba(124,58,237,0.12);
+          box-shadow: 0 4px 20px rgba(13,148,136,0.12);
         }
         .lb-row.you {
-          border-left: 3px solid #a78bfa;
+          border-left: 3px solid #2DD4BF;
         }
         .podium-card {
           transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
@@ -182,10 +182,10 @@ export default function AIQuizLeaderboard() {
           transition: all 0.2s ease;
         }
         .filter-pill:hover {
-          background: rgba(124,58,237,0.15);
+          background: rgba(13,148,136,0.15);
         }
         .filter-pill.active {
-          background: #7c3aed;
+          background: #0D9488;
           color: #fff;
         }
         .lock-icon {
@@ -225,10 +225,10 @@ export default function AIQuizLeaderboard() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 36, height: 36, borderRadius: 10,
-            background: 'linear-gradient(135deg, #7c3aed, #a78bfa)',
+            background: 'linear-gradient(135deg, #0D9488, #2DD4BF)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 16, fontWeight: 700, color: '#fff',
-            boxShadow: '0 4px 12px rgba(124,58,237,0.3)',
+            boxShadow: '0 4px 12px rgba(13,148,136,0.3)',
           }}>🏆</div>
           <h2 style={{
             margin: 0,
@@ -244,9 +244,9 @@ export default function AIQuizLeaderboard() {
           style={{
             padding: '8px 18px',
             borderRadius: 8,
-            border: '1px solid rgba(124,58,237,0.3)',
+            border: '1px solid rgba(13,148,136,0.3)',
             background: phase === 'locked'
-              ? 'linear-gradient(135deg, #7c3aed, #a78bfa)'
+              ? 'linear-gradient(135deg, #0D9488, #2DD4BF)'
               : 'rgba(255,255,255,0.06)',
             color: '#f1f5f9',
             fontSize: 12,
@@ -274,8 +274,8 @@ export default function AIQuizLeaderboard() {
             marginBottom: 20,
             padding: '14px 18px',
             borderRadius: 12,
-            background: 'rgba(124,58,237,0.08)',
-            border: '1px solid rgba(124,58,237,0.15)',
+            background: 'rgba(13,148,136,0.08)',
+            border: '1px solid rgba(13,148,136,0.15)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 18 }}>🔒</span>
@@ -287,12 +287,12 @@ export default function AIQuizLeaderboard() {
               fontFamily: "'Inter', monospace",
               fontSize: 26,
               fontWeight: 700,
-              color: '#a78bfa',
+              color: '#2DD4BF',
               letterSpacing: '0.05em',
               background: 'rgba(0,0,0,0.25)',
               padding: '4px 14px',
               borderRadius: 8,
-              border: '1px solid rgba(167,139,250,0.2)',
+              border: '1px solid rgba(45,212,191,0.2)',
             }}>
               {fmt(countdown)}
             </div>
@@ -381,7 +381,7 @@ export default function AIQuizLeaderboard() {
                   padding: '6px 16px',
                   borderRadius: 20,
                   border: '1px solid ' + (activeFilter === f.key ? 'transparent' : 'rgba(255,255,255,0.1)'),
-                  background: activeFilter === f.key ? '#7c3aed' : 'transparent',
+                  background: activeFilter === f.key ? '#0D9488' : 'transparent',
                   color: activeFilter === f.key ? '#fff' : '#94a3b8',
                   fontSize: 12,
                   fontWeight: 600,
@@ -493,7 +493,7 @@ export default function AIQuizLeaderboard() {
                     border: '1px solid rgba(255,255,255,0.05)',
                   }}>
                     <div style={{ fontSize: 10, color: '#64748b', fontWeight: 500, marginBottom: 2 }}>{s.label}</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: '#a78bfa', fontFamily: "'Poppins', sans-serif" }}>{s.value}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: '#2DD4BF', fontFamily: "'Poppins', sans-serif" }}>{s.value}</div>
                   </div>
                 ))}
               </div>
@@ -546,8 +546,8 @@ export default function AIQuizLeaderboard() {
                     borderBottom: i < sorted.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
                     opacity: visible ? 1 : 0,
                     animation: visible ? `fadeSlideIn 0.35s ease ${(revealDelay - 5) * 0.06}s both` : 'none',
-                    background: p.isYou ? 'rgba(167,139,250,0.06)' : 'transparent',
-                    borderLeft: p.isYou ? '3px solid #a78bfa' : '3px solid transparent',
+                    background: p.isYou ? 'rgba(45,212,191,0.06)' : 'transparent',
+                    borderLeft: p.isYou ? '3px solid #2DD4BF' : '3px solid transparent',
                     borderRadius: p.isYou ? '0 8px 8px 0' : 0,
                   }}
                 >
@@ -571,7 +571,7 @@ export default function AIQuizLeaderboard() {
                     <div style={{
                       width: 28, height: 28, borderRadius: '50%',
                       background: p.isYou
-                        ? 'linear-gradient(135deg, #7c3aed, #a78bfa)'
+                        ? 'linear-gradient(135deg, #0D9488, #2DD4BF)'
                         : 'rgba(255,255,255,0.06)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 10, fontWeight: 700, color: p.isYou ? '#fff' : '#64748b',
@@ -589,8 +589,8 @@ export default function AIQuizLeaderboard() {
                         {p.isYou && (
                           <span style={{
                             marginLeft: 6,
-                            fontSize: 9, fontWeight: 700, color: '#a78bfa',
-                            background: 'rgba(167,139,250,0.12)',
+                            fontSize: 9, fontWeight: 700, color: '#2DD4BF',
+                            background: 'rgba(45,212,191,0.12)',
                             padding: '1px 6px',
                             borderRadius: 4,
                             textTransform: 'uppercase',

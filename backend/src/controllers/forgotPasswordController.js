@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+
+const BCRYPT_COST = 12;
 const { Op } = require('sequelize');
 const { User, PasswordResetOtp } = require('../models');
 const {
@@ -47,7 +49,6 @@ function dispatchOtpEmail(email, otp) {
   if (!isEmailConfigured()) {
     console.warn('⚠️  GMAIL_USER/GMAIL_APP_PASS not configured (placeholder values).');
     console.warn('   Set a real Gmail App Password in backend/.env to enable email delivery.');
-    console.log(`\n🔑 [DEV] OTP for ${email}: ${otp}\n`);
     return;
   }
   setImmediate(() => {
@@ -57,7 +58,6 @@ function dispatchOtpEmail(email, otp) {
         if (mailErr.code) console.error('   error code:', mailErr.code);
         if (mailErr.response) console.error('   smtp response:', mailErr.response);
         explainSmtpError(mailErr);
-        console.log(`\n🔑 [FALLBACK] OTP for ${email}: ${otp}\n   (email send failed — using console fallback)\n`);
       });
   });
 }
@@ -110,13 +110,11 @@ const sendOtp = async (req, res) => {
     await PasswordResetOtp.update({ used: true }, { where: { email, used: false } });
 
     const otp = generateOtp();
-    const otpHash = await bcrypt.hash(otp, 10);
+    const otpHash = await bcrypt.hash(otp, BCRYPT_COST);
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
     await PasswordResetOtp.create({ email, otpHash, expiresAt, used: false, ip });
     lastSendMap.set(email, Date.now());
-
-    console.log(`[OTP DEBUG] Generated OTP for ${email}: ${otp}`);
 
     // Fire-and-forget the email — respond to the client immediately
     dispatchOtpEmail(email, otp);
@@ -168,7 +166,7 @@ const verifyOtp = async (req, res) => {
 
     // Issue a short-lived random reset token (no JWT needed — store hash in DB)
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenHash = await bcrypt.hash(resetToken, 8);
+    const resetTokenHash = await bcrypt.hash(resetToken, BCRYPT_COST);
     const tokenExpiry = new Date(Date.now() + RESET_TOKEN_TTL_MS);
 
     await PasswordResetOtp.create({
@@ -218,8 +216,8 @@ const resetPassword = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await user.update({ password: hashedPassword });
+    const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_COST);
+    await user.update({ password: hashedPassword, passwordVersion: 2 });
 
     // Invalidate the reset token + any leftover OTPs for this email
     await record.update({ used: true });

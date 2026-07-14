@@ -1,39 +1,19 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/db');
 
-/**
- * AIQuiz
- * ──────
- * Course-scoped after the restructure. A quiz is always tied to one course
- * (course_id); it MAY also be linked to a specific lesson within that course
- * (lesson_id, optional) — when null the quiz is considered course-level.
- *
- * Visibility rule: participants see a quiz only when they are enrolled in the
- * quiz's course. result_status gates whether participants can see their
- * scores after submission.
- *
- * Legacy columns (document_id, time_limit, num_questions, difficulty,
- * is_active, training_id) are kept nullable for backward compatibility with
- * the existing aiQuizRoutes.js / TrainerAIQuiz.jsx flow and will be either
- * dropped or repurposed in a later cleanup pass.
- */
 const AIQuiz = sequelize.define('AIQuiz', {
   id: {
     type: DataTypes.BIGINT.UNSIGNED,
     autoIncrement: true,
     primaryKey: true
   },
-
-  // ── New course-centric columns ──
   courseId: {
     type: DataTypes.BIGINT.UNSIGNED,
-    // Nullable while legacy quizzes (trainingId-only) still exist.
     allowNull: true,
     field: 'course_id'
   },
   lessonId: {
     type: DataTypes.BIGINT.UNSIGNED,
-    // Optional — quizzes can live at the course level (no specific lesson).
     allowNull: true,
     field: 'lesson_id'
   },
@@ -49,8 +29,6 @@ const AIQuiz = sequelize.define('AIQuiz', {
     defaultValue: true,
     field: 'is_mandatory'
   },
-
-  // ── Existing columns (preserved for compatibility) ──
   documentId: {
     type: DataTypes.BIGINT.UNSIGNED,
     allowNull: true,
@@ -90,24 +68,167 @@ const AIQuiz = sequelize.define('AIQuiz', {
     allowNull: false,
     defaultValue: 'MIXED'
   },
+  // ── Lifecycle status ──
   status: {
-    type: DataTypes.ENUM('DRAFT', 'PUBLISHED', 'CLOSED'),
+    type: DataTypes.ENUM('DRAFT', 'PUBLISHED', 'CLOSED', 'RESULTS_PUBLISHED', 'ARCHIVED'),
     allowNull: false,
     defaultValue: 'DRAFT'
+  },
+  // ── Time window ──
+  startTime: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'start_time'
+  },
+  endTime: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'end_time'
+  },
+  // ── Marks / scoring ──
+  totalMarks: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0,
+    field: 'total_marks'
+  },
+  // ── Attempt settings ──
+  allowMultipleAttempts: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'allow_multiple_attempts'
+  },
+  maxAttempts: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 1,
+    field: 'max_attempts'
+  },
+  showResultImmediately: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'show_result_immediately'
+  },
+  showCorrectAnswersOnResult: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true,
+    field: 'show_correct_answers_on_result'
+  },
+  shuffleQuestions: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'shuffle_questions'
+  },
+  // ── Timestamps for lifecycle events ──
+  publishedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'published_at'
+  },
+  closedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'closed_at'
+  },
+  resultPublishedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'result_published_at'
+  },
+  // ── Legacy booleans (kept for backward compatibility, driven by status) ──
+  quizId: {
+    type: DataTypes.BIGINT.UNSIGNED,
+    allowNull: true,
+    field: 'quiz_id'
+  },
+  questionCount: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'question_count'
+  },
+  createdBy: {
+    type: DataTypes.BIGINT.UNSIGNED,
+    allowNull: true,
+    field: 'created_by'
+  },
+  published: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'published'
   },
   isActive: {
     type: DataTypes.BOOLEAN,
     defaultValue: true,
     field: 'is_active'
+  },
+  isPublished: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'is_published'
+  },
+  isResultPublished: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'is_result_published'
+  },
+  copyProtectionEnabled: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'copy_protection_enabled'
+  },
+  maxCopyWarnings: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 3,
+    field: 'max_copy_warnings'
+  },
+  copyViolationActions: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    field: 'copy_violation_actions'
+  },
+  copyWarningMessage: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'copy_warning_message'
+  },
+  copyDisqualifyAction: {
+    type: DataTypes.ENUM('LOCK', 'AUTO_SUBMIT'),
+    allowNull: false,
+    defaultValue: 'AUTO_SUBMIT',
+    field: 'copy_disqualify_action'
+  },
+  proctoringLevel: {
+    type: DataTypes.ENUM('LOW', 'MEDIUM', 'HIGH'),
+    allowNull: false,
+    defaultValue: 'MEDIUM',
+    field: 'proctoring_level'
+  },
+  gracePeriodMinutes: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 2,
+    field: 'grace_period_minutes'
+  },
+  proctoringEnabled: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'proctoring_enabled'
   }
 }, {
   tableName: 'ai_quizzes',
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at'
-  // Indexes on course_id / lesson_id / result_status added later by
-  // bootstrapCourseSchema.js once the per-model sync has created the
-  // columns.
 });
 
 module.exports = AIQuiz;

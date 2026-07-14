@@ -16,7 +16,7 @@ function StatItem({ value, label }) {
   );
 }
 
-export default function PageHeader({ quizCount, totalMinutes, totalQuestions, loading, onRefresh }) {
+export default function PageHeader({ quizCount, totalMinutes, totalQuestions, loading, onRefresh, statusLabel = "Available" }) {
   return (
     <header className="qz-pageheader">
       <div className="qz-pageheader__left">
@@ -29,7 +29,7 @@ export default function PageHeader({ quizCount, totalMinutes, totalQuestions, lo
       <div className="qz-pageheader__right">
         {!loading && (
           <div className="qz-stats" role="list">
-            <StatItem value={quizCount} label="Available" />
+            <StatItem value={quizCount} label={statusLabel} />
             <span className="qz-stats__divider" aria-hidden />
             <StatItem value={totalQuestions} label="Questions" />
             <span className="qz-stats__divider" aria-hidden />

@@ -3,6 +3,16 @@ const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 require('dotenv').config();
 
+const BCRYPT_COST = 12;
+
+function isWeakHash(hash) {
+  return typeof hash === 'string' && (
+    hash.startsWith('$2a$10$') ||
+    hash.startsWith('$2b$10$') ||
+    hash.startsWith('$2y$10$')
+  );
+}
+
 const generateUsername = async (name) => {
   const baseName = name.replace(/[^a-zA-Z]/g, '').toLowerCase().slice(0, 4);
   let username = baseName + Math.floor(1000 + Math.random() * 9000);
@@ -31,29 +41,32 @@ const login = async (req, res) => {
     }
 
     const user = await User.findOne({
-      where: { email: credential }
+      where: { email: credential, isDeleted: false }
     }) || await User.findOne({
-      where: { username: credential }
+      where: { username: credential, isDeleted: false }
     });
 
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
     }
 
-    // DEBUG: Log password format
-    console.log('🔍 DEBUG - Stored password starts with:', user.password.substring(0, 20));
-    console.log('🔍 DEBUG - Input password:', password);
-
     const isValidPassword = await bcrypt.compare(password, user.password);
-
-    console.log('🔍 DEBUG - bcrypt.compare result:', isValidPassword);
 
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid password' });
     }
 
+    if (isWeakHash(user.password)) {
+      const rehashed = await bcrypt.hash(password, BCRYPT_COST);
+      await User.update({ password: rehashed, passwordVersion: 2 }, { where: { id: user.id } });
+    }
+
     if (user.role === 'PARTICIPANT' && user.status === 'PENDING') {
       return res.status(403).json({ error: 'Your account is pending approval. Please wait for admin to approve your registration.' });
+    }
+
+    if (user.status === 'INACTIVE') {
+      return res.status(403).json({ error: 'Your account has been deactivated. Please contact your administrator.' });
     }
 
     if (requestedRole && requestedRole !== user.role) {
@@ -61,13 +74,18 @@ const login = async (req, res) => {
       return res.status(403).json({ error: 'Incorrect role selected. Please choose the correct role.' });
     }
 
+    const tokenPayload = {
+      id: user.id,
+      participantId: user.role === 'PARTICIPANT' ? user.id : undefined,
+      role: user.role.toLowerCase(),
+      email: user.email
+    };
+
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      tokenPayload,
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
-
-    console.log(`✅ Login success: ${user.email} as ${user.role}`);
 
     // Track login activity
     try {
@@ -116,7 +134,7 @@ const register = async (req, res) => {
       return res.status(400).json({ error: 'Email already registered' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_COST);
 
     const user = await User.create({
       name,
@@ -124,7 +142,8 @@ const register = async (req, res) => {
       password: hashedPassword,
       phone,
       role: 'PARTICIPANT',
-      status: 'PENDING'
+      status: 'PENDING',
+      passwordVersion: 2
     });
 
     res.status(201).json({
@@ -161,10 +180,7 @@ const createTrainer = async (req, res) => {
 
     const username = email.split('@')[0];
     
-    // DEBUG: Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-    console.log('🔍 DEBUG - Original password:', password);
-    console.log('🔍 DEBUG - Hashed password:', hashedPassword.substring(0, 30) + '...');
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_COST);
 
     const trainer = await User.create({
       name,
@@ -172,7 +188,8 @@ const createTrainer = async (req, res) => {
       username,
       password: hashedPassword,
       phone: null,
-      role: 'TRAINER'
+      role: 'TRAINER',
+      passwordVersion: 2
     });
 
     res.status(201).json({
@@ -212,10 +229,10 @@ const changePassword = async (req, res) => {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_COST);
 
     await User.update(
-      { password: hashedPassword },
+      { password: hashedPassword, passwordVersion: 2 },
       { where: { id: userId } }
     );
 

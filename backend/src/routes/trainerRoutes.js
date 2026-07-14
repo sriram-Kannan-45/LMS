@@ -630,8 +630,8 @@ router.put(
         return res.status(401).json({ error: 'Current password is incorrect' });
       }
 
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      await trainer.update({ password: hashedPassword });
+      const hashedPassword = await bcrypt.hash(newPassword, 12);
+      await trainer.update({ password: hashedPassword, passwordVersion: 2 });
 
       res.json({ message: 'Password changed successfully' });
     } catch (error) {
@@ -831,6 +831,30 @@ router.post(
       return res.status(500).json({
         error: error.message || 'Failed to generate quiz from prompt'
       });
+    }
+  }
+);
+
+// GET /api/trainer/quizzes
+router.get(
+  '/quizzes',
+  authenticateToken,
+  roleMiddleware('TRAINER', 'ADMIN'),
+  async (req, res) => {
+    try {
+      const { AIQuiz, Course, Training } = require('../models');
+      const quizzes = await AIQuiz.findAll({
+        where: { trainerId: req.user.id },
+        include: [
+          { model: Course, as: 'course', attributes: ['id', 'title'] },
+          { model: Training, as: 'training', attributes: ['id', 'title'] }
+        ],
+        order: [['created_at', 'DESC']]
+      });
+      return res.json({ success: true, quizzes });
+    } catch (error) {
+      console.error('Error fetching trainer quizzes:', error);
+      return res.status(500).json({ error: error.message });
     }
   }
 );

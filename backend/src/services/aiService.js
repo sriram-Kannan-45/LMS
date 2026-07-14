@@ -79,9 +79,20 @@ function normalizeRagQuestions(questions = [], fallbackDifficulty = 'MEDIUM') {
 function buildAIError(error) {
   if (!error) return new Error('AI service failed without a response.');
   if (error.response) {
-    const detail = error.response.data?.detail || error.response.data?.error || '';
+    const data = error.response.data || {};
+    const detail = data.detail || data.error || data.message || '';
+    if (error.response.status === 503) {
+      const err = new Error(data.message || 'Gemini AI is currently experiencing high demand. Please try again in a few moments.');
+      err.status = 503;
+      return err;
+    }
     if (error.response.status === 415) return new Error(`File type not supported: ${detail}`);
-    if (error.response.status === 422) return new Error(`Validation error: ${detail}`);
+    if (error.response.status === 422) {
+      if (detail && detail.includes("Document contains insufficient text")) {
+        return new Error("Document contains insufficient text.");
+      }
+      return new Error(`Validation error: ${detail}`);
+    }
     if (error.response.status === 502) return new Error(`AI generation failed: ${detail}`);
     return new Error(`AI service error (${error.response.status}): ${detail || error.response.statusText}`);
   }
@@ -123,7 +134,7 @@ async function callRagGeneration(payload) {
     } catch (error) {
       lastError = error;
       console.error(`[aiService] RAG attempt ${attempt} failed:`, error.message);
-      if (error.response && [400, 415, 422, 502].includes(error.response.status)) break;
+      if (error.response && [400, 415, 422, 502, 503].includes(error.response.status)) break;
       if (attempt < MAX_RETRIES) {
         await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
       }
@@ -138,7 +149,7 @@ const aiService = {
   async generateQuizFromText(content, numQuestions = 10, difficulty = 'MIXED') {
     const cleanContent = (content || '').toString().replace(/\u0000/g, '').trim();
     if (!cleanContent || cleanContent.length < 50) {
-      throw new Error('Document text is too short to generate a quiz. Minimum 50 characters required.');
+      throw new Error('Document contains insufficient text.');
     }
     return callRagGeneration({
       text: cleanContent,
@@ -262,6 +273,25 @@ const aiService = {
         throw new Error('AI service timed out. The prompt may be too complex or the model is overloaded.');
       }
       throw new Error('Failed to generate quiz from prompt: ' + error.message);
+    }
+  },
+
+  async generateCodingProblemsFromPrompt(prompt, numProblems = 5, difficulty = 'MEDIUM') {
+    const cleanPrompt = (prompt || '').toString().trim();
+    if (!cleanPrompt) throw new Error('Prompt cannot be empty.');
+    try {
+      console.log(`[aiService] Generating coding problems from prompt: "${cleanPrompt}"`);
+      const response = await axios.post(`${AI_SERVICE_URL}/generate-coding-problems`, {
+        prompt: cleanPrompt, numProblems: parseInt(numProblems, 10), difficulty,
+      }, { timeout: AI_TIMEOUT, headers: { 'Content-Type': 'application/json' } });
+      if (!response.data || !response.data.problems) {
+        throw new Error('Invalid response from AI service');
+      }
+      return response.data;
+    } catch (error) {
+      console.error('[aiService] generateCodingProblems failed:', error.message);
+      if (error.code === 'ECONNREFUSED') throw new Error('AI service is not running.');
+      throw new Error('Failed to generate coding problems: ' + error.message);
     }
   },
 };

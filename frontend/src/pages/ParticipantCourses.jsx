@@ -1,42 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, BookOpen, FileText, Sparkles, ClipboardList, Folder,
   PlayCircle, CheckCircle2, Clock, ExternalLink, Send, X, Eye,
   Image as ImageIcon, Video, Link as LinkIcon, FilePenLine, Presentation,
-  Trophy, AlertCircle, User, Lock, MessageSquare,
+  Trophy, AlertCircle, User, Lock, MessageSquare, Code,
 } from 'lucide-react'
-import { API, assetUrl } from '../api/api'
+import { API, assetUrl, API_BASE } from '../api/api'
+import { colors } from '../theme/tokens'
 import { useToast } from '../components/Toast'
 import DiscussionBoard from '../components/shared/DiscussionBoard'
+import { Button, Badge, Table, PageHeader, EmptyState, StatCard, ProgressBar } from '../components/ui'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
 const auth = (token) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` })
 
-function ProgressBar({ percent, height = 8, color = '#4f46e5' }) {
-  const v = Math.max(0, Math.min(100, Number(percent || 0)))
-  return (
-    <div style={{ height, width: '100%', background: '#f1f5f9', borderRadius: 999, overflow: 'hidden' }}>
-      <div style={{ width: `${v}%`, height: '100%', background: color, transition: 'width 0.3s' }} />
-    </div>
-  )
-}
+
 
 function StatusPill({ status }) {
-  const map = {
-    NOT_STARTED: { bg: '#f1f5f9', fg: '#64748b', label: 'Not started' },
-    IN_PROGRESS: { bg: '#fef3c7', fg: '#92400e', label: 'In progress' },
-    COMPLETED:   { bg: '#dcfce7', fg: '#15803d', label: 'Completed' },
-  }
-  const v = map[status] || map.NOT_STARTED
-  return (
-    <span style={{
-      fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
-      background: v.bg, color: v.fg, textTransform: 'uppercase', letterSpacing: 0.4,
-    }}>{v.label}</span>
-  )
+  const label = status === 'NOT_STARTED' ? 'Not started' : status === 'IN_PROGRESS' ? 'In progress' : 'Completed';
+  const color = status === 'COMPLETED' ? 'success' : status === 'IN_PROGRESS' ? 'warning' : 'neutral';
+  return <Badge color={color}>{label}</Badge>;
 }
 
 const MAT_ICON = {
@@ -74,105 +61,64 @@ function MyCoursesList({ user, onOpen }) {
   }, [])
 
   return (
-    <div style={{ padding: '20px 0' }}>
-      <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: '#0f172a' }}>My Trainings</h1>
-      <p style={{ marginTop: 4, color: '#64748b', fontSize: 14 }}>
-        Continue where you left off, or jump into any of your enrolled trainings.
-      </p>
+    <div className="space-y-6">
+      <PageHeader
+        title="My Trainings"
+        subtitle="Continue where you left off, or jump into any of your enrolled trainings."
+      />
 
       {loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16, marginTop: 20 }}>
-          {[1, 2, 3].map(i => <div key={i} style={{ height: 280, background: '#f1f5f9', borderRadius: 12 }} />)}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map(i => <div key={i} className="h-72 bg-slate-100 dark:bg-slate-800 rounded-2xl animate-pulse" />)}
         </div>
       ) : courses.length === 0 ? (
-        <div style={{
-          padding: '60px 24px', textAlign: 'center', background: '#fff',
-          border: '1px dashed #cbd5e1', borderRadius: 12, marginTop: 20,
-        }}>
-          <BookOpen size={48} color="#cbd5e1" style={{ margin: '0 auto 12px' }} />
-          <h3 style={{ margin: '0 0 6px', color: '#475569', fontSize: 18, fontWeight: 600 }}>
-            No trainings yet
-          </h3>
-          <p style={{ margin: 0, color: '#94a3b8', fontSize: 14 }}>
-            Browse the Explore Trainings tab to find programs you can enroll in.
-          </p>
-        </div>
+        <EmptyState
+          icon={BookOpen}
+          title="No trainings yet"
+          description="Browse the Explore Trainings catalog to find programs you can enroll in."
+        />
       ) : (
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: 16, marginTop: 20,
-        }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {courses.map((c, i) => (
             <motion.div
               key={c.courseId}
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              whileHover={c.enrollmentStatus !== 'PENDING' ? { y: -3 } : {}}
-              onClick={() => {
-                if (c.enrollmentStatus === 'PENDING') {
-                  showError('Your enrollment request is pending approval by the trainer.')
-                  return
-                }
-                onOpen(c.courseId)
-              }}
-              style={{
-                background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12,
-                overflow: 'hidden', cursor: c.enrollmentStatus === 'PENDING' ? 'not-allowed' : 'pointer',
-                display: 'flex', flexDirection: 'column',
-                opacity: c.enrollmentStatus === 'PENDING' ? 0.75 : 1,
-              }}
+              whileHover={{ y: -3 }}
+              onClick={() => onOpen(c.courseId)}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 flex flex-col group cursor-pointer"
             >
-              <div style={{
-                height: 140, position: 'relative',
-                background: c.thumbnailUrl
-                  ? `url(${assetUrl(c.thumbnailUrl)}) center/cover`
-                  : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
-              }}>
-                {!c.thumbnailUrl && <BookOpen size={42} />}
+              <div
+                className="h-40 relative bg-cover bg-center flex items-center justify-center text-white"
+                style={{
+                  backgroundImage: c.thumbnailUrl ? `url(${assetUrl(c.thumbnailUrl)})` : 'linear-gradient(135deg, #0D9488, #0D9488)',
+                }}
+              >
+                {!c.thumbnailUrl && <BookOpen size={40} className="text-white/80 group-hover:scale-110 transition-transform duration-200" />}
               </div>
-              <div style={{ padding: 16, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{
-                  fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 4px',
-                  display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2,
-                  overflow: 'hidden', minHeight: '2.4em', lineHeight: '1.3',
-                }}>
-                  {c.title}
-                </h3>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#64748b', fontSize: 11, marginBottom: 10 }}>
-                  <Folder size={11} /> {c.programTitle || '—'}
+              <div className="p-5 flex-1 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 mb-1 line-clamp-2 leading-snug">
+                    {c.title}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-4">
+                    <Folder size={12} /> <span>{c.programTitle || '—'}</span>
+                  </div>
                 </div>
 
-                <div style={{ marginTop: 'auto' }}>
-                  {c.enrollmentStatus === 'PENDING' ? (
-                    <div style={{ textAlign: 'center', padding: '8px 0' }}>
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 999,
-                        background: '#fef3c7', color: '#92400e', textTransform: 'uppercase',
-                        display: 'inline-block', width: '100%', boxSizing: 'border-box',
-                        letterSpacing: 0.4,
-                      }}>
-                        Awaiting Approval
-                      </span>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
-                        <span>Progress</span><span style={{ fontWeight: 700, color: '#4f46e5' }}>{Math.round(c.progressPercent)}%</span>
-                      </div>
-                      <ProgressBar percent={c.progressPercent} />
-                      <button
-                        style={{
-                          width: '100%', marginTop: 12, padding: '9px 14px',
-                          background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8,
-                          fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        }}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
+                    <span>Progress</span>
+                    <span className="font-bold text-primary-600 dark:text-primary-400">{Math.round(c.progressPercent)}%</span>
+                  </div>
+                      <ProgressBar value={c.progressPercent} max={100} showLabel={false} color="primary" />
+                      <Button
+                        variant="primary"
+                        className="w-full mt-2"
+                        icon={PlayCircle}
                       >
-                        <PlayCircle size={14} /> Continue
-                      </button>
-                    </>
-                  )}
+                        Continue
+                      </Button>
                 </div>
               </div>
             </motion.div>
@@ -217,6 +163,7 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
     { key: 'lessons',   label: 'Lessons',   icon: <FileText size={14} /> },
     { key: 'resources', label: 'Resources', icon: <Folder size={14} /> },
     { key: 'quizzes',   label: 'Quizzes',   icon: <Sparkles size={14} /> },
+    { key: 'coding',    label: 'Coding Assessments', icon: <Code size={14} /> },
     { key: 'discussions', label: 'Discussions', icon: <MessageSquare size={14} /> },
   ]
 
@@ -242,7 +189,7 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
           width: 200, height: 130, borderRadius: 10, flexShrink: 0,
           background: overview.course.thumbnailUrl
             ? `url(${assetUrl(overview.course.thumbnailUrl)}) center/cover`
-            : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            : 'linear-gradient(135deg, #14B8A6, #14B8A6)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
         }}>
           {!overview.course.thumbnailUrl && <BookOpen size={48} />}
@@ -256,7 +203,7 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
           <div style={{ marginTop: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
               <span>Training progress</span>
-              <span style={{ fontWeight: 700, color: '#4f46e5' }}>
+              <span style={{ fontWeight: 700, color: '#0D9488' }}>
                 {overview.stats.completedLessons} / {overview.stats.totalLessons} lessons · {Math.round(overview.enrollment.progressPercent)}%
               </span>
             </div>
@@ -282,7 +229,7 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
             style={{
               flex: 1, padding: '10px 14px', border: 'none', cursor: 'pointer',
               borderRadius: 8, fontSize: 13, fontWeight: 600,
-              background: tab === t.key ? '#4f46e5' : 'transparent',
+              background: tab === t.key ? '#0D9488' : 'transparent',
               color: tab === t.key ? '#fff' : '#475569',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
@@ -303,7 +250,8 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
             <LessonsView user={user} courseId={courseId} onOpenLesson={onOpenLesson} />
           )}
           {tab === 'resources' && <ResourcesView user={user} courseId={courseId} />}
-          {tab === 'quizzes' && <QuizzesView user={user} courseId={courseId} />}
+          {tab === 'quizzes' && <QuizzesView user={user} courseId={courseId} trainingId={overview.course.trainingProgramId} />}
+          {tab === 'coding' && <CodingAssessmentsView user={user} courseId={courseId} trainingId={overview.course.trainingProgramId} />}
           {tab === 'discussions' && (
             <DiscussionBoard user={user} trainingId={overview.course.trainingProgramId} />
           )}
@@ -336,7 +284,7 @@ function OverviewView({ course, stats }) {
         }}>
           <div style={{
             width: 40, height: 40, borderRadius: 999,
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff',
+            background: 'linear-gradient(135deg, #14B8A6, #14B8A6)', color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
           }}>
             {course.trainer.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
@@ -410,8 +358,8 @@ function LessonsView({ user, courseId, onOpenLesson }) {
         >
           <div style={{
             width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-            background: l.isLocked ? '#e2e8f0' : l.progress.status === 'COMPLETED' ? '#dcfce7' : l.progress.status === 'IN_PROGRESS' ? '#fef3c7' : '#eef2ff',
-            color: l.isLocked ? '#64748b' : l.progress.status === 'COMPLETED' ? '#15803d' : l.progress.status === 'IN_PROGRESS' ? '#92400e' : '#4f46e5',
+            background: l.isLocked ? '#e2e8f0' : l.progress.status === 'COMPLETED' ? '#dcfce7' : l.progress.status === 'IN_PROGRESS' ? '#fef3c7' : '#f0fdfa',
+            color: l.isLocked ? '#64748b' : l.progress.status === 'COMPLETED' ? '#15803d' : l.progress.status === 'IN_PROGRESS' ? '#92400e' : '#0D9488',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
           }}>
             {l.isLocked ? <Lock size={14} /> : l.progress.status === 'COMPLETED' ? <CheckCircle2 size={16} /> : (l.orderIndex + 1)}
@@ -510,7 +458,7 @@ function ResourcesView({ user, courseId }) {
                     target="_blank" rel="noreferrer"
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 4,
-                      padding: '6px 10px', background: '#eef2ff', color: '#4f46e5',
+                      padding: '6px 10px', background: '#f0fdfa', color: '#0D9488',
                       borderRadius: 6, fontSize: 11, fontWeight: 600, textDecoration: 'none',
                     }}
                   >
@@ -527,26 +475,69 @@ function ResourcesView({ user, courseId }) {
 }
 
 // ── Quizzes tab ────────────────────────────────────────────────────────────
-function QuizzesView({ user, courseId }) {
+function QuizzesView({ user, courseId, trainingId }) {
   const { error: showError } = useToast()
+  const navigate = useNavigate()
   const [quizzes, setQuizzes] = useState([])
+  const [completedQuizzes, setCompletedQuizzes] = useState([])
   const [loading, setLoading] = useState(true)
-  const [openQuizId, setOpenQuizId] = useState(null)
 
   const refresh = async () => {
     try {
       setLoading(true)
       const r = await fetch(API.PARTICIPANT_COURSES.QUIZZES(courseId), { headers: auth(user.token) })
       const d = await r.json()
-      if (d.success) setQuizzes(d.quizzes || [])
+      if (d.success) {
+        setQuizzes(d.quizzes || [])
+        setCompletedQuizzes(d.completedQuizzes || [])
+      }
       else showError(d.error || 'Failed to load quizzes')
     } catch (e) { showError(e.message) }
     finally { setLoading(false) }
   }
   useEffect(() => { refresh() }, [courseId])
 
+  const handleStart = async (quizId) => {
+    const token = user?.token;
+    const participantId = user?.id;
+    console.log("--- START QUIZ ATTEMPT CLICKED (handleStart) ---");
+    console.log("Training ID:", trainingId);
+    console.log("Quiz ID:", quizId);
+    console.log("Participant ID:", participantId);
+    console.log("JWT Token:", token);
+
+    try {
+      const startUrl = `${API_BASE}/quizzes/${quizId}/start`;
+      console.log(`[handleStart] Calling API POST: ${startUrl}`);
+      const res = await fetch(startUrl, {
+        method: 'POST',
+        headers: auth(token)
+      });
+      const response = await res.json();
+      console.log("API Response:", response);
+
+      if (!res.ok) {
+        showError(response.error || 'Failed to start quiz');
+        return;
+      }
+      if (response.quiz?.proctoringEnabled) {
+        navigate(`/participant/exam/${quizId}`, {
+          state: {
+            attemptId: response.attemptId,
+            quizData: response.quiz
+          }
+        });
+      } else {
+        navigate(`/trainings/${trainingId}/quizzes/${quizId}/attempt?attemptId=${response.attemptId}&sessionToken=${response.sessionToken}`);
+      }
+    } catch (err) {
+      console.error("[handleStart] Error starting quiz attempt:", err);
+      showError(err.message);
+    }
+  }
+
   if (loading) return <div style={{ height: 100, background: '#f1f5f9', borderRadius: 10 }} />
-  if (quizzes.length === 0) {
+  if (quizzes.length === 0 && completedQuizzes.length === 0) {
     return (
       <div style={emptyCard}>
         <Sparkles size={36} color="#cbd5e1" />
@@ -555,52 +546,268 @@ function QuizzesView({ user, courseId }) {
     )
   }
 
-  return (
-    <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-        {quizzes.map(q => (
-          <div key={q.quizId} style={{
-            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16,
-            display: 'flex', flexDirection: 'column',
-          }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
+  const renderQuizGrid = (list) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+      {list.map(q => (
+        <div key={q.quizId} style={{
+          background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16,
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
               {q.title}
             </div>
-            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
-              {q.lessonTitle || 'Course-level'} · {q.questionCount} question{q.questionCount !== 1 ? 's' : ''}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 'auto', justifyContent: 'space-between' }}>
-              {q.myStatus === 'SUBMITTED' ? (
+            {q.myStatus !== 'NOT_STARTED' && (
+              q.resultStatus === 'PUBLISHED' ? (
+                <span style={{
+                  background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: 999,
+                  fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3, flexShrink: 0
+                }}>
+                  Result Available
+                </span>
+              ) : (
+                <span style={{
+                  background: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: 999,
+                  fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3, flexShrink: 0
+                }}>
+                  Pending Result
+                </span>
+              )
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+            {q.lessonTitle || 'Course-level'} · {q.questionCount} question{q.questionCount !== 1 ? 's' : ''}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 'auto', justifyContent: 'space-between' }}>
+            {q.myStatus === 'IN_PROGRESS' ? (
+              <span style={{ fontSize: 11, color: '#92400e', fontWeight: 600 }}>
+                In Progress
+              </span>
+            ) : q.myStatus !== 'NOT_STARTED' ? (
+              q.resultStatus === 'PUBLISHED' ? (
                 <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600 }}>
                   ✓ Submitted{q.myScore != null ? ` · ${q.myScore.toFixed(0)}%` : ''}
                 </span>
               ) : (
-                <span style={{ fontSize: 11, color: '#475569' }}>Not started</span>
-              )}
-              <button
-                onClick={() => setOpenQuizId(q.quizId)}
-                style={{
-                  padding: '7px 12px', background: '#4f46e5', color: '#fff', border: 'none',
-                  borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                }}
-              >
-                {q.myStatus === 'SUBMITTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
-                {q.myStatus === 'SUBMITTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Awaiting Result') : 'Start'}
-              </button>
-            </div>
+                <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
+                  Result Pending - Waiting for Trainer to Publish Results
+                </span>
+              )
+            ) : (
+              <span style={{ fontSize: 11, color: '#475569' }}>Not started</span>
+            )}
+            <button
+              onClick={() => {
+                if (q.myStatus === 'IN_PROGRESS') {
+                  handleStart(q.quizId)
+                } else if (q.myStatus !== 'NOT_STARTED') {
+                  if (q.resultStatus === 'PUBLISHED') {
+                    navigate(`/trainings/${trainingId}/quizzes/${q.quizId}/result`)
+                  }
+                } else {
+                  handleStart(q.quizId)
+                }
+              }}
+              disabled={q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED'}
+              style={{
+                padding: '7px 12px',
+                background: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#0D9488',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              {q.myStatus === 'IN_PROGRESS' ? <PlayCircle size={12} /> : q.myStatus !== 'NOT_STARTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
+              {q.myStatus === 'IN_PROGRESS' ? 'Resume' : q.myStatus !== 'NOT_STARTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Attempted') : 'Start'}
+            </button>
           </div>
-        ))}
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <>
+      {quizzes.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <h4 style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 12 }}>Available Quizzes</h4>
+          {renderQuizGrid(quizzes)}
+        </div>
+      )}
+      {completedQuizzes.length > 0 && (
+        <div>
+          <h4 style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 12 }}>Completed Quizzes</h4>
+          {renderQuizGrid(completedQuizzes)}
+        </div>
+      )}
+    </>
+  )
+}
+
+// ── Coding Assessments tab ──────────────────────────────────────────────────
+function CodingAssessmentsView({ user, courseId, trainingId }) {
+  const { error: showError } = useToast()
+  const navigate = useNavigate()
+  const [assessments, setAssessments] = useState([])
+  const [completedAssessments, setCompletedAssessments] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const refresh = async () => {
+    try {
+      setLoading(true)
+      const r = await fetch(API.PARTICIPANT_COURSES.CODING_ASSESSMENTS(courseId), { headers: auth(user.token) })
+      const d = await r.json()
+      if (d.success) {
+        setAssessments(d.assessments || [])
+        setCompletedAssessments(d.completedAssessments || [])
+      }
+      else showError(d.error || 'Failed to load coding assessments')
+    } catch (e) { showError(e.message) }
+    finally { setLoading(false) }
+  }
+  useEffect(() => { refresh() }, [courseId])
+
+  const handleStart = async (assessmentId) => {
+    const token = user?.token;
+    try {
+      const startUrl = `${API_BASE}/coding/participant/start/${assessmentId}`;
+      const res = await fetch(startUrl, {
+        method: 'POST',
+        headers: auth(token),
+        body: JSON.stringify({
+          participant_id: user?.id,
+          training_id: trainingId,
+          lesson_id: null,
+          coding_assessment_id: assessmentId
+        })
+      });
+      const response = await res.json();
+      if (!res.ok) {
+        showError(response.error || 'Failed to start coding assessment');
+        return;
+      }
+      navigate(`/trainings/${trainingId}/coding/${assessmentId}/attempt?attemptId=${response.attemptId}&sessionToken=${response.sessionToken}`);
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  if (loading) return <div style={{ height: 100, background: '#f1f5f9', borderRadius: 10 }} />
+  if (assessments.length === 0 && completedAssessments.length === 0) {
+    return (
+      <div style={emptyCard}>
+        <Code size={36} color="#cbd5e1" />
+        <p>No coding assessments published yet for this training.</p>
       </div>
-      <AnimatePresence>
-        {openQuizId && (
-          <QuizModal
-            user={user}
-            quizId={openQuizId}
-            onClose={() => { setOpenQuizId(null); refresh() }}
-          />
-        )}
-      </AnimatePresence>
+    )
+  }
+
+  const renderAssessmentGrid = (list) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+      {list.map(a => (
+        <div key={a.assessmentId} style={{
+          background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16,
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+              {a.title}
+            </div>
+            {a.myStatus !== 'NOT_STARTED' && (
+              a.resultStatus === 'PUBLISHED' ? (
+                <span style={{
+                  background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: 999,
+                  fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3, flexShrink: 0
+                }}>
+                  Result Available
+                </span>
+              ) : (
+                <span style={{
+                  background: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: 999,
+                  fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3, flexShrink: 0
+                }}>
+                  Pending Result
+                </span>
+              )
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+            {a.problemCount} problem{a.problemCount !== 1 ? 's' : ''}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 'auto', justifyContent: 'space-between' }}>
+            {a.myStatus === 'IN_PROGRESS' ? (
+              <span style={{ fontSize: 11, color: '#92400e', fontWeight: 600 }}>
+                In Progress
+              </span>
+            ) : a.myStatus !== 'NOT_STARTED' ? (
+              a.resultStatus === 'PUBLISHED' ? (
+                <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600 }}>
+                  ✓ Submitted{a.myScore != null ? ` · ${a.myScore.toFixed(0)}%` : ''}
+                </span>
+              ) : (
+                <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
+                  Result Pending
+                </span>
+              )
+            ) : (
+              <span style={{ fontSize: 11, color: '#475569' }}>Not started</span>
+            )}
+            <button
+              onClick={() => {
+                if (a.myStatus === 'IN_PROGRESS') {
+                  handleStart(a.assessmentId)
+                } else if (a.myStatus !== 'NOT_STARTED') {
+                  if (a.resultStatus === 'PUBLISHED') {
+                    navigate(`/trainings/${trainingId}/coding/${a.assessmentId}/result`)
+                  }
+                } else {
+                  handleStart(a.assessmentId)
+                }
+              }}
+              disabled={a.myStatus !== 'NOT_STARTED' && a.myStatus !== 'IN_PROGRESS' && a.resultStatus !== 'PUBLISHED'}
+              style={{
+                padding: '7px 12px',
+                background: (a.myStatus !== 'NOT_STARTED' && a.myStatus !== 'IN_PROGRESS' && a.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#0D9488',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: (a.myStatus !== 'NOT_STARTED' && a.myStatus !== 'IN_PROGRESS' && a.resultStatus !== 'PUBLISHED') ? 'not-allowed' : 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              {a.myStatus === 'IN_PROGRESS' ? <PlayCircle size={12} /> : a.myStatus !== 'NOT_STARTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
+              {a.myStatus === 'IN_PROGRESS' ? 'Resume' : a.myStatus !== 'NOT_STARTED' ? (a.resultStatus === 'PUBLISHED' ? 'View Result' : 'Attempted') : 'Start'}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <>
+      {assessments.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <h4 style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 12 }}>Available Coding Assessments</h4>
+          {renderAssessmentGrid(assessments)}
+        </div>
+      )}
+      {completedAssessments.length > 0 && (
+        <div>
+          <h4 style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 12 }}>Completed Coding Assessments</h4>
+          {renderAssessmentGrid(completedAssessments)}
+        </div>
+      )}
     </>
   )
 }
@@ -610,9 +817,9 @@ function QuizzesView({ user, courseId }) {
 // ════════════════════════════════════════════════════════════════════════════
 function LessonView({ user, lessonId, onBack }) {
   const { error: showError, success } = useToast()
+  const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [tab, setTab] = useState('materials')
-  const [openQuizId, setOpenQuizId] = useState(null)
   const [openAssessmentId, setOpenAssessmentId] = useState(null)
 
   const fetchLesson = async () => {
@@ -624,6 +831,46 @@ function LessonView({ user, lessonId, onBack }) {
     } catch (e) { showError(e.message) }
   }
   useEffect(() => { fetchLesson() }, [lessonId])
+
+  const handleStartQuiz = async (quizId) => {
+    const token = user?.token;
+    const participantId = user?.id;
+    const currentTrainingId = data?.trainingProgramId || trainingId;
+    console.log("--- START QUIZ ATTEMPT CLICKED (handleStartQuiz) ---");
+    console.log("Training ID:", currentTrainingId);
+    console.log("Quiz ID:", quizId);
+    console.log("Participant ID:", participantId);
+    console.log("JWT Token:", token);
+
+    try {
+      const startUrl = `${API_BASE}/quizzes/${quizId}/start`;
+      console.log(`[handleStartQuiz] Calling API POST: ${startUrl}`);
+      const res = await fetch(startUrl, {
+        method: 'POST',
+        headers: auth(token)
+      });
+      const response = await res.json();
+      console.log("API Response:", response);
+
+      if (!res.ok) {
+        showError(response.error || 'Failed to start quiz');
+        return;
+      }
+      if (response.quiz?.proctoringEnabled) {
+        navigate(`/participant/exam/${quizId}`, {
+          state: {
+            attemptId: response.attemptId,
+            quizData: response.quiz
+          }
+        });
+      } else {
+        navigate(`/trainings/${currentTrainingId}/quizzes/${quizId}/attempt?attemptId=${response.attemptId}&sessionToken=${response.sessionToken}`);
+      }
+    } catch (err) {
+      console.error("[handleStartQuiz] Error starting quiz attempt:", err);
+      showError(err.message);
+    }
+  }
 
   const markViewed = async () => {
     try {
@@ -695,7 +942,7 @@ function LessonView({ user, lessonId, onBack }) {
             style={{
               flex: 1, padding: '10px 14px', border: 'none', cursor: 'pointer',
               borderRadius: 8, fontSize: 13, fontWeight: 600,
-              background: tab === t.key ? '#4f46e5' : 'transparent',
+              background: tab === t.key ? '#0D9488' : 'transparent',
               color: tab === t.key ? '#fff' : '#475569',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
@@ -744,21 +991,64 @@ function LessonView({ user, lessonId, onBack }) {
                   display: 'flex', alignItems: 'center', gap: 12,
                 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{q.title}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{q.title}</div>
+                      {q.myStatus !== 'NOT_STARTED' && (
+                        q.resultStatus === 'PUBLISHED' ? (
+                          <span style={{
+                            background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: 999,
+                            fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3
+                          }}>
+                            Result Available
+                          </span>
+                        ) : (
+                          <span style={{
+                            background: '#fef3c7', color: '#d97706', padding: '2px 8px', borderRadius: 999,
+                            fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3
+                          }}>
+                            Pending Result
+                          </span>
+                        )
+                      )}
+                    </div>
                     <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
                       {q.questionCount} questions · {q.isMandatory ? 'Mandatory' : 'Optional'}
+                      {q.myStatus !== 'NOT_STARTED' && (
+                        <> · <span style={{ fontWeight: 600, color: q.myStatus === 'IN_PROGRESS' ? '#92400e' : q.resultStatus === 'PUBLISHED' ? '#15803d' : '#f59e0b' }}>
+                          {q.myStatus === 'IN_PROGRESS' ? 'In Progress' : q.resultStatus === 'PUBLISHED' ? `Submitted${q.myScore != null ? ` (${q.myScore.toFixed(0)}%)` : ''}` : 'Result Pending - Waiting for Trainer to Publish Results'}
+                        </span></>
+                      )}
                     </div>
                   </div>
                   <button
-                    onClick={() => setOpenQuizId(q.quizId)}
+                    onClick={() => {
+                      if (q.myStatus === 'IN_PROGRESS') {
+                        handleStartQuiz(q.quizId)
+                      } else if (q.myStatus !== 'NOT_STARTED') {
+                        if (q.resultStatus === 'PUBLISHED') {
+                          navigate(`/trainings/${data.trainingProgramId}/quizzes/${q.quizId}/result`)
+                        }
+                      } else {
+                        handleStartQuiz(q.quizId)
+                      }
+                    }}
+                    disabled={q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED'}
                     style={{
-                      padding: '8px 14px', background: '#4f46e5', color: '#fff', border: 'none',
-                      borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '8px 14px',
+                      background: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#0D9488',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
                     }}
                   >
-                    {q.myStatus === 'SUBMITTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
-                    {q.myStatus === 'SUBMITTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Awaiting Result') : 'Start Quiz'}
+                    {q.myStatus === 'IN_PROGRESS' ? <PlayCircle size={12} /> : q.myStatus !== 'NOT_STARTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
+                    {q.myStatus === 'IN_PROGRESS' ? 'Resume Quiz' : q.myStatus !== 'NOT_STARTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Attempted') : 'Start Quiz'}
                   </button>
                 </div>
               ))}
@@ -791,9 +1081,9 @@ function LessonView({ user, lessonId, onBack }) {
                       onClick={() => setOpenAssessmentId(a.assessmentId)}
                       style={{
                         padding: '8px 14px',
-                        background: a.myStatus === 'NOT_STARTED' ? '#4f46e5' : '#fff',
-                        color: a.myStatus === 'NOT_STARTED' ? '#fff' : '#4f46e5',
-                        border: a.myStatus === 'NOT_STARTED' ? 'none' : '1px solid #4f46e5',
+                        background: a.myStatus === 'NOT_STARTED' ? '#0D9488' : '#fff',
+                        color: a.myStatus === 'NOT_STARTED' ? '#fff' : '#0D9488',
+                        border: a.myStatus === 'NOT_STARTED' ? 'none' : '1px solid #0D9488',
                         borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                       }}
                     >
@@ -816,9 +1106,6 @@ function LessonView({ user, lessonId, onBack }) {
       )}
 
       <AnimatePresence>
-        {openQuizId && (
-          <QuizModal user={user} quizId={openQuizId} onClose={() => { setOpenQuizId(null); fetchLesson() }} />
-        )}
         {openAssessmentId && (
           <AssessmentModal
             user={user}
@@ -839,7 +1126,7 @@ function MaterialCard({ material }) {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#4f46e5' }}>{MAT_ICON[m.materialType]}</span>
+          <span style={{ color: '#0D9488' }}>{MAT_ICON[m.materialType]}</span>
           <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{m.title}</span>
         </div>
         {(m.fileUrl || m.linkUrl) && (
@@ -848,7 +1135,7 @@ function MaterialCard({ material }) {
             target="_blank" rel="noreferrer"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
-              padding: '6px 10px', background: '#eef2ff', color: '#4f46e5',
+              padding: '6px 10px', background: '#f0fdfa', color: '#0D9488',
               borderRadius: 6, fontSize: 11, fontWeight: 600, textDecoration: 'none',
             }}
           >
@@ -872,227 +1159,6 @@ function MaterialCard({ material }) {
         <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 13 }}>{m.content}</p>
       )}
     </div>
-  )
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// QUIZ MODAL — start, take, submit, view result
-// ════════════════════════════════════════════════════════════════════════════
-function QuizModal({ user, quizId, onClose }) {
-  const { error: showError, success } = useToast()
-  const [phase, setPhase] = useState('loading') // loading | taking | submitted-hidden | result | error
-  const [attemptId, setAttemptId] = useState(null)
-  const [questions, setQuestions] = useState([])
-  const [answers, setAnswers] = useState({})
-  const [meta, setMeta] = useState(null)
-  const [result, setResult] = useState(null)
-  const [submitting, setSubmitting] = useState(false)
-
-  // First, check if already submitted
-  useEffect(() => {
-    let aborted = false
-    ;(async () => {
-      try {
-        // Try to read result first — if SUBMITTED_HIDDEN or PUBLISHED, no need to start
-        const rr = await fetch(API.PARTICIPANT_COURSES.QUIZ_RESULT(quizId), { headers: auth(user.token) })
-        const dr = await rr.json()
-        if (aborted) return
-        if (dr.success && dr.status === 'PUBLISHED') {
-          setResult(dr); setPhase('result'); return
-        }
-        if (dr.success && dr.status === 'SUBMITTED_HIDDEN') {
-          setResult(dr); setPhase('submitted-hidden'); return
-        }
-        // Otherwise start
-        const rs = await fetch(API.PARTICIPANT_COURSES.QUIZ_START(quizId), {
-          method: 'POST', headers: auth(user.token),
-        })
-        const ds = await rs.json()
-        if (aborted) return
-        if (!rs.ok || ds.success === false) {
-          showError(ds.error || 'Could not start quiz'); setPhase('error'); return
-        }
-        setAttemptId(ds.attemptId)
-        setQuestions(ds.questions || [])
-        setMeta(ds.quiz || {})
-        setPhase('taking')
-      } catch (e) {
-        if (!aborted) { showError(e.message); setPhase('error') }
-      }
-    })()
-    return () => { aborted = true }
-  }, [quizId])
-
-  const submit = async () => {
-    const missing = questions.filter(q => !answers[q.id])
-    if (missing.length > 0) {
-      if (!window.confirm(`${missing.length} question${missing.length !== 1 ? 's' : ''} unanswered. Submit anyway?`)) return
-    }
-    try {
-      setSubmitting(true)
-      const r = await fetch(API.PARTICIPANT_COURSES.QUIZ_SUBMIT(quizId), {
-        method: 'POST', headers: auth(user.token),
-        body: JSON.stringify({
-          attemptId,
-          answers: questions.map(q => ({ questionId: q.id, answer: answers[q.id] || '' })),
-        }),
-      })
-      const d = await r.json()
-      if (!r.ok || d.success === false) { showError(d.error || 'Submit failed'); return }
-      success(d.message)
-      // Re-check result
-      const rr = await fetch(API.PARTICIPANT_COURSES.QUIZ_RESULT(quizId), { headers: auth(user.token) })
-      const dr = await rr.json()
-      setResult(dr)
-      setPhase(dr.status === 'PUBLISHED' ? 'result' : 'submitted-hidden')
-    } catch (e) { showError(e.message) }
-    finally { setSubmitting(false) }
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      onClick={() => !submitting && phase !== 'taking' && onClose()}
-      style={{
-        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)',
-        zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
-      }}
-    >
-      <motion.div
-        onClick={(e) => e.stopPropagation()}
-        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        style={{
-          background: '#fff', borderRadius: 14, width: '100%', maxWidth: 720,
-          maxHeight: '90vh', display: 'flex', flexDirection: 'column',
-        }}
-      >
-        <div style={{
-          padding: 18, borderBottom: '1px solid #e2e8f0',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
-            {meta?.title || result?.review?.[0]?.questionText ? meta?.title : 'Quiz'}
-          </div>
-          <button onClick={onClose} disabled={submitting} style={{
-            border: 'none', background: '#f1f5f9', color: '#475569', padding: 8, borderRadius: 8, cursor: 'pointer',
-          }}>
-            <X size={18} />
-          </button>
-        </div>
-        <div style={{ flex: 1, overflow: 'auto', padding: 18 }}>
-          {phase === 'loading' && <div style={{ height: 200, background: '#f1f5f9', borderRadius: 10 }} />}
-
-          {phase === 'taking' && questions.map((q, i) => (
-            <div key={q.id} style={{
-              background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 12,
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-                Question {i + 1}
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginBottom: 12 }}>
-                {q.questionText}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {(q.options || []).map((opt, oi) => (
-                  <label key={oi} style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: 10,
-                    background: answers[q.id] === opt ? '#eef2ff' : '#fff',
-                    border: `1px solid ${answers[q.id] === opt ? '#4f46e5' : '#e2e8f0'}`,
-                    borderRadius: 8, cursor: 'pointer', transition: 'all 0.1s',
-                  }}>
-                    <input
-                      type="radio" name={`q-${q.id}`} value={opt}
-                      checked={answers[q.id] === opt}
-                      onChange={() => setAnswers({ ...answers, [q.id]: opt })}
-                    />
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{'ABCD'[oi]}.</span>
-                    <span style={{ flex: 1, fontSize: 13 }}>{opt}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {phase === 'submitted-hidden' && (
-            <div style={{ padding: 30, textAlign: 'center' }}>
-              <Clock size={42} color="#f59e0b" style={{ margin: '0 auto 12px' }} />
-              <h3 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
-                Quiz submitted — awaiting trainer release
-              </h3>
-              <p style={{ margin: 0, color: '#64748b', fontSize: 13 }}>
-                {result?.message || 'Your trainer will publish results soon.'}
-              </p>
-            </div>
-          )}
-
-          {phase === 'result' && result && (
-            <div>
-              <div style={{
-                background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff',
-                padding: 20, borderRadius: 12, textAlign: 'center', marginBottom: 16,
-              }}>
-                <Trophy size={28} style={{ marginBottom: 4 }} />
-                <div style={{ fontSize: 32, fontWeight: 700 }}>
-                  {result.score?.toFixed(0)}%
-                </div>
-                <div style={{ fontSize: 13, opacity: 0.9 }}>
-                  {result.totalScore} / {result.maxScore} correct
-                </div>
-              </div>
-              <h4 style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 700, color: '#0f172a',
-                            textTransform: 'uppercase', letterSpacing: 0.5 }}>Question review</h4>
-              {(result.review || []).map((q, i) => (
-                <div key={q.questionId} style={{
-                  background: '#fff', border: `1px solid ${q.isCorrect ? '#86efac' : '#fca5a5'}`,
-                  borderRadius: 10, padding: 14, marginBottom: 10,
-                }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: q.isCorrect ? '#15803d' : '#dc2626', marginBottom: 4 }}>
-                    {q.isCorrect ? '✓ Correct' : '✗ Incorrect'} · Q{i + 1}
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 6 }}>{q.questionText}</div>
-                  <div style={{ fontSize: 12, color: '#475569' }}>
-                    Your answer: <strong>{q.myAnswer || '—'}</strong>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#15803d' }}>
-                    Correct answer: <strong>{q.correctAnswer}</strong>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {phase === 'error' && (
-            <div style={{ padding: 30, textAlign: 'center', color: '#dc2626' }}>
-              <AlertCircle size={36} style={{ marginBottom: 8 }} />
-              <p>Could not load quiz. Please close and try again.</p>
-            </div>
-          )}
-        </div>
-
-        {phase === 'taking' && (
-          <div style={{
-            padding: 14, borderTop: '1px solid #e2e8f0',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
-            background: '#fafbfc',
-          }}>
-            <div style={{ fontSize: 12, color: '#64748b' }}>
-              {Object.keys(answers).length} / {questions.length} answered
-            </div>
-            <button
-              onClick={submit} disabled={submitting}
-              style={{
-                padding: '10px 20px', background: '#4f46e5', color: '#fff', border: 'none',
-                borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-              }}
-            >
-              <Send size={14} />
-              {submitting ? 'Submitting…' : 'Submit Quiz'}
-            </button>
-          </div>
-        )}
-      </motion.div>
-    </motion.div>
   )
 }
 
@@ -1242,7 +1308,7 @@ function ExploreCatalog({ user, onEnrollSuccess }) {
       })
       const d = await r.json()
       if (d.success) {
-        success(d.message || 'Enrollment request submitted!')
+        success(d.message || 'Enrolled successfully!')
         onEnrollSuccess?.()
         await fetchExplore()
       } else {
@@ -1256,7 +1322,7 @@ function ExploreCatalog({ user, onEnrollSuccess }) {
     <div style={{ padding: '20px 0' }}>
       <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#0f172a' }}>Explore Trainings</h2>
       <p style={{ marginTop: 4, color: '#64748b', fontSize: 14 }}>
-        Discover and request enrollment in published trainings.
+        Discover and enroll in published trainings.
       </p>
 
       {loading ? (
@@ -1270,7 +1336,7 @@ function ExploreCatalog({ user, onEnrollSuccess }) {
             No new trainings to explore
           </h3>
           <p style={{ margin: 0, color: '#94a3b8', fontSize: 13 }}>
-            You've requested enrollment in all published trainings!
+            You're already enrolled in all published trainings!
           </p>
         </div>
       ) : (
@@ -1293,7 +1359,7 @@ function ExploreCatalog({ user, onEnrollSuccess }) {
                 height: 140, position: 'relative',
                 background: c.thumbnailUrl
                   ? `url(${assetUrl(c.thumbnailUrl)}) center/cover`
-                  : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                  : 'linear-gradient(135deg, #14B8A6, #14B8A6)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
               }}>
                 {!c.thumbnailUrl && <BookOpen size={42} />}
@@ -1327,7 +1393,7 @@ function ExploreCatalog({ user, onEnrollSuccess }) {
                     onClick={() => handleEnroll(c.courseId)}
                     style={{
                       width: '100%', padding: '9px 14px',
-                      background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8,
+                      background: '#0D9488', color: '#fff', border: 'none', borderRadius: 8,
                       fontSize: 13, fontWeight: 600, cursor: 'pointer',
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                       opacity: enrollingId === c.courseId ? 0.7 : 1,
@@ -1386,7 +1452,7 @@ const inputStyle = {
 }
 const btnPrimary = {
   display: 'inline-flex', alignItems: 'center',
-  padding: '10px 18px', background: '#4f46e5', color: '#fff', border: 'none',
+  padding: '10px 18px', background: '#0D9488', color: '#fff', border: 'none',
   borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
 }
 const btnSecondary = {

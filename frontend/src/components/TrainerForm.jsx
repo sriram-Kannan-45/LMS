@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
+import { Camera, KeyRound } from 'lucide-react'
 
 import { API_BASE as API, assetUrl } from '../api/api'
 
@@ -274,54 +275,64 @@ function TrainerForm({ user, onLogout }) {
         <form onSubmit={handleSubmit} className="trainer-profile-form" noValidate>
 
           {/* ── Profile Image ─────────────────────────────────────────── */}
-          <div className="profile-image-section">
-            <div className="profile-image-wrapper">
-              {displayImage ? (
-                <img
-                  src={displayImage}
-                  alt="Profile"
-                  className="profile-image-preview"
-                  onError={e => {
-                    e.target.style.display = 'none'
-                    if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex'
-                  }}
-                />
-              ) : null}
-              <div
-                className="profile-image-initials"
-                style={{ display: displayImage ? 'none' : 'flex' }}
-              >
-                {initials(user.name)}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 24, marginBottom: 28,
+            padding: 20, background: '#f8fafc', borderRadius: 12,
+            border: '1px dashed #cbd5e1'
+          }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <div style={{
+                width: 88, height: 88, borderRadius: '50%', overflow: 'hidden',
+                border: '3px solid #e2e8f0', background: '#f1f5f9',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                {displayImage ? (
+                  <img src={displayImage} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <span style={{ fontSize: 28, fontWeight: 700, color: '#0D9488', fontFamily: "'Poppins', sans-serif" }}>
+                    {initials(user.name)}
+                  </span>
+                )}
               </div>
               <button
                 type="button"
-                className="profile-image-edit-btn"
                 onClick={() => fileInputRef.current?.click()}
+                style={{
+                  position: 'absolute', bottom: 0, right: 0, width: 32, height: 32,
+                  borderRadius: '50%', border: '2px solid #fff', cursor: 'pointer',
+                  background: '#0D9488', color: '#fff', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+                }}
                 title="Change photo"
               >
-                &#9998;
+                <Camera size={14} />
               </button>
             </div>
 
-            <div className="profile-image-meta">
-              <div className="profile-name">{user.name}</div>
-              <div className="profile-email">{user.email}</div>
+            <div>
+              <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>{user.name}</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{user.email}</div>
               <button
                 type="button"
-                className="btn btn-sm"
                 onClick={() => fileInputRef.current?.click()}
-                style={{ marginTop: 8 }}
+                style={{
+                  marginTop: 8, padding: '6px 16px', borderRadius: 8, border: '1px solid #e2e8f0',
+                  background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  color: '#475569', transition: 'all 0.15s'
+                }}
+                onMouseEnter={e => e.target.style.borderColor = '#0D9488'}
+                onMouseLeave={e => e.target.style.borderColor = '#e2e8f0'}
               >
                 {displayImage ? 'Change Photo' : 'Upload Photo'}
               </button>
               {imageFile && (
-                <span style={{ fontSize: 12, color: 'var(--success)', marginTop: 6, display: 'block' }}>
-                  ✓ {imageFile.name} selected
-                </span>
+                <div style={{ fontSize: 12, color: '#22c55e', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span>✓</span> {imageFile.name}
+                </div>
               )}
             </div>
 
-            {/* Hidden file input — multer field name: profileImage */}
             <input
               ref={fileInputRef}
               id="profile-image-input"
@@ -333,76 +344,96 @@ function TrainerForm({ user, onLogout }) {
           </div>
 
           {/* ── Form Fields ───────────────────────────────────────────── */}
-          <div className="form-group">
-            <label className="form-label">Full Name</label>
-            <input
-              className="form-control"
-              type="text"
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              placeholder="Your full name"
-            />
-          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="form-group">
+              <label className="form-label">Full Name</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  className="form-control"
+                  type="text"
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="Your full name"
+                  style={{ paddingLeft: 36 }}
+                />
+                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: 14 }}>👤</span>
+              </div>
+            </div>
 
-          <div className="form-grid-2">
             <div className="form-group">
               <label className="form-label">Phone Number</label>
-              <input
-                className={`form-control${fieldErrors.phone ? ' is-invalid' : ''}`}
-                type="tel"
-                name="phone"
-                value={form.phone}
-                onChange={handleChange}
-                placeholder="e.g. +91 98765 43210"
-              />
-              {fieldErrors.phone && (
-                <span className="field-error" style={{ color: 'var(--danger, #e53e3e)', fontSize: 12, marginTop: 4, display: 'block' }}>
-                  {fieldErrors.phone}
-                </span>
-              )}
+              <div style={{ position: 'relative' }}>
+                <input
+                  className={`form-control${fieldErrors.phone ? ' is-invalid' : ''}`}
+                  type="tel"
+                  name="phone"
+                  value={form.phone}
+                  onChange={handleChange}
+                  placeholder="e.g. +91 98765 43210"
+                  style={{ paddingLeft: 36 }}
+                />
+                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: 14 }}>📞</span>
+                {fieldErrors.phone && (
+                  <span className="field-error" style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'block' }}>
+                    {fieldErrors.phone}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="form-group">
               <label className="form-label">Date of Birth</label>
-              <input
-                className={`form-control${fieldErrors.dob ? ' is-invalid' : ''}`}
-                type="date"
-                name="dob"
-                value={form.dob}
-                onChange={handleChange}
-                max={new Date().toISOString().split('T')[0]}
-              />
-              {fieldErrors.dob && (
-                <span className="field-error" style={{ color: 'var(--danger, #e53e3e)', fontSize: 12, marginTop: 4, display: 'block' }}>
-                  {fieldErrors.dob}
-                </span>
-              )}
+              <div style={{ position: 'relative' }}>
+                <input
+                  className={`form-control${fieldErrors.dob ? ' is-invalid' : ''}`}
+                  type="date"
+                  name="dob"
+                  value={form.dob}
+                  onChange={handleChange}
+                  max={new Date().toISOString().split('T')[0]}
+                  style={{ paddingLeft: 36 }}
+                />
+                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: 14 }}>🎂</span>
+                {fieldErrors.dob && (
+                  <span className="field-error" style={{ color: '#ef4444', fontSize: 12, marginTop: 4, display: 'block' }}>
+                    {fieldErrors.dob}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Qualification <span style={{ color: '#94a3b8', fontSize: 12 }}>(optional)</span></label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  className="form-control"
+                  type="text"
+                  name="qualification"
+                  value={form.qualification}
+                  onChange={handleChange}
+                  placeholder="e.g. M.Tech, Ph.D, MBA"
+                  style={{ paddingLeft: 36 }}
+                />
+                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: 14 }}>🎓</span>
+              </div>
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Qualification <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>(optional)</span></label>
-            <input
-              className="form-control"
-              type="text"
-              name="qualification"
-              value={form.qualification}
-              onChange={handleChange}
-              placeholder="e.g. M.Tech, Ph.D, MBA"
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Experience <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>(optional)</span></label>
-            <textarea
-              className="form-control"
-              name="experience"
-              value={form.experience}
-              onChange={handleChange}
-              placeholder="Describe your teaching experience, specializations, achievements…"
-              rows={4}
-            />
+          <div className="form-group" style={{ marginTop: 4 }}>
+            <label className="form-label">Experience <span style={{ color: '#94a3b8', fontSize: 12 }}>(optional)</span></label>
+            <div style={{ position: 'relative' }}>
+              <textarea
+                className="form-control"
+                name="experience"
+                value={form.experience}
+                onChange={handleChange}
+                placeholder="Describe your teaching experience, specializations, achievements…"
+                rows={4}
+                style={{ paddingLeft: 36 }}
+              />
+              <span style={{ position: 'absolute', left: 10, top: 12, color: '#94a3b8', fontSize: 14 }}>💼</span>
+            </div>
           </div>
 
           {/* ── Inline feedback ───────────────────────────────────────── */}
@@ -438,33 +469,40 @@ function TrainerForm({ user, onLogout }) {
           )}
 
           {/* ── Action buttons ────────────────────────────────────────── */}
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 8 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 24, paddingTop: 20, borderTop: '1px solid #e2e8f0' }}>
             <button
               type="submit"
-              className="btn btn-primary"
               id="save-profile-btn"
               disabled={saving}
-              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px',
+                borderRadius: 10, border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
+                background: saving ? '#94a3b8' : '#0D9488', color: '#fff',
+                fontSize: 14, fontWeight: 600, transition: 'all 0.15s',
+                opacity: saving ? 0.7 : 1
+              }}
             >
               {saving && (
-                <span
-                  className="spinner"
-                  style={{ width: 14, height: 14, borderWidth: 2 }}
-                />
+                <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
               )}
               {saving ? 'Saving…' : 'Save Profile'}
             </button>
 
             <button
               type="button"
-              className="btn"
               id="change-password-btn"
               onClick={() => {
                 setPasswordError('')
                 setPasswordSuccess('')
                 setShowPasswordModal(true)
               }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px',
+                borderRadius: 10, border: '1px solid #e2e8f0', cursor: 'pointer',
+                background: '#fff', color: '#475569', fontSize: 14, fontWeight: 600
+              }}
             >
+              <KeyRound size={16} />
               Change Password
             </button>
           </div>
@@ -473,66 +511,107 @@ function TrainerForm({ user, onLogout }) {
 
       {/* ── Password Modal ───────────────────────────────────────────────── */}
       {showPasswordModal && (
-        <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Change Password</h3>
-              <button className="modal-close" onClick={() => setShowPasswordModal(false)}>×</button>
+        <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}
+          style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+          <div className="modal" onClick={e => e.stopPropagation()}
+            style={{ borderRadius: 16, maxWidth: 440 }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10, background: '#fef3c7',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  <KeyRound size={18} style={{ color: '#d97706' }} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif" }}>Change Password</h3>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>Update your account password</p>
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => setShowPasswordModal(false)}
+                style={{
+                  width: 32, height: 32, borderRadius: 8, border: 'none',
+                  background: '#f1f5f9', color: '#64748b', cursor: 'pointer',
+                  fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>×</button>
             </div>
 
-            <form onSubmit={handlePasswordChange}>
+            <form onSubmit={handlePasswordChange} style={{ paddingTop: 20 }}>
               <div className="form-group">
-                <label className="form-label">Current Password</label>
+                <label className="form-label" style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Current Password</label>
                 <input
                   className="form-control"
                   type="password"
                   value={passwordForm.oldPassword}
                   onChange={e => setPasswordForm(p => ({ ...p, oldPassword: e.target.value }))}
+                  placeholder="Enter current password"
                   required
+                  style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
-              <div className="form-group">
-                <label className="form-label">New Password</label>
+              <div className="form-group" style={{ marginTop: 16 }}>
+                <label className="form-label" style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>New Password</label>
                 <input
                   className="form-control"
                   type="password"
                   value={passwordForm.newPassword}
                   onChange={e => setPasswordForm(p => ({ ...p, newPassword: e.target.value }))}
+                  placeholder="Min. 6 characters"
                   required
                   minLength={6}
+                  style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
-              <div className="form-group">
-                <label className="form-label">Confirm New Password</label>
+              <div className="form-group" style={{ marginTop: 16 }}>
+                <label className="form-label" style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Confirm New Password</label>
                 <input
                   className="form-control"
                   type="password"
                   value={passwordForm.confirmPassword}
                   onChange={e => setPasswordForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                  placeholder="Re-enter new password"
                   required
+                  style={{ padding: '10px 14px', borderRadius: 10, border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
 
               {passwordError && (
-                <div className="error" style={{ marginBottom: 12, color: 'var(--danger, #e53e3e)', fontSize: 14 }}>
+                <div style={{
+                  marginTop: 16, padding: '10px 14px', borderRadius: 10,
+                  background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: 13
+                }}>
                   {passwordError}
                 </div>
               )}
               {passwordSuccess && (
-                <div className="success" style={{ marginBottom: 12, color: 'var(--success, #38a169)', fontSize: 14 }}>
+                <div style={{
+                  marginTop: 16, padding: '10px 14px', borderRadius: 10,
+                  background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#16a34a', fontSize: 13
+                }}>
                   ✓ {passwordSuccess}
                 </div>
               )}
 
-              <div className="modal-footer">
-                <button type="button" className="btn" onClick={() => setShowPasswordModal(false)}>
+              <div className="modal-footer" style={{
+                marginTop: 24, paddingTop: 16, borderTop: '1px solid #e2e8f0',
+                display: 'flex', justifyContent: 'flex-end', gap: 10
+              }}>
+                <button type="button" onClick={() => setShowPasswordModal(false)}
+                  style={{
+                    padding: '8px 18px', borderRadius: 10, border: '1px solid #e2e8f0',
+                    background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#475569'
+                  }}>
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-primary"
                   id="confirm-password-btn"
                   disabled={changingPassword}
+                  style={{
+                    padding: '8px 20px', borderRadius: 10, border: 'none', cursor: changingPassword ? 'not-allowed' : 'pointer',
+                    background: changingPassword ? '#94a3b8' : '#0D9488', color: '#fff',
+                    fontSize: 13, fontWeight: 600, opacity: changingPassword ? 0.7 : 1
+                  }}
                 >
                   {changingPassword ? 'Changing…' : 'Change Password'}
                 </button>

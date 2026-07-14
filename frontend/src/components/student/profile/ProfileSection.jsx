@@ -1,198 +1,130 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { User, Mail, Phone, Calendar, Award, TrendingUp, BookOpen, Loader2, ExternalLink } from 'lucide-react'
+import { API_BASE } from '../../../api/api'
+import EditProfileModal from '../../participant/EditProfileModal'
 
-import ProfileHero from './ProfileHero'
-import ProfileMiniStats from './ProfileMiniStats'
-import ProfileSkills from './ProfileSkills'
-import ProfileLeaderboardBadge from './ProfileLeaderboardBadge'
-import ProfileRecentActivity from './ProfileRecentActivity'
-import ProfileAchievementsPreview from './ProfileAchievementsPreview'
-import ProfileCourseProgress from './ProfileCourseProgress'
-import ProfileQuickActions from './ProfileQuickActions'
-import ProfileSettingsModal from './ProfileSettingsModal'
-import ProfileSkeleton from './ProfileSkeleton'
+function getAuthHeaders() {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}')
+    const token = user?.token || user?.accessToken || ''
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  } catch {
+    return {}
+  }
+}
 
-import { useStudentStats } from '../../../hooks/useStudentStats'
-import { useContinueLearning } from '../../../hooks/useContinueLearning'
-import useParticipantProfile from '../../../hooks/useParticipantProfile'
-import { useToast } from '../../Toast'
-
-/**
- * ProfileSection — Full Dashboard View (v4 — light template restored).
- *
- * Layout zones:
- *   A. Identity card                         (full width, top)
- *   B. 4 stat cards                          (row, 4 cols)
- *   C. Left column (2/3)                     ↓
- *      C1. Skills earned
- *      C2. Achievements preview
- *      C3. Recent activity feed
- *   D. Right column (1/3)                    ↓
- *      D1. Leaderboard snapshot (rich)
- *      D2. Course progress
- *      D3. Quick actions
- */
-export default function ProfileSection({
-  user,
-  enrollments = [],
-  quizzes = [],
-  onResume,
-  onTabChange,
-}) {
-  const {
-    profile, completion, initials,
-    updateProfile, uploadAvatar, setAvatar, clearAvatar,
-  } = useParticipantProfile(user)
-  const { stats, loading } = useStudentStats()
-  const { items: recentItems } = useContinueLearning()
-  const { success, error: showError } = useToast()
-
-  const [editOpen, setEditOpen] = useState(false)
+export default function ProfileSection({ user, enrollments = [], quizzes = [], onResume, onTabChange }) {
+  const [profile, setProfile] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [showEdit, setShowEdit] = useState(false)
 
   useEffect(() => {
-    const handler = () => setEditOpen(true)
-    window.addEventListener('wave:profile:edit', handler)
-    return () => window.removeEventListener('wave:profile:edit', handler)
+    let cancelled = false
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/participant-profile/me`, {
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        })
+        if (!res.ok) throw new Error('Failed')
+        const data = await res.json()
+        if (!cancelled) setProfile(data.profile || data)
+      } catch {
+        // silent
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    fetchProfile()
+    return () => { cancelled = true }
   }, [])
 
-  const handleAvatarChange = useCallback(async (file) => {
-    try { await setAvatar(file); success('Profile photo updated.') }
-    catch (e) { showError(e?.message || 'Could not save photo') }
-  }, [setAvatar, success, showError])
-
-  const handleAvatarClear = useCallback(async () => {
-    try { await clearAvatar(); success('Profile photo removed.') }
-    catch (e) { showError(e?.message || 'Could not remove photo') }
-  }, [clearAvatar, success, showError])
-
-  const handleSaveProfile = useCallback(async (patch) => {
-    try { await updateProfile(patch); success('Profile updated successfully.') }
-    catch (e) { showError(e?.message || 'Could not save changes'); throw e }
-  }, [updateProfile, success, showError])
-
-  const closeEdit = useCallback(() => setEditOpen(false), [])
-
-  // ── Derived metrics ───────────────────────────────────────────────────
-  const totalQuizzes = stats?.totalQuizzes ?? 0
-  const accuracy     = stats?.averageScore ?? 0
-  const bestScore    = stats?.bestScore ?? 0
-  const bestRank     = stats?.bestRank ?? null
-  const xp           = totalQuizzes * 10 + Math.round(accuracy * 1.5)
-
-  const certificates = useMemo(
-    () => (stats?.breakdownByQuiz || []).filter((q) => (q.bestScore ?? 0) >= 70).length,
-    [stats]
-  )
-
-  const trend = stats?.accuracyTrend || []
-  const accuracyDelta =
-    trend.length >= 2
-      ? +(trend[trend.length - 1].score - trend[trend.length - 2].score).toFixed(1)
-      : undefined
-
-  const streak = useMemo(() => {
-    const dates = new Set(trend.map((t) => t.date))
-    let s = 0
-    for (let i = 0; i < 90; i++) {
-      const d = new Date()
-      d.setHours(0, 0, 0, 0)
-      d.setDate(d.getDate() - i)
-      const key = d.toISOString().slice(0, 10)
-      if (dates.has(key)) s++
-      else if (i > 0) break
-    }
-    return s
-  }, [trend])
-
-  // ── Loading ───────────────────────────────────────────────────────────
-  if (loading && !stats) {
-    return <ProfileSkeleton />
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+        <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
+      </div>
+    )
   }
 
+  const initials = user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'
+  const avatarUrl = profile?.avatarUrl || user?.profileImage
+
   return (
-    <motion.div
-      className="profile-dashboard"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.25 }}
-    >
-      {/* ── ZONE A: Identity card ─────────────────────────────────── */}
-      <ProfileHero
-        user={user}
-        profile={profile}
-        completion={completion}
-        initials={initials}
-        onEdit={() => setEditOpen(true)}
-        onAvatarChange={handleAvatarChange}
-        onAvatarClear={handleAvatarClear}
-      />
+    <div>
+      <div className="card" style={{ padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--accent-medium)' }} />
+          ) : (
+            <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 700 }}>
+              {initials}
+            </div>
+          )}
+          <div style={{ flex: 1 }}>
+            <h3 style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Poppins', sans-serif", margin: 0 }}>{user?.name || 'Student'}</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: '4px 0' }}>{user?.email || ''}</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+              <span className="badge badge-blue"><User size={12} style={{ marginRight: 4 }} />{user?.role || 'PARTICIPANT'}</span>
+              {profile?.bio && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{profile.bio}</span>}
+            </div>
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowEdit(true)}>Edit Profile</button>
+        </div>
+      </div>
 
-      {/* ── ZONE B: 4 stat cards ──────────────────────────────────── */}
-      <div className="stats-row">
-        <ProfileMiniStats
-          totalQuizzes={totalQuizzes}
-          accuracy={accuracy}
-          xp={xp}
-          certificates={certificates}
-          accuracyDelta={accuracyDelta}
-          onTabChange={onTabChange}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginTop: 16 }}>
+        <div className="stat-card">
+          <span className="stat-label">Enrolled</span>
+          <span className="stat-value">{enrollments.length}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Quizzes</span>
+          <span className="stat-value">{quizzes.length}</span>
+        </div>
+        <div className="stat-card">
+          <span className="stat-label">Completed</span>
+          <span className="stat-value">{enrollments.filter(e => e.status === 'COMPLETED').length}</span>
+        </div>
+      </div>
+
+      {profile?.skills?.length > 0 && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-header"><h3>Skills</h3></div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {profile.skills.map((s, i) => (
+              <span key={i} className="badge badge-green">{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {profile?.links?.length > 0 && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-header"><h3>Links</h3></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {profile.links.map((link, i) => (
+              <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent)', fontSize: 14 }}
+              >
+                <ExternalLink size={14} />
+                {link.label || link.url}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showEdit && (
+        <EditProfileModal
+          user={user}
+          profile={profile}
+          onClose={() => setShowEdit(false)}
+          onSave={(updated) => {
+            setProfile(prev => ({ ...prev, ...updated }))
+            setShowEdit(false)
+          }}
         />
-      </div>
-
-      {/* ── ZONES C + D: Two-column main row ──────────────────────── */}
-      <div className="main-row">
-        {/* LEFT COLUMN (2/3) */}
-        <div className="left-col">
-          <ProfileSkills
-            skills={profile?.skills || []}
-            onAdd={() => setEditOpen(true)}
-          />
-
-          <ProfileAchievementsPreview
-            stats={stats}
-            enrollmentsCount={enrollments.length}
-            streak={streak}
-            onSeeAll={onTabChange ? () => onTabChange('achievements') : undefined}
-          />
-
-          <ProfileRecentActivity
-            items={recentItems}
-            stats={stats}
-            onResume={onResume}
-            onTabChange={onTabChange}
-          />
-        </div>
-
-        {/* RIGHT COLUMN (1/3) */}
-        <div className="right-col">
-          <ProfileLeaderboardBadge
-            user={user}
-            rank={bestRank}
-            bestScore={bestScore}
-            averageScore={accuracy}
-            onViewFull={onTabChange ? () => onTabChange('leaderboard') : undefined}
-          />
-
-          <ProfileCourseProgress
-            enrollments={enrollments}
-            onTabChange={onTabChange}
-          />
-
-          <ProfileQuickActions onTabChange={onTabChange} />
-        </div>
-      </div>
-
-      {/* SETTINGS MODAL */}
-      <ProfileSettingsModal
-        open={editOpen}
-        onClose={closeEdit}
-        profile={profile}
-        user={user}
-        initials={initials}
-        onSave={handleSaveProfile}
-        onAvatarUpload={uploadAvatar}
-        onAvatarClear={clearAvatar}
-      />
-    </motion.div>
+      )}
+    </div>
   )
 }

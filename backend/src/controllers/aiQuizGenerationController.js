@@ -9,6 +9,7 @@ const {
   Course,
   CourseTrainerAssignment,
   TrainingTrainerAssignment,
+  QuizAssignment,
 } = require('../models');
 const aiService = require('../services/aiService');
 const { isImageFile } = require('../middleware/uploadAIQuizMaterial');
@@ -21,19 +22,63 @@ function cleanNullable(value) {
 }
 
 async function resolveScope({ trainingId, courseId, trainerId }) {
+  const { Op } = require('sequelize');
+  const { TrainingTrainerAssignment, CourseTrainerAssignment, User } = require('../models');
+
   let resolvedCourseId = cleanNullable(courseId);
   let resolvedTrainingId = cleanNullable(trainingId);
 
+  // If both courseId and trainingId are equal, they are probably the same Training ID passed twice
+  if (resolvedCourseId && resolvedTrainingId && String(resolvedCourseId) === String(resolvedTrainingId)) {
+    resolvedCourseId = null;
+  }
+
+  // 1. Auto-assign trainingId if both are missing
+  if (!resolvedTrainingId && !resolvedCourseId) {
+    const training = await Training.findOne({
+      where: { [Op.or]: [{ trainerId }, { createdBy: trainerId }] }
+    });
+    if (training) {
+      resolvedTrainingId = String(training.id);
+      console.log(`[resolveScope] Auto-assigned training #${resolvedTrainingId} for trainer #${trainerId}`);
+    } else {
+      const assignment = await TrainingTrainerAssignment.findOne({
+        where: { trainerId }
+      });
+      if (assignment) {
+        resolvedTrainingId = String(assignment.trainingId);
+        console.log(`[resolveScope] Auto-assigned training #${resolvedTrainingId} via assignment for trainer #${trainerId}`);
+      }
+    }
+  }
+
+  // 2. Fallback: If trainingId is present but courseId is not
   if (resolvedTrainingId && !resolvedCourseId) {
+    // Check if trainingId was actually a Course ID by mistake
     const courseCheck = await Course.findByPk(resolvedTrainingId);
     if (courseCheck) {
       resolvedCourseId = String(courseCheck.id);
       resolvedTrainingId = String(courseCheck.trainingProgramId);
     } else {
+      // Find the actual Course associated with this trainingProgramId
       const course = await Course.findOne({ where: { trainingProgramId: resolvedTrainingId } });
-      if (course) resolvedCourseId = String(course.id);
+      if (course) {
+        resolvedCourseId = String(course.id);
+      }
     }
   }
+
+  // 3. Fallback: If courseId is present but trainingId is not
+  if (resolvedCourseId && !resolvedTrainingId) {
+    const course = await Course.findByPk(resolvedCourseId);
+    if (course) {
+      resolvedTrainingId = String(course.trainingProgramId);
+    }
+  }
+
+  // 4. Verify trainer has access to the resolved training / course
+  const user = await User.findByPk(trainerId);
+  const isAdmin = user?.role === 'ADMIN';
 
   if (resolvedCourseId) {
     const course = await Course.findByPk(resolvedCourseId);
@@ -45,16 +90,14 @@ async function resolveScope({ trainingId, courseId, trainerId }) {
     const courseAssigned = await CourseTrainerAssignment.findOne({
       where: { courseId: resolvedCourseId, trainerId },
     });
-    const hasAccess = course.trainerId === trainerId || courseAssigned !== null;
+    const hasAccess = isAdmin || course.trainerId === trainerId || courseAssigned !== null;
     if (!hasAccess) {
       const error = new Error(`You are not authorized to generate quizzes for course (ID: ${resolvedCourseId}).`);
       error.status = 403;
       throw error;
     }
-    return { resolvedCourseId, resolvedTrainingId: String(course.trainingProgramId) };
-  }
-
-  if (resolvedTrainingId) {
+    resolvedTrainingId = String(course.trainingProgramId);
+  } else if (resolvedTrainingId) {
     const training = await Training.findByPk(resolvedTrainingId);
     if (!training) {
       const error = new Error(`The selected training program (ID: ${resolvedTrainingId}) does not exist.`);
@@ -64,7 +107,7 @@ async function resolveScope({ trainingId, courseId, trainerId }) {
     const trainingAssigned = await TrainingTrainerAssignment.findOne({
       where: { trainingId: resolvedTrainingId, trainerId },
     });
-    const hasAccess = training.trainerId === trainerId || training.createdBy === trainerId || trainingAssigned !== null;
+    const hasAccess = isAdmin || training.trainerId === trainerId || training.createdBy === trainerId || trainingAssigned !== null;
     if (!hasAccess) {
       const error = new Error(`You are not authorized to generate quizzes for training program (ID: ${resolvedTrainingId}).`);
       error.status = 403;
@@ -139,7 +182,7 @@ async function generateAIQuiz(req, res) {
     const trainingId = req.body.training_id ?? req.body.trainingId;
     const courseId = req.body.course_id ?? req.body.courseId;
     const difficulty = String(req.body.difficulty || 'MIXED').toUpperCase();
-    const numQuestions = validateQuestionCount(req.body.numberOfQuestions ?? req.body.numQuestions ?? 10);
+    const numQuestions = validateQuestionCount(req.body.numberOfQuestions ?? req.body.numQuestions ?? req.body.questionCount ?? 10);
     const questionType = req.body.questionType || req.body.question_type || 'MIXED';
     const url = cleanNullable(req.body.url ?? req.body.source_url);
 
@@ -180,6 +223,10 @@ async function generateAIQuiz(req, res) {
       numQuestions,
       difficulty: ['EASY', 'MEDIUM', 'HARD', 'MIXED'].includes(difficulty) ? difficulty : 'MIXED',
       status: 'DRAFT',
+      isPublished: false,
+      isActive: true,
+      published: false,
+      createdBy: trainerId,
     });
 
     const result = req.file
@@ -218,6 +265,10 @@ async function generateAIQuiz(req, res) {
       status: 'READY',
       content: result.metadata?.cleanTextPreview || null,
     });
+
+    // NOTE: quiz_assignments are created per-participant when trainer clicks "Send Quiz"
+    // (POST /api/ai-quiz/trainer/quiz/:id/send), not at generation time.
+    console.log(`[generateAIQuiz] ✅ Quiz #${quiz.id} created as DRAFT — trainer must click Send Quiz to assign to participants`);
 
     await quiz.reload({ include: [{ model: AIQuestion, as: 'questions' }] });
 

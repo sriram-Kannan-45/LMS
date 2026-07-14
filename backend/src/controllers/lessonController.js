@@ -1,12 +1,12 @@
 const {
   Lesson, LessonQuiz, LessonAssessment, AssessmentSubmission,
-  QuizProgress, LessonProgress, Enrollment, AIQuiz, User
+  QuizProgress, LessonProgress, Enrollment, AIQuiz, User,
 } = require('../models');
 const NotificationService = require('../services/notificationService');
+const { Training, Course } = require('../models');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-// Participants "assigned" to a lesson = participants enrolled in its training.
 const assignedParticipantIds = async (trainingId) => {
   const rows = await Enrollment.findAll({
     where: { trainingId, status: 'ENROLLED' },
@@ -15,7 +15,6 @@ const assignedParticipantIds = async (trainingId) => {
   return rows.map(r => r.participantId);
 };
 
-// Completion stats for one lesson quiz: total / completed / pending.
 const quizStats = async (lessonQuiz) => {
   const lesson = await Lesson.findByPk(lessonQuiz.lessonId);
   const ids = await assignedParticipantIds(lesson.trainingId);
@@ -36,327 +35,297 @@ const createLesson = async (req, res) => {
     const lesson = await Lesson.create({
       trainingId, title, content, orderIndex: orderIndex || 0, trainerId: req.user.id
     });
-    res.status(201).json({ lesson });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    return res.json({ success: true, lesson });
+  } catch (error) {
+    console.error('Error creating lesson:', error);
+    return res.status(500).json({ error: error.message });
+  }
 };
 
 const getTrainerLessons = async (req, res) => {
   try {
-    const where = { trainerId: req.user.id };
-    if (req.query.trainingId) where.trainingId = req.query.trainingId;
     const lessons = await Lesson.findAll({
-      where,
+      where: { trainerId: req.user.id },
       include: [
-        { model: LessonQuiz, as: 'quizzes', include: [{ model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] }] },
-        { model: LessonAssessment, as: 'assessments' }
+        { model: Training, as: 'training', attributes: ['id', 'title'] },
+        { model: Course, as: 'course', attributes: ['id', 'title'] },
       ],
-      order: [['orderIndex', 'ASC']]
+      order: [['orderIndex', 'ASC']],
     });
-    res.json({ lessons });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    return res.json({ success: true, lessons });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
 
 const attachQuiz = async (req, res) => {
   try {
+    const { lessonId } = req.params;
     const { quizId, isMandatory } = req.body;
-    const lesson = await Lesson.findByPk(req.params.lessonId);
-    if (!lesson || lesson.trainerId !== req.user.id) return res.status(404).json({ error: 'Lesson not found' });
-    if (!await AIQuiz.findByPk(quizId)) return res.status(404).json({ error: 'Quiz not found' });
-    const link = await LessonQuiz.create({
-      lessonId: lesson.id, quizId, isMandatory: isMandatory !== false
-    });
-    res.status(201).json({ lessonQuiz: link });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    if (!quizId) return res.status(422).json({ error: 'quizId is required' });
+    const lessonQuiz = await LessonQuiz.create({ lessonId, quizId, isMandatory: isMandatory ?? false });
+    return res.json({ success: true, lessonQuiz });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
 
 const createAssessment = async (req, res) => {
   try {
+    const { lessonId } = req.params;
     const { title, instructions, maxScore, isMandatory } = req.body;
-    const lesson = await Lesson.findByPk(req.params.lessonId);
-    if (!lesson || lesson.trainerId !== req.user.id) return res.status(404).json({ error: 'Lesson not found' });
-    const assessment = await LessonAssessment.create({
-      lessonId: lesson.id, title, instructions, maxScore: maxScore || 100, isMandatory: isMandatory !== false
-    });
-    res.status(201).json({ assessment });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    if (!title || !maxScore) return res.status(422).json({ error: 'title and maxScore are required' });
+    const assessment = await LessonAssessment.create({ lessonId, title, instructions, maxScore, isMandatory: isMandatory ?? false });
+    return res.json({ success: true, assessment });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
 
-// ── Trainer: dashboard ───────────────────────────────────────────────────────
-
-// Enrolled / completed / pending counts per quiz in a lesson, plus publish-eligibility.
 const getLessonDashboard = async (req, res) => {
   try {
-    const lesson = await Lesson.findByPk(req.params.lessonId, {
-      include: [{ model: LessonQuiz, as: 'quizzes', include: [{ model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] }] }]
-    });
-    if (!lesson || lesson.trainerId !== req.user.id) return res.status(404).json({ error: 'Lesson not found' });
+    const { lessonId } = req.params;
+    const lesson = await Lesson.findByPk(lessonId);
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
 
-    const quizzes = await Promise.all(lesson.quizzes.map(async (lq) => {
-      const s = await quizStats(lq);
+    const ids = await assignedParticipantIds(lesson.trainingId);
+    const participantCount = ids.length;
+
+    const quizzes = await LessonQuiz.findAll({ where: { lessonId } });
+    const assessments = await LessonAssessment.findAll({ where: { lessonId } });
+
+    const quizData = await Promise.all(quizzes.map(async q => {
+      const stats = await quizStats(q);
+      return { id: q.id, quizId: q.quizId, isMandatory: q.isMandatory, ...stats };
+    }));
+
+    const assessmentData = await Promise.all(assessments.map(async a => {
+      const submissions = await AssessmentSubmission.findAll({ where: { assessmentId: a.id } });
+      const completed = submissions.filter(s => s.status === 'SUBMITTED' || s.status === 'GRADED').length;
       return {
-        lessonQuizId: lq.id,
-        quizId: lq.quizId,
-        title: lq.quiz?.title,
-        resultStatus: lq.resultStatus,
-        enrolled: s.total,
-        completed: s.completed,
-        pending: s.pending,
-        canPublish: s.total > 0 && s.pending === 0 && lq.resultStatus === 'HIDDEN'
+        id: a.id,
+        title: a.title,
+        maxScore: Number(a.maxScore),
+        isMandatory: a.isMandatory,
+        total: participantCount,
+        completed,
+        pending: participantCount - completed,
       };
     }));
-    res.json({ lessonId: lesson.id, quizzes });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-};
 
-// ── Trainer: publish quiz results (gated) ────────────────────────────────────
+    return res.json({
+      success: true,
+      lesson: { id: lesson.id, title: lesson.title },
+      participantCount,
+      quizzes: quizData,
+      assessments: assessmentData,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
 
 const publishQuizResults = async (req, res) => {
   try {
-    const lq = await LessonQuiz.findByPk(req.params.lessonQuizId, { include: [{ model: Lesson, as: 'lesson' }] });
-    if (!lq || lq.lesson.trainerId !== req.user.id) return res.status(404).json({ error: 'Lesson quiz not found' });
+    const { lessonQuizId } = req.params;
+    const lessonQuiz = await LessonQuiz.findByPk(lessonQuizId, { include: [{ model: AIQuiz, as: 'quiz' }] });
+    if (!lessonQuiz) return res.status(404).json({ error: 'Lesson quiz not found' });
+    const quiz = lessonQuiz.quiz;
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+    const lesson = await Lesson.findByPk(lessonQuiz.lessonId);
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+    const ids = await assignedParticipantIds(lesson.trainingId);
 
-    const s = await quizStats(lq);
-    if (s.total === 0 || s.pending > 0) {
-      return res.status(409).json({ error: 'Results cannot be published until all assigned participants complete the quiz.' });
-    }
+    try {
+      const io = req.app?.get('io');
+      if (io) {
+        ids.forEach(pid => {
+          io.to(`user_${pid}`).emit('results:published', {
+            lessonQuizId,
+            quizId: quiz.id,
+            quizTitle: quiz.title,
+          });
+        });
+      }
+    } catch (_) {}
 
-    lq.resultStatus = 'PUBLISHED';
-    lq.publishedAt = new Date();
-    await lq.save();
-
-    const io = req.app.get('io');
-    await Promise.all(s.assignedIds.map(pid =>
-      NotificationService.createNotification({
-        userId: pid,
-        message: 'Your quiz results have been published.',
-        type: 'OTHER',
-        actionUrl: `/lessons/${lq.lessonId}`,
-        relatedEntityId: lq.id,
-        relatedEntityType: 'LessonQuiz'
-      }, io)
-    ));
-    res.json({ message: 'Quiz results published', lessonQuiz: lq });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    return res.json({ success: true, message: `Results published for ${ids.length} participants` });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
-
-// ── Trainer: assessment review / grade / publish ─────────────────────────────
 
 const getAssessmentSubmissions = async (req, res) => {
   try {
-    const assessment = await LessonAssessment.findByPk(req.params.assessmentId, { include: [{ model: Lesson, as: 'lesson' }] });
-    if (!assessment || assessment.lesson.trainerId !== req.user.id) return res.status(404).json({ error: 'Assessment not found' });
+    const { assessmentId } = req.params;
     const submissions = await AssessmentSubmission.findAll({
-      where: { assessmentId: assessment.id },
-      include: [{ model: User, as: 'participant', attributes: ['id', 'name', 'email'] }]
+      where: { assessmentId },
+      include: [{ model: User, as: 'participant', attributes: ['id', 'name', 'email'] }],
+      order: [['submittedAt', 'DESC']],
     });
-    res.json({ submissions });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    return res.json({ success: true, submissions });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
 
 const gradeAssessment = async (req, res) => {
   try {
+    const { submissionId } = req.params;
     const { score, feedback } = req.body;
-    const sub = await AssessmentSubmission.findByPk(req.params.submissionId, {
-      include: [{ model: LessonAssessment, as: 'assessment', include: [{ model: Lesson, as: 'lesson' }] }]
-    });
-    if (!sub || sub.assessment.lesson.trainerId !== req.user.id) return res.status(404).json({ error: 'Submission not found' });
-    sub.score = score;
-    sub.feedback = feedback;
-    sub.status = 'REVIEWED';
-    sub.reviewedAt = new Date();
-    await sub.save();
-    res.json({ message: 'Assessment graded', submission: sub });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const submission = await AssessmentSubmission.findByPk(submissionId);
+    if (!submission) return res.status(404).json({ error: 'Submission not found' });
+    submission.score = score;
+    submission.feedback = feedback || '';
+    submission.gradedBy = req.user.id;
+    submission.status = 'GRADED';
+    submission.gradedAt = new Date();
+    await submission.save();
+    return res.json({ success: true, submission });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
 
-// Publish a graded assessment result to the participant (hidden until now).
 const publishAssessment = async (req, res) => {
   try {
-    const sub = await AssessmentSubmission.findByPk(req.params.submissionId, {
-      include: [{ model: LessonAssessment, as: 'assessment', include: [{ model: Lesson, as: 'lesson' }] }]
-    });
-    if (!sub || sub.assessment.lesson.trainerId !== req.user.id) return res.status(404).json({ error: 'Submission not found' });
-    if (sub.status !== 'REVIEWED') return res.status(409).json({ error: 'Grade the submission before publishing.' });
-    sub.status = 'PUBLISHED';
-    await sub.save();
-
-    await NotificationService.createNotification({
-      userId: sub.participantId,
-      message: `Your assessment result for "${sub.assessment.title}" has been published.`,
-      type: 'OTHER',
-      actionUrl: `/lessons/${sub.assessment.lessonId}`,
-      relatedEntityId: sub.id,
-      relatedEntityType: 'AssessmentSubmission'
-    }, req.app.get('io'));
-    res.json({ message: 'Assessment result published', submission: sub });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const { submissionId } = req.params;
+    const submission = await AssessmentSubmission.findByPk(submissionId);
+    if (!submission) return res.status(404).json({ error: 'Submission not found' });
+    if (submission.status !== 'GRADED') return res.status(422).json({ error: 'Submission must be graded before publishing' });
+    submission.resultPublished = true;
+    await submission.save();
+    return res.json({ success: true, submission });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
-
-// ── Participant: view lessons ────────────────────────────────────────────────
 
 const getParticipantLessons = async (req, res) => {
   try {
-    const where = {};
-    if (req.query.trainingId) where.trainingId = req.query.trainingId;
-    const lessons = await Lesson.findAll({
-      where,
-      include: [
-        { model: LessonQuiz, as: 'quizzes', include: [{ model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] }] },
-        { model: LessonAssessment, as: 'assessments' }
-      ],
-      order: [['orderIndex', 'ASC']]
+    const enrollments = await Enrollment.findAll({
+      where: { participantId: req.user.id, status: 'ENROLLED' },
     });
-    res.json({ lessons });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const trainingIds = [...new Set(enrollments.map(e => e.trainingId).filter(Boolean))];
+    const courseIds = [...new Set(enrollments.map(e => e.courseId).filter(Boolean))];
+
+    const lessons = await Lesson.findAll({
+      where: {
+        [require('sequelize').Op.or]: [
+          { trainingId: trainingIds },
+          { courseId: courseIds },
+        ],
+      },
+      include: [
+        { model: Training, as: 'training', attributes: ['id', 'title'] },
+        { model: Course, as: 'course', attributes: ['id', 'title'] },
+      ],
+      order: [['orderIndex', 'ASC']],
+    });
+    return res.json({ success: true, lessons });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
 
 const viewContent = async (req, res) => {
   try {
-    const lesson = await Lesson.findByPk(req.params.lessonId);
+    const { lessonId } = req.params;
+    const lesson = await Lesson.findByPk(lessonId);
     if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
-    const [prog] = await LessonProgress.findOrCreate({
-      where: { lessonId: lesson.id, participantId: req.user.id },
-      defaults: { status: 'IN_PROGRESS' }
+    const [progress] = await LessonProgress.findOrCreate({
+      where: { lessonId, participantId: req.user.id },
+      defaults: { lessonId, participantId: req.user.id, status: 'IN_PROGRESS', trainingId: lesson.trainingId }
     });
-    prog.contentViewed = true;
-    if (prog.status === 'NOT_STARTED') prog.status = 'IN_PROGRESS';
-    await prog.save();
-    await evaluateLessonCompletion(lesson, req.user.id, req.app.get('io'));
-    res.json({ message: 'Content marked as viewed', progress: prog });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    if (progress.status === 'PENDING' || progress.status === 'NOT_STARTED') {
+      progress.status = 'IN_PROGRESS';
+      await progress.save();
+    }
+    return res.json({ success: true, lesson, progress });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
 
-// Participant completes a quiz. Score (computed by the quiz engine) is stored
-// but never returned — results stay hidden until the trainer publishes.
 const completeQuiz = async (req, res) => {
   try {
-    const { score } = req.body;
-    const lq = await LessonQuiz.findByPk(req.params.lessonQuizId, { include: [{ model: Lesson, as: 'lesson' }] });
-    if (!lq) return res.status(404).json({ error: 'Lesson quiz not found' });
-
-    const [prog] = await QuizProgress.findOrCreate({
-      where: { lessonQuizId: lq.id, participantId: req.user.id },
-      defaults: { status: 'IN_PROGRESS' }
+    const { lessonQuizId } = req.params;
+    const lessonQuiz = await LessonQuiz.findByPk(lessonQuizId);
+    if (!lessonQuiz) return res.status(404).json({ error: 'Lesson quiz not found' });
+    const [progress] = await QuizProgress.findOrCreate({
+      where: { lessonQuizId, participantId: req.user.id },
+      defaults: { lessonQuizId, participantId: req.user.id, status: 'COMPLETED' }
     });
-    prog.status = 'COMPLETED';
-    prog.score = score != null ? score : prog.score;
-    prog.completedAt = new Date();
-    await prog.save();
-
-    const io = req.app.get('io');
-    await evaluateLessonCompletion(lq.lesson, req.user.id, io);
-
-    // Notify trainer once ALL assigned participants have completed this quiz.
-    const s = await quizStats(lq);
-    if (s.total > 0 && s.pending === 0) {
-      await NotificationService.createNotification({
-        userId: lq.lesson.trainerId,
-        message: `All participants have completed the quiz for lesson "${lq.lesson.title}". You can now publish results.`,
-        type: 'OTHER',
-        actionUrl: `/trainer/lessons/${lq.lessonId}`,
-        relatedEntityId: lq.id,
-        relatedEntityType: 'LessonQuiz'
-      }, io);
+    if (progress.status !== 'COMPLETED') {
+      progress.status = 'COMPLETED';
+      progress.completedAt = new Date();
+      await progress.save();
     }
-    res.json({ message: 'Quiz completed successfully. Your responses have been submitted.' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    return res.json({ success: true, progress });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
 
 const submitAssessment = async (req, res) => {
   try {
-    const { content, fileUrl } = req.body;
-    const assessment = await LessonAssessment.findByPk(req.params.assessmentId);
+    const { assessmentId } = req.params;
+    const { content } = req.body;
+    const assessment = await LessonAssessment.findByPk(assessmentId);
     if (!assessment) return res.status(404).json({ error: 'Assessment not found' });
-
-    const [sub] = await AssessmentSubmission.findOrCreate({
-      where: { assessmentId: assessment.id, participantId: req.user.id },
-      defaults: { status: 'SUBMITTED' }
+    const submission = await AssessmentSubmission.create({
+      assessmentId,
+      participantId: req.user.id,
+      content: content || '',
+      status: 'SUBMITTED',
+      submittedAt: new Date(),
     });
-    sub.content = content;
-    sub.fileUrl = fileUrl;
-    sub.status = 'SUBMITTED';
-    sub.submittedAt = new Date();
-    await sub.save();
-
-    const lesson = await Lesson.findByPk(assessment.lessonId);
-    await evaluateLessonCompletion(lesson, req.user.id, req.app.get('io'));
-    res.status(201).json({ message: 'Assessment submitted successfully.', submission: { id: sub.id, status: sub.status } });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    return res.json({ success: true, submission });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
-
-// ── Participant: result visibility ───────────────────────────────────────────
 
 const getQuizResult = async (req, res) => {
   try {
-    const lq = await LessonQuiz.findByPk(req.params.lessonQuizId);
-    if (!lq) return res.status(404).json({ error: 'Lesson quiz not found' });
-    const prog = await QuizProgress.findOne({ where: { lessonQuizId: lq.id, participantId: req.user.id } });
-
-    if (!prog || prog.status !== 'COMPLETED') {
-      return res.json({ status: prog?.status || 'NOT_STARTED', resultStatus: lq.resultStatus });
-    }
-    if (lq.resultStatus !== 'PUBLISHED') {
-      return res.json({
-        status: 'COMPLETED',
-        resultStatus: 'HIDDEN',
-        message: 'Your quiz has been submitted. Results will be available once published by the trainer.'
-      });
-    }
-    res.json({ status: 'COMPLETED', resultStatus: 'PUBLISHED', score: prog.score, completedAt: prog.completedAt });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const { lessonQuizId } = req.params;
+    const progress = await QuizProgress.findOne({
+      where: { lessonQuizId, participantId: req.user.id },
+    });
+    if (!progress) return res.status(404).json({ error: 'No progress found' });
+    return res.json({ success: true, progress });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
 
 const getAssessmentResult = async (req, res) => {
   try {
-    const sub = await AssessmentSubmission.findOne({
-      where: { assessmentId: req.params.assessmentId, participantId: req.user.id }
+    const { assessmentId } = req.params;
+    const submission = await AssessmentSubmission.findOne({
+      where: { assessmentId, participantId: req.user.id },
     });
-    if (!sub) return res.json({ status: 'NOT_STARTED' });
-    if (sub.status !== 'PUBLISHED') {
-      return res.json({
-        status: sub.status,
-        message: 'Your assessment has been submitted. Results will be available once published by the trainer.'
-      });
-    }
-    res.json({ status: 'PUBLISHED', score: sub.score, feedback: sub.feedback });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-};
-
-// ── Lesson completion logic ──────────────────────────────────────────────────
-// Complete when: content viewed AND all mandatory quizzes COMPLETED AND all
-// mandatory assessments SUBMITTED (any of REVIEWED/PUBLISHED also counts).
-const evaluateLessonCompletion = async (lesson, participantId, io) => {
-  const [prog] = await LessonProgress.findOrCreate({
-    where: { lessonId: lesson.id, participantId },
-    defaults: { status: 'IN_PROGRESS' }
-  });
-
-  const quizzes = await LessonQuiz.findAll({ where: { lessonId: lesson.id, isMandatory: true } });
-  const quizzesDone = (await Promise.all(quizzes.map(async (q) => {
-    const p = await QuizProgress.findOne({ where: { lessonQuizId: q.id, participantId } });
-    return p && p.status === 'COMPLETED';
-  }))).every(Boolean);
-
-  const assessments = await LessonAssessment.findAll({ where: { lessonId: lesson.id, isMandatory: true } });
-  const assessmentsDone = (await Promise.all(assessments.map(async (a) => {
-    const sub = await AssessmentSubmission.findOne({ where: { assessmentId: a.id, participantId } });
-    return sub && ['SUBMITTED', 'REVIEWED', 'PUBLISHED'].includes(sub.status);
-  }))).every(Boolean);
-
-  const completed = prog.contentViewed && quizzesDone && assessmentsDone;
-  const next = completed ? 'COMPLETED' : (prog.contentViewed ? 'IN_PROGRESS' : prog.status);
-  if (next !== prog.status) {
-    prog.status = next;
-    prog.completedAt = completed ? new Date() : null;
-    await prog.save();
+    if (!submission) return res.status(404).json({ error: 'No submission found' });
+    return res.json({ success: true, submission });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
-  return prog;
 };
 
 module.exports = {
-  createLesson, getTrainerLessons, attachQuiz, createAssessment,
-  getLessonDashboard, publishQuizResults,
-  getAssessmentSubmissions, gradeAssessment, publishAssessment,
-  getParticipantLessons, viewContent, completeQuiz, submitAssessment,
-  getQuizResult, getAssessmentResult
+  createLesson,
+  getTrainerLessons,
+  attachQuiz,
+  createAssessment,
+  getLessonDashboard,
+  publishQuizResults,
+  getAssessmentSubmissions,
+  gradeAssessment,
+  publishAssessment,
+  getParticipantLessons,
+  viewContent,
+  completeQuiz,
+  submitAssessment,
+  getQuizResult,
+  getAssessmentResult,
 };

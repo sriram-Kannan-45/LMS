@@ -2,7 +2,7 @@ import json
 import random
 import re
 from difflib import SequenceMatcher
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 from services.gemini_client import GeminiClient
 
@@ -20,21 +20,56 @@ class RAGQuizGenerationService:
         self.config = config
         self.client = GeminiClient(api_key=config.gemini_api_key, model=config.gemini_model)
 
+    def _summarize_chunk(
+        self,
+        chunk: str,
+        doc_name: str = "N/A",
+        file_size: str = "N/A",
+        extracted_text_len: int = 0,
+        first_500_chars: str = "N/A"
+    ) -> str:
+        prompt = f"""You are an expert educator. Summarize the following section of a learning document. 
+Retain all important definitions, concepts, technical details, procedures, and facts.
+Make the summary dense, factual, and clear. Do not lose key educational content.
+
+Section content:
+{chunk}
+"""
+        summary = self.client.generate_content(
+            prompt,
+            temperature=0.3,
+            response_json=False,
+            doc_name=doc_name,
+            file_size=file_size,
+            extracted_text_len=extracted_text_len,
+            first_500_chars=first_500_chars
+        )
+        return summary
+
     def generate(
         self,
         *,
-        retrieved_chunks: List[RetrievedChunk],
+        retrieved_chunks: Optional[List[RetrievedChunk]] = None,
+        context_text: Optional[str] = None,
         source_title: str,
         difficulty: str,
         number_of_questions: int,
         question_type: str,
+        doc_name: str = "N/A",
+        file_size: str = "N/A",
+        extracted_text_len: int = 0,
+        first_500_chars: str = "N/A",
     ) -> QuizOutput:
         try:
             self.config.require_gemini_key()
         except RuntimeError as exc:
             raise QuizGenerationError(str(exc)) from exc
 
-        context = self._format_context(retrieved_chunks)
+        if context_text is not None:
+            context = context_text
+        else:
+            context = self._format_context(retrieved_chunks or [])
+
         normalized_type = normalize_question_type(question_type)
         normalized_difficulty = normalize_difficulty(difficulty, allow_mixed=True)
         counts = self._type_counts(number_of_questions, normalized_type)
@@ -50,13 +85,22 @@ class RAGQuizGenerationService:
                 nonce=random.randint(100000, 999999),
                 previous_error=last_error,
             )
-            raw = self.client.generate_content(prompt, temperature=0.65, response_json=True)
+            raw = self.client.generate_content(
+                prompt,
+                temperature=0.65,
+                response_json=True,
+                doc_name=doc_name,
+                file_size=file_size,
+                extracted_text_len=extracted_text_len,
+                first_500_chars=first_500_chars,
+            )
             try:
                 parsed = self._parse(raw)
                 quiz = QuizOutput.model_validate(parsed)
                 self._validate_count_and_types(quiz, number_of_questions, counts)
-                self._validate_no_copying(quiz, context)
-                self._validate_grounding(quiz, context)
+                if context_text is None:
+                    self._validate_no_copying(quiz, context)
+                    self._validate_grounding(quiz, context)
                 return quiz
             except Exception as exc:
                 last_error = str(exc)
@@ -143,14 +187,41 @@ Return this exact JSON shape:
     @staticmethod
     def _parse(raw: str):
         text = raw.strip()
+        
+        # 1. Try finding JSON block within markdown code fence first
         fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.S | re.I)
         if fence:
             text = fence.group(1).strip()
+            
+        # 2. Try standard json loads
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+            
+        # 3. Try to locate outermost curly braces
         start = text.find("{")
         end = text.rfind("}")
         if start >= 0 and end > start:
-            text = text[start : end + 1]
-        return json.loads(text)
+            extracted = text[start : end + 1]
+            try:
+                return json.loads(extracted)
+            except json.JSONDecodeError:
+                text_to_repair = extracted
+        else:
+            text_to_repair = text
+
+        # 4. Fallback to json-repair if available
+        try:
+            from json_repair import repair_json
+            repaired = repair_json(text_to_repair, return_objects=True)
+            if isinstance(repaired, (dict, list)):
+                return repaired
+        except Exception as e:
+            pass
+            
+        # If everything fails, do one final attempt with strict loads to propagate the JSONDecodeError
+        return json.loads(text_to_repair)
 
     @staticmethod
     def _type_counts(total: int, requested_type: str) -> Dict[str, int]:

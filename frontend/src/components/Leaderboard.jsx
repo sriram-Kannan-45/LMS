@@ -14,7 +14,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-xl px-4 py-3 text-sm">
       <p className="font-bold text-slate-800 mb-1">{label}</p>
-      <p className="text-indigo-600 font-black text-base">{payload[0]?.value?.toFixed(1)}%</p>
+      <p className="text-primary-600 font-black text-base">{payload[0]?.value?.toFixed(1)}%</p>
     </div>
   )
 }
@@ -73,7 +73,7 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
 
   const getMedalColor = (score) => {
     if (score >= 90) return 'text-amber-500'
-    if (score >= 80) return 'text-indigo-500'
+    if (score >= 80) return 'text-primary-500'
     if (score >= 70) return 'text-emerald-500'
     return 'text-slate-400'
   }
@@ -82,14 +82,14 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
     if (score >= 90) return { label: 'Outstanding', color: 'bg-amber-50 text-amber-700 border-amber-200' }
     if (score >= 80) return { label: 'Excellent',   color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
     if (score >= 60) return { label: 'Good',        color: 'bg-blue-50 text-blue-700 border-blue-200' }
-    if (score >= 40) return { label: 'Passed',      color: 'bg-indigo-50 text-indigo-700 border-indigo-200' }
+    if (score >= 40) return { label: 'Passed',      color: 'bg-primary-50 text-primary-700 border-primary-200' }
     return                  { label: 'Keep Going',  color: 'bg-slate-50 text-slate-600 border-slate-200' }
   }
 
   const CHART_COLORS = [
-    '#6366f1', '#7c3aed', '#8b5cf6', '#a78bfa',
-    '#c4b5fd', '#818cf8', '#4f46e5', '#4338ca',
-    '#3730a3', '#312e81',
+    '#14B8A6', '#0D9488', '#14B8A6', '#2DD4BF',
+    '#5EEAD4', '#2DD4BF', '#0D9488', '#0F766E',
+    '#115E59', '#134E4A',
   ]
 
   return (
@@ -126,9 +126,9 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
           </div>
 
           {data.length > 0 && (
-            <div className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-indigo-50 rounded-xl border border-indigo-100">
-              <Users size={15} className="text-indigo-500" />
-              <span className="text-sm font-bold text-indigo-600">{data.length} participants</span>
+            <div className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-primary-50 rounded-xl border border-primary-100">
+              <Users size={15} className="text-primary-500" />
+              <span className="text-sm font-bold text-primary-600">{data.length} participants</span>
             </div>
           )}
         </div>
@@ -147,7 +147,7 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
               className={[
                 'flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200',
                 filterRange === key
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-200'
+                  ? 'bg-gradient-to-r from-primary-600 to-primary-600 text-white shadow-md shadow-primary-200'
                   : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200 hover:border-slate-300',
               ].join(' ')}
             >
@@ -220,7 +220,7 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
                         transition={{ delay: 0.6 }}
                         className="absolute -top-3.5 left-0 right-0 flex justify-center z-10"
                       >
-                        <span className="px-3 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-black rounded-full shadow-lg shadow-indigo-200 uppercase tracking-wider">
+                        <span className="px-3 py-1 bg-gradient-to-r from-primary-600 to-primary-600 text-white text-[10px] font-black rounded-full shadow-lg shadow-primary-200 uppercase tracking-wider">
                           ✨ You
                         </span>
                       </motion.div>
@@ -308,8 +308,8 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
               className="mb-8 bg-white rounded-2xl border border-slate-200 p-5 sm:p-7 shadow-sm hover:shadow-md transition-shadow"
             >
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-indigo-100 rounded-lg">
-                  <BarChart2 size={18} className="text-indigo-600" />
+                <div className="p-2 bg-primary-100 rounded-lg">
+                  <BarChart2 size={18} className="text-primary-600" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900" style={{ fontFamily: 'Outfit, sans-serif' }}>
@@ -335,7 +335,7 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
                     domain={[0, 100]}
                     tickFormatter={v => `${v}%`}
                   />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99,102,241,0.05)', radius: 8 }} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(20,184,166,0.05)', radius: 8 }} />
                   <Bar dataKey="score" radius={[8, 8, 0, 0]}>
                     {chartData.map((_, idx) => (
                       <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
@@ -399,8 +399,8 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: 0.4 + index * 0.04 }}
                           className={[
-                            'transition-colors hover:bg-indigo-50/30 group',
-                            isCurrentUser ? 'bg-indigo-50/50' : '',
+                            'transition-colors hover:bg-primary-50/30 group',
+                            isCurrentUser ? 'bg-primary-50/50' : '',
                           ].join(' ')}
                         >
                           {/* Rank */}
@@ -425,7 +425,7 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
                                 className={[
                                   'w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white text-sm shadow-sm flex-shrink-0',
                                   isCurrentUser
-                                    ? 'bg-gradient-to-br from-indigo-500 to-purple-600'
+                                    ? 'bg-gradient-to-br from-primary-500 to-primary-600'
                                     : 'bg-gradient-to-br from-slate-400 to-slate-500',
                                 ].join(' ')}
                               >
@@ -436,7 +436,7 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
                                   {entry.name || 'Anonymous'}
                                 </p>
                                 {isCurrentUser && (
-                                  <p className="text-[10px] text-indigo-600 font-bold mt-0.5">✨ You</p>
+                                  <p className="text-[10px] text-primary-600 font-bold mt-0.5">✨ You</p>
                                 )}
                               </div>
                             </div>
@@ -462,7 +462,7 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
                                 initial={{ width: 0 }}
                                 animate={{ width: `${score}%` }}
                                 transition={{ duration: 0.8, ease: 'easeOut', delay: 0.5 + index * 0.03 }}
-                                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-600"
+                                className="h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-600"
                               />
                             </div>
                           </td>

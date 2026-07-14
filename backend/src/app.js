@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const { User } = require('./models');
 const { sequelize, connectDB } = require('./config/db');
 const logger = require('./utils/logger');
+const authenticateToken = require('./middleware/auth');
 const {
   initializeSocket,
   setupRedisAdapter,
@@ -27,13 +28,16 @@ const noteRoutes = require('./routes/noteRoutes');
 const feedRoutes = require('./routes/feedRoutes');
 const liveRoutes = require('./routes/liveRoutes');
 const aiQuizRoutes = require('./routes/aiQuizRoutes');
+const quizzesRoutes = require('./routes/quizzesRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const participantProfileRoutes = require('./routes/participantProfileRoutes');
 const proctoringRoutes = require('./routes/proctoringRoutes');
+const monitorRoutes = require('./routes/monitorRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
-const codingAssessmentRoutes = require('./routes/codingAssessmentRoutes');
 const discussionRoutes = require('./routes/discussionRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const recordingRoutes = require('./routes/recordingRoutes');
+const codingAssessmentRoutes = require('./routes/codingAssessmentRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -73,7 +77,20 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Global request logger
 app.use((req, res, next) => {
-  console.log('➡️ API HIT:', req.method, req.originalUrl);
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const isError = res.statusCode >= 400;
+    const isDev = process.env.NODE_ENV === 'development';
+    if (isError || isDev) {
+      const logMsg = `➡️ ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`;
+      if (isError) {
+        logger.error(logMsg);
+      } else {
+        logger.debug(logMsg);
+      }
+    }
+  });
   next();
 });
 
@@ -86,19 +103,50 @@ app.use('/api/participant', participantCourseRoutes);
 app.use('/api/participant', enrollmentRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/trainings', trainingRoutes);
+app.use('/api/training', trainingRoutes);
 app.use('/api/survey', surveyRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/notes', noteRoutes);
 app.use('/api/feed', feedRoutes);
 app.use('/api/live', liveRoutes);
 app.use('/api/ai-quiz', aiQuizRoutes);
+app.use('/api/quizzes', quizzesRoutes);
+
+// Endpoint GET /api/attempts/:attemptId
+app.get('/api/attempts/:attemptId', authenticateToken, async (req, res) => {
+  try {
+    const { QuizAttempt, AIQuiz } = require('./models');
+    const attempt = await QuizAttempt.findByPk(req.params.attemptId, {
+      include: [{ model: AIQuiz, as: 'quiz' }]
+    });
+    if (!attempt) {
+      console.log(`[GET /api/attempts/${req.params.attemptId}] Attempt not found`);
+      return res.status(404).json({ error: 'Attempt not found' });
+    }
+    
+    // Check ownership if participant
+    if (req.user.role === 'PARTICIPANT' && attempt.participantId !== req.user.id) {
+      console.log(`[GET /api/attempts/${req.params.attemptId}] Access denied for user #${req.user.id}`);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    console.log(`[GET /api/attempts/${req.params.attemptId}] Returning attempt details for user #${req.user.id}`);
+    res.json({ attempt });
+  } catch (error) {
+    console.error(`[GET /api/attempts/${req.params.attemptId}] Error:`, error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.use('/api/profile', profileRoutes);
 app.use('/api/participant-profile', participantProfileRoutes);
 app.use('/api/proctor', proctoringRoutes);
+app.use('/api', monitorRoutes);
 app.use('/api/lessons', lessonRoutes);
-app.use('/api/coding', codingAssessmentRoutes);
 app.use('/api/discussion', discussionRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/recordings', recordingRoutes);
+app.use('/api/coding', codingAssessmentRoutes);
 
 // Health check for AI service (separate path to avoid conflict with router)
 app.get('/api/ai/health', async (req, res) => {
@@ -126,7 +174,6 @@ app.get('/api/ai/health', async (req, res) => {
 // Custom route for updating profile exactly as requested
 const profileController = require('./controllers/profileController');
 const upload = require('./middleware/upload');
-const authenticateToken = require('./middleware/auth');
 app.put('/api/update-profile', authenticateToken, upload.single('profilePic'), profileController.updateProfile);
 
 // Top-level /api/test-mail alias (matches the spec's debugging step #5)
@@ -149,6 +196,16 @@ app.use((err, req, res, next) => {
   }
   if (err.message && err.message.includes('Only JPG')) {
     return res.status(415).json({ success: false, message: err.message });
+  }
+
+  // Never expose raw SQL/database errors to the frontend
+  const msg = err.message || '';
+  if (msg.includes('cannot be null') || msg.includes('Column') || msg.includes('ER_PARSE_ERROR') || msg.includes('ER_BAD_FIELD_ERROR') || msg.includes('ER_NO_REFERENCED_ROW') || msg.includes('ER_DUP_ENTRY') || msg.includes('ER_DATA_TOO_LONG') || msg.includes('Sequelize')) {
+    console.error('⚠️ Sanitized database error for client:', err.message);
+    return res.status(err.status || 500).json({
+      success: false,
+      message: 'A database error occurred. Please try again or contact support.'
+    });
   }
 
   res.status(err.status || 500).json({
@@ -205,6 +262,21 @@ const startServer = async () => {
       logger.info('proctoring tables ready');
     } catch (e) {
       logger.error('Could not sync proctoring tables', { error: e.message });
+    }
+
+    // Parallel monitor system tables — additive sync, scoped to module
+    try {
+      const {
+        MonitorAttempt,
+        MonitorViolation,
+        MonitorScreenshot,
+      } = require('./models');
+      await MonitorAttempt.sync({ alter: true });
+      await MonitorViolation.sync({ alter: true });
+      await MonitorScreenshot.sync({ alter: true });
+      logger.info('monitor system tables ready');
+    } catch (e) {
+      logger.error('Could not sync monitor system tables', { error: e.message });
     }
 
     // OTP table for forgot-password flow
@@ -329,23 +401,27 @@ const startServer = async () => {
       logger.error('Could not sync lesson workflow tables', { error: e.message });
     }
 
-    // Coding Assessment tables — additive sync, scoped to module
+    // Quiz Recordings — screen recordings for proctored quiz sessions
     try {
-      const {
-        CodingAssessment, CodingQuestion, TestCase, CodingAttempt,
-        CodingSubmission, SubmissionResult, CodingViolation, PlagiarismReport,
-      } = require('./models');
+      const { QuizRecording } = require('./models');
+      await QuizRecording.sync({ alter: true });
+      logger.info('quiz_recordings table ready');
+    } catch (e) {
+      logger.error('Could not sync quiz_recordings', { error: e.message });
+    }
+
+    // Coding Assessment tables
+    try {
+      const { CodingAssessment, CodingProblem, CodingTestCase, CodingAttempt, CodingSubmission, CodingResult } = require('./models');
       await CodingAssessment.sync({ alter: true });
-      await CodingQuestion.sync({ alter: true });
-      await TestCase.sync({ alter: true });
+      await CodingProblem.sync({ alter: true });
+      await CodingTestCase.sync({ alter: true });
       await CodingAttempt.sync({ alter: true });
       await CodingSubmission.sync({ alter: true });
-      await SubmissionResult.sync({ alter: true });
-      await CodingViolation.sync({ alter: true });
-      await PlagiarismReport.sync({ alter: true });
-      logger.info('coding assessment tables ready');
+      await CodingResult.sync({ alter: true });
+      logger.info('coding_assessment tables ready');
     } catch (e) {
-      logger.error('Could not sync coding assessment tables', { error: e.message });
+      logger.error('Could not sync coding_assessment tables', { error: e.message });
     }
 
     // Add course-centric indexes that were intentionally omitted from the
@@ -392,10 +468,26 @@ const startServer = async () => {
     // Setup Redis adapter for multi-instance scaling (disabled for local dev)
     logger.info('Running Socket.IO in single-instance mode (Redis disabled for local dev)');
 
+    // Parallel monitor system auto-submit cron (every minute) — must run AFTER socket init
+    try {
+      const { startMonitorAutoSubmitCron } = require('./jobs/monitorAutoSubmit');
+      startMonitorAutoSubmitCron(io);
+    } catch (e) {
+      logger.warn('Could not start monitor auto-submit cron', { error: e.message });
+    }
+
+    // Start the Judge submission worker (BullMQ)
+    try {
+      const { startWorker } = require('./workers/submissionWorker');
+      startWorker(io);
+    } catch (e) {
+      logger.warn('Could not start submission worker (Redis may be unavailable)', { error: e.message });
+    }
+
     // Create default admin if not exists
     const adminExists = await User.findOne({ where: { email: 'admin@test.com' } });
     if (!adminExists) {
-      const hashedPassword = await bcrypt.hash('admin123', 10);
+      const hashedPassword = await bcrypt.hash('admin123', 12);
       await User.create({
         name: 'Admin',
         email: 'admin@test.com',
@@ -431,7 +523,7 @@ const startServer = async () => {
     });
 
     server.listen(PORT, () => {
-      logger.info(`🚀 WAVE INIT LMS Server running on http://localhost:${PORT}`);
+      logger.logAlways(`🚀 WAVE INIT LMS Server running on http://localhost:${PORT}`);
       logger.info(`📋 Mounted routes:
    /api/auth      → auth routes
    /api/admin     → admin routes (+ analytics endpoints)
@@ -452,14 +544,55 @@ const startServer = async () => {
        · GET    /:userId             (admin/trainer view)
    /api/survey    → survey routes
       `);
-      logger.info('🔌 WebSocket server active on Socket.IO');
+      logger.logAlways('🔌 WebSocket server active on Socket.IO');
+
+      // Start quiz auto-close scheduler
+      try {
+        const quizAutoClose = require('./jobs/quizAutoClose');
+        quizAutoClose.start();
+      } catch (jobErr) {
+        logger.warn('Failed to start quiz auto-close job:', jobErr.message);
+      }
+
+      // Start proctoring reapers
+      try {
+        const proctoringService = require('./services/proctoringService');
+        // Every 30 seconds: expire stale sessions (no heartbeat for 25s)
+        setInterval(async () => {
+          try {
+            await proctoringService.expireStaleSessions(io);
+          } catch (e) {
+            logger.warn('Failed to run expireStaleSessions reaper:', e.message);
+          }
+        }, 30000);
+
+        // Every 60 seconds: expire grace period sessions (disconnect timeout)
+        setInterval(async () => {
+          try {
+            await proctoringService.expireGracePeriodSessions(io);
+          } catch (e) {
+            logger.warn('Failed to run expireGracePeriodSessions reaper:', e.message);
+          }
+        }, 60000);
+
+        // Every 60 seconds: auto-submit sessions past endsAt absolute timer
+        setInterval(async () => {
+          try {
+            await proctoringService.autoSubmitExpiredSessions(io);
+          } catch (e) {
+            logger.warn('Failed to run autoSubmitExpiredSessions reaper:', e.message);
+          }
+        }, 60000);
+      } catch (proctorErr) {
+        logger.warn('Failed to start proctoring reapers:', proctorErr.message);
+      }
     });
 
     // Graceful shutdown
     process.on('SIGTERM', async () => {
-      logger.info('SIGTERM signal received: closing HTTP server');
+      logger.logAlways('SIGTERM signal received: closing HTTP server');
       server.close(async () => {
-        logger.info('HTTP server closed');
+        logger.logAlways('HTTP server closed');
         await cleanupSocket(io);
         await sequelize.close();
         process.exit(0);
@@ -467,9 +600,9 @@ const startServer = async () => {
     });
 
     process.on('SIGINT', async () => {
-      logger.info('SIGINT signal received: closing HTTP server');
+      logger.logAlways('SIGINT signal received: closing HTTP server');
       server.close(async () => {
-        logger.info('HTTP server closed');
+        logger.logAlways('HTTP server closed');
         await cleanupSocket(io);
         await sequelize.close();
         process.exit(0);

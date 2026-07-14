@@ -43,7 +43,7 @@ function Particles() {
         if (d.x < 0) d.x = w; if (d.x > w) d.x = 0
         if (d.y < 0) d.y = h; if (d.y > h) d.y = 0
         ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(167,139,250,${d.o})`; ctx.fill()
+        ctx.fillStyle = `rgba(45,212,191,${d.o})`; ctx.fill()
       }
       id = requestAnimationFrame(draw)
     }
@@ -71,7 +71,7 @@ function AvatarCircle({ name, rank, size = 36 }) {
     2: 'from-slate-300 via-slate-200 to-slate-400',
     3: 'from-amber-700 via-amber-600 to-amber-800',
   }
-  const border = borderGrads[rank] || 'from-[#7c3aed] to-[#a78bfa]'
+  const border = borderGrads[rank] || 'from-[#0D9488] to-[#2DD4BF]'
   const glow = rank === 1 ? 'shadow-[0_0_16px_rgba(245,158,11,0.4)]' : rank === 2 ? 'shadow-[0_0_12px_rgba(156,163,175,0.3)]' : rank === 3 ? 'shadow-[0_0_12px_rgba(180,83,9,0.3)]' : ''
   return (
     <div className={`shrink-0 rounded-full bg-gradient-to-br ${border} p-[2px] ${glow}`}>
@@ -94,7 +94,7 @@ function ScoreBar({ score, maxScore, color }) {
         animate={{ width: `${pct}%` }}
         transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
         className="h-full rounded-full"
-        style={{ background: color || 'linear-gradient(90deg, #7c3aed, #a78bfa)' }}
+        style={{ background: color || 'linear-gradient(90deg, #0D9488, #2DD4BF)' }}
       />
     </div>
   )
@@ -195,7 +195,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
       {/* ── Drawer toggle (mobile) ── */}
       <button
         onClick={() => setDrawerOpen(v => !v)}
-        className="lg:hidden fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-gradient-to-br from-[#7c3aed] to-[#a78bfa] text-white flex items-center justify-center shadow-lg shadow-[#7c3aed]/40"
+        className="lg:hidden fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-gradient-to-br from-[#0D9488] to-[#2DD4BF] text-white flex items-center justify-center shadow-lg shadow-[#0D9488]/40"
         aria-label={drawerOpen ? 'Close leaderboard' : 'Open leaderboard'}
       >
         <Trophy size={20} />
@@ -211,7 +211,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
           {/* Header */}
           <div className="flex items-center justify-between flex-wrap gap-3 px-5 py-4 border-b border-white/5">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#7c3aed] to-[#a78bfa] flex items-center justify-center shadow-lg shadow-[#7c3aed]/30">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#0D9488] to-[#2DD4BF] flex items-center justify-center shadow-lg shadow-[#0D9488]/30">
                 <Trophy size={18} className="text-white" />
               </div>
               <div>
@@ -226,7 +226,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                 phase === 'live'
                   ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
                   : phase === 'completed'
-                  ? 'bg-[#7c3aed]/15 text-[#a78bfa] border border-[#7c3aed]/20'
+                  ? 'bg-[#0D9488]/15 text-[#2DD4BF] border border-[#0D9488]/20'
                   : 'bg-white/5 text-white/30 border border-white/10'
               }`}>
                 {phase === 'live' && <><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live</>}
@@ -236,7 +236,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
 
               {/* Countdown (live only) */}
               {phase === 'live' && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] font-mono font-bold text-[#a78bfa]">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] font-mono font-bold text-[#2DD4BF]">
                   <Clock size={12} />
                   {fmt(countdown)}
                 </div>
@@ -246,7 +246,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
               <div className="flex gap-1.5">
                 {phase === 'live' && (
                   <button onClick={() => { setPhase('completed'); setCountdown(0) }}
-                    className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#7c3aed] to-[#a78bfa] text-white text-[10px] font-bold hover:shadow-lg hover:shadow-[#7c3aed]/30 transition-all"
+                    className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#0D9488] to-[#2DD4BF] text-white text-[10px] font-bold hover:shadow-lg hover:shadow-[#0D9488]/30 transition-all"
                   >
                     End Quiz
                   </button>
@@ -340,7 +340,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: i * 0.04 }}
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 hover:bg-white/[0.04] ${
-                          p.isYou ? 'bg-[#7c3aed]/10 border border-[#7c3aed]/20' : ''
+                          p.isYou ? 'bg-[#0D9488]/10 border border-[#0D9488]/20' : ''
                         }`}
                       >
                         <span className="w-6 text-center text-[11px] font-bold text-white/30">#{(p.id)}</span>
@@ -348,9 +348,9 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-[12px] font-semibold text-white/80 truncate">{p.name}</span>
-                            {p.isYou && <span className="text-[8px] font-bold text-[#a78bfa] bg-[#7c3aed]/20 px-1.5 py-0.5 rounded uppercase">You</span>}
+                            {p.isYou && <span className="text-[8px] font-bold text-[#2DD4BF] bg-[#0D9488]/20 px-1.5 py-0.5 rounded uppercase">You</span>}
                           </div>
-                          <ScoreBar score={p.score} maxScore={maxScore} color="linear-gradient(90deg, #7c3aed, #a78bfa)" />
+                          <ScoreBar score={p.score} maxScore={maxScore} color="linear-gradient(90deg, #0D9488, #2DD4BF)" />
                         </div>
                         <span className="text-[14px] font-bold text-white/70" style={{ fontFamily: "'Poppins', sans-serif" }}>{p.score}</span>
                         <span className="text-[11px] text-white/30 w-10 text-right">{p.accuracy}%</span>
@@ -364,15 +364,15 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-2 flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#7c3aed]/10 border border-[#7c3aed]/20"
+                    className="mt-2 flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#0D9488]/10 border border-[#0D9488]/20"
                   >
-                    <span className="w-6 text-center text-[11px] font-bold text-[#a78bfa]">#{youIdx + 1}</span>
+                    <span className="w-6 text-center text-[11px] font-bold text-[#2DD4BF]">#{youIdx + 1}</span>
                     <AvatarCircle name={youRow.name} rank={0} size={28} />
                     <div className="flex-1 min-w-0">
                       <span className="text-[12px] font-semibold text-white/80">{youRow.name}</span>
-                      <span className="ml-2 text-[8px] font-bold text-[#a78bfa] bg-[#7c3aed]/20 px-1.5 py-0.5 rounded uppercase">You</span>
+                      <span className="ml-2 text-[8px] font-bold text-[#2DD4BF] bg-[#0D9488]/20 px-1.5 py-0.5 rounded uppercase">You</span>
                     </div>
-                    <span className="text-[14px] font-bold text-[#a78bfa]">{youRow.score}</span>
+                    <span className="text-[14px] font-bold text-[#2DD4BF]">{youRow.score}</span>
                   </motion.div>
                 )}
 
@@ -453,7 +453,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                         animate={visible ? { opacity: 1, x: 0 } : {}}
                         transition={{ duration: 0.35, delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }}
                         className={`grid grid-cols-[40px_1fr_60px_60px_70px_50px] gap-2 items-center px-4 py-2.5 transition-all duration-200 hover:bg-white/[0.04] lb-row ${
-                          p.isYou ? 'bg-[#7c3aed]/10 border-l-2 border-l-[#a78bfa]' : 'border-l-2 border-l-transparent'
+                          p.isYou ? 'bg-[#0D9488]/10 border-l-2 border-l-[#2DD4BF]' : 'border-l-2 border-l-transparent'
                         } ${i < sorted.length - 1 ? 'border-b border-white/[0.03]' : ''}`}
                       >
                         {/* Rank */}
@@ -466,16 +466,16 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                           <AvatarCircle name={p.name} rank={isTop3 ? i + 1 : 0} size={30} />
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <span className={`text-[13px] font-semibold truncate ${p.isYou ? 'text-[#a78bfa]' : 'text-white/80'}`}
+                              <span className={`text-[13px] font-semibold truncate ${p.isYou ? 'text-[#2DD4BF]' : 'text-white/80'}`}
                                 style={{ fontFamily: "'Poppins', sans-serif" }}
                               >
                                 {p.name}
                               </span>
                               {p.isYou && (
-                                <span className="text-[8px] font-bold text-[#a78bfa] bg-[#7c3aed]/20 px-1.5 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">You</span>
+                                <span className="text-[8px] font-bold text-[#2DD4BF] bg-[#0D9488]/20 px-1.5 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">You</span>
                               )}
                             </div>
-                            <ScoreBar score={p.score} maxScore={maxScore} color={isTop3 ? podiumColors[i].text : 'linear-gradient(90deg, #7c3aed, #a78bfa)'} />
+                            <ScoreBar score={p.score} maxScore={maxScore} color={isTop3 ? podiumColors[i].text : 'linear-gradient(90deg, #0D9488, #2DD4BF)'} />
                           </div>
                         </div>
 
@@ -509,7 +509,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
                   className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2"
                 >
                   {[
-                    { label: 'Avg Score', value: Math.round(sorted.reduce((a, p) => a + p.score, 0) / sorted.length) + '%', color: '#a78bfa' },
+                    { label: 'Avg Score', value: Math.round(sorted.reduce((a, p) => a + p.score, 0) / sorted.length) + '%', color: '#2DD4BF' },
                     { label: 'Top Score', value: sorted[0]?.score + '%', color: '#f59e0b' },
                     { label: 'Participants', value: sorted.length, color: '#60a5fa' },
                     { label: 'Avg Accuracy', value: Math.round(sorted.reduce((a, p) => a + p.accuracy, 0) / sorted.length) + '%', color: '#34d399' },
@@ -530,7 +530,7 @@ export default function PremiumLeaderboardPanel({ quizActive = true, onClear }) 
             }
             .lb-row:hover {
               transform: translateY(-2px);
-              box-shadow: 0 4px 20px rgba(124,58,237,0.1);
+              box-shadow: 0 4px 20px rgba(13,148,136,0.1);
             }
           `}</style>
         </div>

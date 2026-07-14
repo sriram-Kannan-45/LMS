@@ -27,14 +27,33 @@ const AssessmentSession = sequelize.define(
     },
     attemptId: {
       type: DataTypes.BIGINT.UNSIGNED,
-      allowNull: false,
+      allowNull: true,
       unique: true,
       field: 'attempt_id',
+      comment: 'Quiz attempt FK (null for coding)',
+    },
+    codingAttemptId: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      allowNull: true,
+      unique: true,
+      field: 'coding_attempt_id',
+      comment: 'Coding attempt FK (null for quiz)',
     },
     quizId: {
       type: DataTypes.BIGINT.UNSIGNED,
-      allowNull: false,
+      allowNull: true,
       field: 'quiz_id',
+    },
+    assessmentId: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      allowNull: true,
+      field: 'assessment_id',
+    },
+    assessmentType: {
+      type: DataTypes.ENUM('quiz', 'coding'),
+      allowNull: false,
+      defaultValue: 'quiz',
+      field: 'assessment_type',
     },
     participantId: {
       type: DataTypes.BIGINT.UNSIGNED,
@@ -95,6 +114,7 @@ const AssessmentSession = sequelize.define(
     updatedAt: 'updated_at',
     indexes: [
       { fields: ['participant_id', 'quiz_id', 'status'] },
+      { fields: ['participant_id', 'assessment_id', 'status'] },
       { fields: ['session_token'] },
       { fields: ['expires_at'] },
     ],

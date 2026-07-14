@@ -37,6 +37,38 @@ const TrainerProfile = sequelize.define('TrainerProfile', {
     type: DataTypes.STRING,
     allowNull: true,
     field: 'image_path'
+  },
+  coverImagePath: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'cover_image_path'
+  },
+  headline: {
+    type: DataTypes.STRING(200),
+    allowNull: true,
+    comment: 'e.g. Senior Software Engineer | React & Node.js Expert'
+  },
+  about: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  skills: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: [],
+    comment: 'JSON array of skill strings'
+  },
+  certifications: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: [],
+    comment: 'JSON array of certification strings'
+  },
+  socialLinks: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: {},
+    comment: 'JSON object with linkedin, github, website, twitter keys'
   }
 }, {
   tableName: 'trainer_profiles',

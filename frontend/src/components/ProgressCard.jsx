@@ -12,7 +12,7 @@ function ProgressCard({
   const themeClasses = {
     blue: 'from-blue-50 to-blue-100 border-blue-200',
     green: 'from-green-50 to-green-100 border-green-200',
-    purple: 'from-purple-50 to-purple-100 border-purple-200',
+    primary: 'from-primary-50 to-primary-100 border-primary-200',
     orange: 'from-orange-50 to-orange-100 border-orange-200',
     red: 'from-red-50 to-red-100 border-red-200'
   }
@@ -20,7 +20,7 @@ function ProgressCard({
   const textColor = {
     blue: 'text-blue-700',
     green: 'text-green-700',
-    purple: 'text-purple-700',
+    primary: 'text-primary-700',
     orange: 'text-orange-700',
     red: 'text-red-700'
   }

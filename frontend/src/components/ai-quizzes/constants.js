@@ -22,9 +22,9 @@ export const DIFFICULTY = {
   },
   MIXED: {
     label: 'Mixed',
-    dot: 'bg-violet-500',
-    badge: 'bg-violet-500/10 text-violet-700 border-violet-200/80 dark:text-violet-300 dark:border-violet-500/30',
-    bar: 'from-violet-400 to-purple-600',
+    dot: 'bg-primary-500',
+    badge: 'bg-primary-500/10 text-primary-700 border-primary-200/80 dark:text-primary-300 dark:border-primary-500/30',
+    bar: 'from-primary-400 to-primary-600',
     barWidth: '75%',
   },
 }

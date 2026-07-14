@@ -1,3 +1,7 @@
+import { getAuthHeaders } from './request';
+
+export { getAuthHeaders };
+
 /**
  * Centralized API configuration.
  *
@@ -47,7 +51,7 @@ export const API = {
     TRAININGS:       `${API_BASE}/admin/trainings`,
     TRAINERS:        `${API_BASE}/admin/trainers`,
     PARTICIPANTS:    `${API_BASE}/admin/participants`,
-    DELETE_TRAINING: `${API_BASE}/admin/delete-training`,
+    DELETE_TRAINING: (id) => `${API_BASE}/admin/trainings/${id}`,
     NOTES:           `${API_BASE}/notes/admin/notes`
   },
 
@@ -73,13 +77,8 @@ export const API = {
   AI_HEALTH: `${API_BASE}/ai/health`,
 
   AI_QUIZ: {
-    TRAINER_UPLOAD:     `${API_BASE}/ai-quiz/trainer/upload-document`,
-    TRAINER_QUIZZES:    `${API_BASE}/ai-quiz/trainer/quizzes`,
-    TRAINER_UPDATE_QUIZ:(id) => `${API_BASE}/ai-quiz/trainer/quiz/${id}`,
-    PARTICIPANT_QUIZZES:`${API_BASE}/ai-quiz/participant/quizzes`,
-    START:              (quizId)   => `${API_BASE}/ai-quiz/participant/start/${quizId}`,
-    SUBMIT:             (attemptId)=> `${API_BASE}/ai-quiz/participant/submit/${attemptId}`,
-    LEADERBOARD:        (quizId)   => `${API_BASE}/ai-quiz/leaderboard/${quizId}`
+    GENERATE_FROM_PROMPT:   `${API_BASE}/ai-quiz/generate-from-prompt`,
+    GENERATE_FROM_DOCUMENT: `${API_BASE}/ai-quiz/generate-from-document`,
   },
 
   /** Lesson workflow: lessons + quiz/assessment gating, results & dashboards */
@@ -102,7 +101,8 @@ export const API = {
     COMPLETE_QUIZ:      (lessonQuizId) => `${API_BASE}/lessons/quizzes/${lessonQuizId}/complete`,
     SUBMIT_ASSESSMENT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/submit`,
     QUIZ_RESULT:        (lessonQuizId) => `${API_BASE}/lessons/quizzes/${lessonQuizId}/result`,
-    ASSESSMENT_RESULT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/result`
+    ASSESSMENT_RESULT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/result`,
+
   },
 
   /**
@@ -131,11 +131,22 @@ export const API = {
     REORDER_MATERIALS:(lessonId)       => `${API_BASE}/trainer/lessons/${lessonId}/materials/reorder`,
 
     QUIZ_MANUAL:   (courseId)          => `${API_BASE}/trainer/courses/${courseId}/quiz/manual`,
-    GENERATE_FROM_PROMPT:              `${API_BASE}/trainer/quiz/generate-from-prompt`,
     QUIZZES:       (courseId)          => `${API_BASE}/trainer/courses/${courseId}/quizzes`,
     QUIZ:          (courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}`,
+    SEND_QUIZ:     (quizId)            => `${API_BASE}/quizzes/${quizId}/send`,
     PUBLISH_QUIZ:  (courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}/publish`,
     QUIZ_DASHBOARD:(courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}/dashboard`,
+    QUIZ_LEADERBOARD:(quizId)          => `${API_BASE}/ai-quiz/leaderboard/${quizId}`,
+    QUIZ_RESULTS:    (quizId)          => `${API_BASE}/quizzes/${quizId}/results`,
+    PUBLISH_RESULT:  (quizId, pId)     => `${API_BASE}/quizzes/${quizId}/publish-participant/${pId}`,
+    PUBLISH_ALL_RESULTS: (quizId)      => `${API_BASE}/quizzes/${quizId}/publish-result`,
+    QUIZ_DETAIL:         (quizId)      => `${API_BASE}/quizzes/${quizId}`,
+    QUIZ_QUESTIONS:      (quizId)      => `${API_BASE}/quizzes/${quizId}/questions`,
+    QUIZ_QUESTION:       (qId)         => `${API_BASE}/questions/${qId}`,
+    QUIZ_REORDER:        (quizId)      => `${API_BASE}/quizzes/${quizId}/questions/reorder`,
+    QUIZ_PARTICIPANTS:   (quizId)      => `${API_BASE}/quizzes/${quizId}/participants`,
+    PUBLISH_QUIZ_NOW:    (quizId)      => `${API_BASE}/quizzes/${quizId}/publish`,
+    RESULTS_SUMMARY:     (quizId)      => `${API_BASE}/quizzes/${quizId}/results-summary`,
 
     PARTICIPANTS:  (courseId)          => `${API_BASE}/trainer/courses/${courseId}/participants`,
     PARTICIPANT:   (courseId, userId)  => `${API_BASE}/trainer/courses/${courseId}/participants/${userId}`,
@@ -170,27 +181,61 @@ export const API = {
 
     ASSESSMENT_SUBMIT: (assessmentId) => `${API_BASE}/participant/assessments/${assessmentId}/submit`,
     ASSESSMENT_RESULT: (assessmentId) => `${API_BASE}/participant/assessments/${assessmentId}/result`,
+    CODING_ASSESSMENTS: (courseId) => `${API_BASE}/participant/courses/${courseId}/coding-assessments`,
+  },
+
+  /** Coding Assessment module */
+  CODING: {
+    // Trainer
+    LIST:                  `${API_BASE}/coding/assessments`,
+    DETAIL:        (id) => `${API_BASE}/coding/assessments/${id}`,
+    CREATE:                `${API_BASE}/coding/assessments`,
+    UPDATE:        (id) => `${API_BASE}/coding/assessments/${id}`,
+    DELETE:        (id) => `${API_BASE}/coding/assessments/${id}`,
+    CREATE_PROBLEM:(id) => `${API_BASE}/coding/assessments/${id}/problems`,
+    UPDATE_PROBLEM:(id) => `${API_BASE}/coding/problems/${id}`,
+    DELETE_PROBLEM:(id) => `${API_BASE}/coding/problems/${id}`,
+    GENERATE:              `${API_BASE}/coding/generate-from-prompt`,
+    PUBLISH:       (id) => `${API_BASE}/coding/assessments/${id}/publish`,
+    CLOSE:         (id) => `${API_BASE}/coding/assessments/${id}/close`,
+    PUBLISH_RESULT:(id) => `${API_BASE}/coding/assessments/${id}/publish-result`,
+    HIDE_RESULT:   (id) => `${API_BASE}/coding/assessments/${id}/hide-result`,
+    RESULTS:       (id) => `${API_BASE}/coding/assessments/${id}/results`,
+    PARTICIPANTS:  (id) => `${API_BASE}/coding/assessments/${id}/participants`,
+    RESULTS_SUMMARY:(id) => `${API_BASE}/coding/assessments/${id}/results-summary`,
+    ANALYTICS:     (id) => `${API_BASE}/coding/assessments/${id}/analytics`,
+    LEADERBOARD:   (id) => `${API_BASE}/coding/assessments/${id}/leaderboard`,
+    RECORDINGS:    (id) => `${API_BASE}/coding/assessments/${id}/recordings`,
+    // Participant
+    START:         (id) => `${API_BASE}/coding/participant/start/${id}`,
+    RUN:                  `${API_BASE}/coding/participant/run`,
+    SUBMIT_CODE:          `${API_BASE}/coding/participant/submit-code`,
+    SUBMISSION:    (id) => `${API_BASE}/coding/participant/submission/${id}`,
+    SUBMIT:        (id) => `${API_BASE}/coding/participant/submit/${id}`,
+    PARTICIPANT_RESULT: (id) => `${API_BASE}/coding/participant/assessments/${id}/result`,
   },
 
   /** Coding Assessment module (Judge0 sandbox + AI gen/review + plagiarism) */
-  CODING: {
-    // Trainer
-    ASSESSMENTS:          `${API_BASE}/coding/assessments`,
-    ASSESSMENT:     (id) => `${API_BASE}/coding/assessments/${id}`,
-    QUESTIONS:      (id) => `${API_BASE}/coding/assessments/${id}/questions`,
-    GENERATE_Q:     (id) => `${API_BASE}/coding/assessments/${id}/generate-question`,
-    PLAGIARISM_CHECK:   (id) => `${API_BASE}/coding/assessments/${id}/plagiarism-check`,
-    PLAGIARISM_REPORTS: (id) => `${API_BASE}/coding/assessments/${id}/plagiarism-reports`,
-    RESULTS:        (id) => `${API_BASE}/coding/assessments/${id}/results`,
-    // Participant
-    P_ASSESSMENTS:        `${API_BASE}/coding/participant/assessments`,
-    P_ASSESSMENT:   (id) => `${API_BASE}/coding/participant/assessments/${id}`,
-    START:          (id) => `${API_BASE}/coding/participant/assessments/${id}/start`,
-    RUN:     (attemptId) => `${API_BASE}/coding/participant/attempts/${attemptId}/run`,
-    SUBMIT:  (attemptId) => `${API_BASE}/coding/participant/attempts/${attemptId}/submit`,
-    REVIEW:      (subId) => `${API_BASE}/coding/participant/submissions/${subId}/review`,
-    VIOLATION:(attemptId)=> `${API_BASE}/coding/participant/attempts/${attemptId}/violation`,
-  }
+  RECORDINGS: {
+    LIST:        `${API_BASE}/recordings`,
+    DETAIL:      (id) => `${API_BASE}/recordings/${id}`,
+    STREAM:      (id) => `${API_BASE}/recordings/${id}/stream`,
+    UPLOAD:      `${API_BASE}/recordings/upload`,
+    DELETE:      (id) => `${API_BASE}/recordings/${id}`,
+  },
+
+  PROFILE: {
+    GET:                  `${API_BASE}/profile/trainer/profile`,
+    UPDATE:               `${API_BASE}/profile/trainer/profile`,
+    PUBLIC:      (userId)=> `${API_BASE}/profile/public/${userId}`,
+    ADD_EXPERIENCE:       `${API_BASE}/profile/trainer/experience`,
+    UPDATE_EXPERIENCE:(id)=> `${API_BASE}/profile/trainer/experience/${id}`,
+    DELETE_EXPERIENCE:(id)=> `${API_BASE}/profile/trainer/experience/${id}`,
+    ADD_EDUCATION:        `${API_BASE}/profile/trainer/education`,
+    UPDATE_EDUCATION:(id) => `${API_BASE}/profile/trainer/education/${id}`,
+    DELETE_EDUCATION:(id) => `${API_BASE}/profile/trainer/education/${id}`,
+  },
+
 };
 
 export { API_BASE, BACKEND_ORIGIN };

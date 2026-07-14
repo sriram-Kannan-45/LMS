@@ -1,11 +1,22 @@
-import React, { createContext, useState, useContext, useCallback } from 'react'
+import React, { createContext, useState, useContext, useCallback, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useLocation } from 'react-router-dom'
 import { Check, AlertCircle, Info, X, AlertTriangle } from 'lucide-react'
 
 const ToastContext = createContext()
 
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([])
+  const location = useLocation()
+  const prevPath = useRef(location.pathname)
+
+  // Clear toasts on route change so stale messages don't persist across pages
+  useEffect(() => {
+    if (prevPath.current !== location.pathname) {
+      setToasts([])
+      prevPath.current = location.pathname
+    }
+  }, [location.pathname])
 
   const addToast = useCallback((message, options = {}) => {
     const id = Date.now()

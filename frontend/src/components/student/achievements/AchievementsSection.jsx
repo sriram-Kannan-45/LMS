@@ -35,7 +35,7 @@ export default function AchievementsSection({ user, enrollmentsCount = 0 }) {
           width: 44, height: 44, borderRadius: 12,
           background: 'var(--academic-gradient-accent)', color: '#fff',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 8px 18px rgba(139,92,246,0.28)',
+          boxShadow: '0 8px 18px rgba(20,184,166,0.28)',
         }}>
           <Trophy size={20} />
         </div>

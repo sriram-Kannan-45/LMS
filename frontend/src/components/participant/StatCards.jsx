@@ -11,9 +11,9 @@ const statConfig = [
     label: 'Quiz Score',
     format: (v) => v !== null && v !== undefined ? `${v.toFixed(1)}%` : '—',
     icon: Brain,
-    color: '#6366f1',
-    hoverBg: 'bg-indigo-50',
-    hoverBorder: 'border-indigo-300',
+    color: '#14B8A6',
+    hoverBg: 'bg-primary-50',
+    hoverBorder: 'border-primary-300',
   },
   {
     key: 'aiQuizScore',

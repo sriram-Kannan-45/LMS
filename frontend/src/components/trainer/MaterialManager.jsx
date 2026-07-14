@@ -13,10 +13,8 @@ import {
 } from 'lucide-react'
 import { API, assetUrl } from '../../api/api'
 import { useToast } from '../Toast'
+import { colors, btnPrimary, btnSecondary, iconBtn, TYPE_BADGE, lblStyle, inputStyle, typography } from '../../theme/tokens'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Material type metadata
-// ─────────────────────────────────────────────────────────────────────────────
 const TYPES = [
   { key: 'NOTE',  label: 'Note',  icon: <FilePenLine size={16} />,  hint: 'Rich-text notes (paragraphs, headings, lists, links, images)' },
   { key: 'PDF',   label: 'PDF',   icon: <FileText size={16} />,     hint: 'Upload a PDF document (max 50 MB)' },
@@ -38,20 +36,6 @@ const TYPE_ACCEPT = {
 
 const TYPE_LIMIT_MB = { PDF: 50, PPT: 100, VIDEO: 500, IMAGE: 10, ATTACHMENT: 100 }
 
-const TYPE_BADGE = {
-  NOTE:  { bg: '#eef2ff', fg: '#4f46e5' },
-  PDF:   { bg: '#fee2e2', fg: '#dc2626' },
-  PPT:   { bg: '#fef3c7', fg: '#92400e' },
-  VIDEO: { bg: '#dbeafe', fg: '#1d4ed8' },
-  IMAGE: { bg: '#dcfce7', fg: '#15803d' },
-  LINK:  { bg: '#f3e8ff', fg: '#7e22ce' },
-  ATTACHMENT: { bg: '#e2e8f0', fg: '#475569' },
-  LIVE_SESSION: { bg: '#fae8ff', fg: '#c084fc' },
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// XHR upload helper with progress
-// ─────────────────────────────────────────────────────────────────────────────
 function uploadWithProgress({ url, formData, token, onProgress }) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
@@ -73,9 +57,6 @@ function uploadWithProgress({ url, formData, token, onProgress }) {
   })
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TipTap rich-text editor
-// ─────────────────────────────────────────────────────────────────────────────
 function NoteEditor({ value, onChange }) {
   const editor = useEditor({
     extensions: [
@@ -102,8 +83,8 @@ function NoteEditor({ value, onChange }) {
       style={{
         width: 30, height: 30, border: 'none', cursor: 'pointer',
         borderRadius: 6, fontSize: 12,
-        background: active ? '#4f46e5' : 'transparent',
-        color: active ? '#fff' : '#475569',
+        background: active ? colors.primary[600] : 'transparent',
+        color: active ? colors.surface.primary : colors.slate[600],
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       }}
     >
@@ -128,10 +109,10 @@ function NoteEditor({ value, onChange }) {
   }
 
   return (
-    <div style={{ border: '1px solid #cbd5e1', borderRadius: 8, overflow: 'hidden' }}>
+    <div style={{ border: `1px solid ${colors.slate[300]}`, borderRadius: 8, overflow: 'hidden' }}>
       <div style={{
         display: 'flex', flexWrap: 'wrap', gap: 4, padding: 8,
-        background: '#f8fafc', borderBottom: '1px solid #e2e8f0',
+        background: colors.surface.secondary, borderBottom: `1px solid ${colors.border.default}`,
       }}>
         <ToolbarBtn onClick={() => editor.chain().focus().toggleBold().run()}     active={editor.isActive('bold')}      title="Bold">
           <Bold size={14} />
@@ -142,7 +123,7 @@ function NoteEditor({ value, onChange }) {
         <ToolbarBtn onClick={() => editor.chain().focus().toggleStrike().run()}   active={editor.isActive('strike')}    title="Strikethrough">
           <span style={{ textDecoration: 'line-through', fontWeight: 700 }}>S</span>
         </ToolbarBtn>
-        <div style={{ width: 1, background: '#e2e8f0', margin: '0 4px' }} />
+        <div style={{ width: 1, background: colors.border.default, margin: '0 4px' }} />
         <ToolbarBtn onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive('heading', { level: 1 })} title="H1">
           <Heading1 size={14} />
         </ToolbarBtn>
@@ -152,7 +133,7 @@ function NoteEditor({ value, onChange }) {
         <ToolbarBtn onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive('heading', { level: 3 })} title="H3">
           <Heading3 size={14} />
         </ToolbarBtn>
-        <div style={{ width: 1, background: '#e2e8f0', margin: '0 4px' }} />
+        <div style={{ width: 1, background: colors.border.default, margin: '0 4px' }} />
         <ToolbarBtn onClick={() => editor.chain().focus().toggleBulletList().run()}  active={editor.isActive('bulletList')}  title="Bullet list">
           <List size={14} />
         </ToolbarBtn>
@@ -162,7 +143,7 @@ function NoteEditor({ value, onChange }) {
         <ToolbarBtn onClick={() => editor.chain().focus().toggleCodeBlock().run()}   active={editor.isActive('codeBlock')}   title="Code block">
           <Code size={14} />
         </ToolbarBtn>
-        <div style={{ width: 1, background: '#e2e8f0', margin: '0 4px' }} />
+        <div style={{ width: 1, background: colors.border.default, margin: '0 4px' }} />
         <ToolbarBtn onClick={setLink}      active={editor.isActive('link')}  title="Add/edit link">
           <LinkIcon size={14} />
         </ToolbarBtn>
@@ -170,16 +151,13 @@ function NoteEditor({ value, onChange }) {
           <ImageIcon size={14} />
         </ToolbarBtn>
       </div>
-      <div style={{ background: '#fff', padding: 12, minHeight: 200, maxHeight: 360, overflow: 'auto' }}>
+      <div style={{ background: colors.surface.primary, padding: 12, minHeight: 200, maxHeight: 360, overflow: 'auto' }}>
         <EditorContent editor={editor} />
       </div>
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Drag-and-drop file zone
-// ─────────────────────────────────────────────────────────────────────────────
 function DropZone({ accept, onFile, file, hint, limitMb }) {
   const inputRef = useRef(null)
   const [over, setOver] = useState(false)
@@ -218,43 +196,43 @@ function DropZone({ accept, onFile, file, hint, limitMb }) {
           onDragLeave={() => setOver(false)}
           onDrop={handleDrop}
           style={{
-            border: `2px dashed ${over ? '#4f46e5' : '#cbd5e1'}`,
+            border: `2px dashed ${over ? colors.primary[600] : colors.slate[300]}`,
             borderRadius: 12, padding: 28, textAlign: 'center',
-            background: over ? '#eef2ff' : '#f8fafc',
+            background: over ? '#eef2ff' : colors.surface.secondary,
             cursor: 'pointer', transition: 'all 0.15s',
           }}
         >
-          <Upload size={36} color={over ? '#4f46e5' : '#94a3b8'} style={{ marginBottom: 8 }} />
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginBottom: 4 }}>
+          <Upload size={36} color={over ? colors.primary[600] : colors.slate[400]} style={{ marginBottom: 8 }} />
+          <div style={{ fontSize: 14, fontWeight: 600, color: colors.text.primary, marginBottom: 4 }}>
             Drop a file or click to browse
           </div>
-          <div style={{ fontSize: 12, color: '#64748b' }}>{hint || `Max ${limitMb} MB`}</div>
+          <div style={{ fontSize: 12, color: colors.slate[500] }}>{hint || `Max ${limitMb} MB`}</div>
         </div>
       ) : (
         <div style={{
-          border: '1px solid #e2e8f0', borderRadius: 10, padding: 12,
-          display: 'flex', alignItems: 'center', gap: 12, background: '#f8fafc',
+          border: `1px solid ${colors.border.default}`, borderRadius: 10, padding: 12,
+          display: 'flex', alignItems: 'center', gap: 12, background: colors.surface.secondary,
         }}>
           <div style={{
             width: 40, height: 40, borderRadius: 8,
-            background: '#eef2ff', color: '#4f46e5',
+            background: '#eef2ff', color: colors.primary[600],
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             <FileText size={20} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a',
+            <div style={{ fontSize: 13, fontWeight: 600, color: colors.text.primary,
                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {file.name}
             </div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>{fmtSize(file.size)}</div>
+            <div style={{ fontSize: 11, color: colors.slate[500] }}>{fmtSize(file.size)}</div>
           </div>
           <button
             type="button"
             onClick={() => onFile(null)}
             style={{
               border: 'none', background: 'transparent', cursor: 'pointer',
-              color: '#dc2626', padding: 6, borderRadius: 6,
+              color: colors.danger[600], padding: 6, borderRadius: 6,
             }}
             title="Remove"
           >
@@ -266,9 +244,6 @@ function DropZone({ accept, onFile, file, hint, limitMb }) {
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MaterialManager (slide-over panel)
-// ─────────────────────────────────────────────────────────────────────────────
 export default function MaterialManager({ user, lessonId, lessonTitle, open, onClose, onSaved }) {
   const { success, error: showError, info } = useToast()
   const [type, setType] = useState('NOTE')
@@ -276,19 +251,17 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
   const [loading, setLoading] = useState(false)
   const [editingId, setEditingId] = useState(null)
 
-  // form state for current type
   const [title, setTitle] = useState('')
   const [noteContent, setNoteContent] = useState('')
   const [linkUrl, setLinkUrl] = useState('')
   const [linkDesc, setLinkDesc] = useState('')
   const [file, setFile] = useState(null)
   const [videoExternalUrl, setVideoExternalUrl] = useState('')
-  const [progress, setProgress] = useState(null) // 0–100 or null
+  const [progress, setProgress] = useState(null)
   const [saving, setSaving] = useState(false)
 
   const auth = () => ({ Authorization: `Bearer ${user.token}` })
 
-  // ── Load materials when opened ────────────────────────────────────────────
   const fetchMaterials = async () => {
     if (!lessonId) return
     try {
@@ -302,22 +275,18 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
   }
   useEffect(() => { if (open) fetchMaterials() }, [open, lessonId])
 
-  // ── Reset form when switching type ────────────────────────────────────────
   const resetForm = () => {
     setTitle(''); setNoteContent(''); setLinkUrl(''); setLinkDesc('')
     setFile(null); setVideoExternalUrl(''); setProgress(null); setEditingId(null)
   }
   const switchType = (t) => { setType(t); resetForm() }
 
-  // ── Save (create or update) ───────────────────────────────────────────────
   const save = async () => {
     if (!title.trim()) { showError('Title is required'); return }
 
     const isEdit = !!editingId
 
     if (isEdit) {
-      // PUT — only metadata fields are editable here. Replacing the file
-      // would require a separate flow.
       try {
         setSaving(true)
         const r = await fetch(API.TRAINER_COURSES.MATERIAL(lessonId, editingId), {
@@ -343,7 +312,6 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
     try {
       setSaving(true); setProgress(null)
 
-      // NOTE / LINK / external-video → JSON POST (no upload)
       if (type === 'NOTE' || type === 'LINK' || type === 'LIVE_SESSION' || (type === 'VIDEO' && !file && videoExternalUrl)) {
         const body = {
           materialType: type,
@@ -360,7 +328,6 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
         if (!r.ok || d.success === false) { showError(d.error || 'Save failed'); return }
         success('Material saved')
       } else {
-        // FILE upload — multipart with progress
         if (!file) { showError('Please select a file'); return }
         const fd = new FormData()
         fd.append('materialType', type)
@@ -387,7 +354,6 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
     }
   }
 
-  // ── Edit / delete actions ────────────────────────────────────────────────
   const beginEdit = (m) => {
     setType(m.materialType)
     setEditingId(m.id)
@@ -412,17 +378,12 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
     } catch (e) { showError(e.message) }
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────
   if (!open) return null
 
   const TypeBadge = ({ value }) => {
     const v = TYPE_BADGE[value] || TYPE_BADGE.NOTE
     return (
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
-        borderRadius: 999, fontSize: 10, fontWeight: 700,
-        background: v.bg, color: v.fg, letterSpacing: 0.4,
-      }}>
+      <span style={{ ...v, padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: 0.4 }}>
         {value}
       </span>
     )
@@ -444,20 +405,20 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
             initial={{ x: 600 }} animate={{ x: 0 }} exit={{ x: 600 }}
             transition={{ type: 'spring', damping: 32, stiffness: 280 }}
             style={{
-              width: '100%', maxWidth: 600, background: '#fff', height: '100vh',
+              width: '100%', maxWidth: 600, background: colors.surface.primary, height: '100vh',
               display: 'flex', flexDirection: 'column', boxShadow: '-25px 0 50px -10px rgba(0,0,0,0.25)',
             }}
           >
             {/* Header */}
             <div style={{
-              padding: 16, borderBottom: '1px solid #e2e8f0',
+              padding: 16, borderBottom: `1px solid ${colors.border.default}`,
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', letterSpacing: 1, textTransform: 'uppercase' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: colors.slate[400], letterSpacing: 1, textTransform: 'uppercase' }}>
                   Manage Materials
                 </div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: colors.text.primary }}>
                   {lessonTitle || 'Lesson'}
                 </div>
               </div>
@@ -465,7 +426,7 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
                 onClick={onClose}
                 disabled={saving}
                 style={{
-                  border: 'none', background: '#f1f5f9', color: '#475569',
+                  border: 'none', background: colors.slate[100], color: colors.slate[600],
                   padding: 8, borderRadius: 8, cursor: saving ? 'wait' : 'pointer',
                 }}
               >
@@ -475,7 +436,7 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
 
             {/* Type tabs */}
             <div style={{
-              padding: '12px 16px', borderBottom: '1px solid #e2e8f0',
+              padding: '12px 16px', borderBottom: `1px solid ${colors.border.default}`,
               display: 'flex', gap: 6, overflowX: 'auto',
             }}>
               {TYPES.map(t => (
@@ -486,8 +447,8 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                     padding: '7px 12px', border: 'none', cursor: 'pointer',
                     borderRadius: 8, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
-                    background: type === t.key ? '#4f46e5' : '#f1f5f9',
-                    color: type === t.key ? '#fff' : '#475569',
+                    background: type === t.key ? colors.primary[600] : colors.slate[100],
+                    color: type === t.key ? colors.surface.primary : colors.slate[600],
                   }}
                 >
                   {t.icon} {t.label}
@@ -498,13 +459,13 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
             {/* Form scroll area */}
             <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
               <div style={{
-                fontSize: 12, color: '#64748b', marginBottom: 12,
-                background: '#f8fafc', padding: '8px 12px', borderRadius: 8,
+                fontSize: 12, color: colors.slate[500], marginBottom: 12,
+                background: colors.surface.secondary, padding: '8px 12px', borderRadius: 8,
               }}>
                 {TYPES.find(t => t.key === type)?.hint}
               </div>
 
-              <label style={lblStyle}>Title <span style={{ color: '#dc2626' }}>*</span></label>
+              <label style={lblStyle}>Title <span style={{ color: colors.danger[600] }}>*</span></label>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -557,11 +518,11 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
                   />
                   <div style={{
                     margin: '14px 0', display: 'flex', alignItems: 'center', gap: 12,
-                    color: '#94a3b8', fontSize: 11,
+                    color: colors.slate[400], fontSize: 11,
                   }}>
-                    <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+                    <div style={{ flex: 1, height: 1, background: colors.border.default }} />
                     <span>OR</span>
-                    <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+                    <div style={{ flex: 1, height: 1, background: colors.border.default }} />
                   </div>
                   <label style={lblStyle}>External URL (YouTube, Vimeo, etc.)</label>
                   <input
@@ -583,7 +544,7 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
                     hint={`JPG / PNG / GIF / WEBP · max ${TYPE_LIMIT_MB.IMAGE} MB`}
                     limitMb={TYPE_LIMIT_MB.IMAGE}
                   />
-                  <div style={{ marginTop: 8, fontSize: 11, color: '#94a3b8' }}>
+                  <div style={{ marginTop: 8, fontSize: 11, color: colors.slate[400] }}>
                     For multiple images, save one then upload the next — each becomes its own material.
                   </div>
                 </>
@@ -604,7 +565,7 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
 
               {type === 'LIVE_SESSION' && (
                 <>
-                  <label style={lblStyle}>Live Session URL (Zoom/Meet/Teams) <span style={{ color: '#dc2626' }}>*</span></label>
+                  <label style={lblStyle}>Live Session URL (Zoom/Meet/Teams) <span style={{ color: colors.danger[600] }}>*</span></label>
                   <input
                     type="url"
                     value={linkUrl}
@@ -625,7 +586,7 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
 
               {type === 'LINK' && (
                 <>
-                  <label style={lblStyle}>URL <span style={{ color: '#dc2626' }}>*</span></label>
+                  <label style={lblStyle}>URL <span style={{ color: colors.danger[600] }}>*</span></label>
                   <input
                     type="url"
                     value={linkUrl}
@@ -646,26 +607,25 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
 
               {progress != null && (
                 <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+                  <div style={{ fontSize: 11, color: colors.slate[500], marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
                     <span>Uploading…</span><span>{progress}%</span>
                   </div>
-                  <div style={{ height: 8, background: '#e2e8f0', borderRadius: 999, overflow: 'hidden' }}>
-                    <div style={{ width: `${progress}%`, height: '100%', background: '#4f46e5', transition: 'width 0.15s' }} />
+                  <div style={{ height: 8, background: colors.border.default, borderRadius: 999, overflow: 'hidden' }}>
+                    <div style={{ width: `${progress}%`, height: '100%', background: colors.primary[600], transition: 'width 0.15s' }} />
                   </div>
                 </div>
               )}
 
-              {/* Existing materials list */}
               <div style={{ marginTop: 28 }}>
-                <h4 style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: '0 0 10px',
+                <h4 style={{ fontSize: 13, fontWeight: 700, color: colors.text.primary, margin: '0 0 10px',
                               textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   Existing materials ({materials.length})
                 </h4>
                 {loading ? (
-                  <div style={{ height: 60, background: '#f1f5f9', borderRadius: 8 }} />
+                  <div style={{ height: 60, background: colors.slate[100], borderRadius: 8 }} />
                 ) : materials.length === 0 ? (
-                  <div style={{ fontSize: 12, color: '#94a3b8', padding: 12,
-                                border: '1px dashed #e2e8f0', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: 12, color: colors.slate[400], padding: 12,
+                                border: `1px dashed ${colors.border.default}`, borderRadius: 8, textAlign: 'center' }}>
                     No materials yet — fill the form above and click Save.
                   </div>
                 ) : (
@@ -673,12 +633,12 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
                     {materials.map(m => (
                       <div key={m.id} style={{
                         display: 'flex', alignItems: 'center', gap: 10,
-                        padding: 10, border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff',
+                        padding: 10, border: `1px solid ${colors.border.default}`, borderRadius: 8, background: colors.surface.primary,
                       }}>
-                        <GripVertical size={14} color="#cbd5e1" />
+                        <GripVertical size={14} color={colors.slate[300]} />
                         <TypeBadge value={m.materialType} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a',
+                          <div style={{ fontSize: 13, fontWeight: 600, color: colors.text.primary,
                                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {m.title}
                           </div>
@@ -686,7 +646,7 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
                             <a
                               href={m.fileUrl ? assetUrl(m.fileUrl) : m.linkUrl}
                               target="_blank" rel="noreferrer"
-                              style={{ fontSize: 11, color: '#4f46e5', textDecoration: 'none',
+                              style={{ fontSize: 11, color: colors.primary[600], textDecoration: 'none',
                                        display: 'inline-flex', alignItems: 'center', gap: 3 }}
                             >
                               <ExternalLink size={11} />
@@ -694,10 +654,10 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
                             </a>
                           )}
                         </div>
-                        <button onClick={() => beginEdit(m)} title="Edit" style={iconBtn('#eef2ff', '#4f46e5')}>
+                        <button onClick={() => beginEdit(m)} title="Edit" style={iconBtn('#eef2ff', colors.primary[600])}>
                           <Pencil size={12} />
                         </button>
-                        <button onClick={() => removeMat(m)} title="Delete" style={iconBtn('#fee2e2', '#dc2626')}>
+                        <button onClick={() => removeMat(m)} title="Delete" style={iconBtn('#fee2e2', colors.danger[600])}>
                           <Trash2 size={12} />
                         </button>
                       </div>
@@ -709,9 +669,9 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
 
             {/* Footer */}
             <div style={{
-              padding: 16, borderTop: '1px solid #e2e8f0',
+              padding: 16, borderTop: `1px solid ${colors.border.default}`,
               display: 'flex', gap: 10, justifyContent: 'flex-end',
-              background: '#fafbfc',
+              background: colors.surface.secondary,
             }}>
               {editingId && (
                 <button type="button" onClick={resetForm} disabled={saving} style={btnSecondary}>
@@ -732,27 +692,3 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
     </AnimatePresence>
   )
 }
-
-// ── shared style helpers ────────────────────────────────────────────────────
-const lblStyle = {
-  display: 'block', fontSize: 11, fontWeight: 700, color: '#475569',
-  marginTop: 14, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5,
-}
-const inputStyle = {
-  width: '100%', padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: 8,
-  fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
-}
-const btnPrimary = {
-  display: 'inline-flex', alignItems: 'center',
-  padding: '10px 18px', background: '#4f46e5', color: '#fff', border: 'none',
-  borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-  opacity: 1,
-}
-const btnSecondary = {
-  padding: '10px 18px', background: '#fff', color: '#475569', border: '1px solid #cbd5e1',
-  borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-}
-const iconBtn = (bg, fg) => ({
-  width: 28, height: 28, border: 'none', cursor: 'pointer', borderRadius: 6,
-  background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-})

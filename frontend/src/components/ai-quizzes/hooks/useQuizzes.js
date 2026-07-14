@@ -31,6 +31,7 @@ function enrichQuiz(quiz) {
 
 export function useQuizzes() {
   const [quizzes, setQuizzes] = useState([]);
+  const [completedQuizzes, setCompletedQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [startingId, setStartingId] = useState(null);
@@ -45,9 +46,11 @@ export function useQuizzes() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load quizzes');
       setQuizzes((data.quizzes || []).map(enrichQuiz));
+      setCompletedQuizzes((data.completedQuizzes || []).map(enrichQuiz));
     } catch (err) {
       setError(err.message || 'Failed to load quizzes. Please check your connection.');
       setQuizzes([]);
+      setCompletedQuizzes([]);
     } finally {
       setLoading(false);
     }
@@ -111,7 +114,11 @@ export function useQuizzes() {
 
         return {
           attemptId: data.attemptId,
-          quiz: data.quiz,
+          quiz: {
+            ...data.quiz,
+            initialViolationCount: data.violationCount || 0,
+            initialStatus: data.quiz?.status === 'disqualified_copy_violation' ? 'disqualified_copy_violation' : 'IN_PROGRESS'
+          },
           sessionToken: data.sessionToken || null,
         };
       } catch (err) {
@@ -131,6 +138,7 @@ export function useQuizzes() {
 
   return {
     quizzes,
+    completedQuizzes,
     loading,
     error,
     startingId,

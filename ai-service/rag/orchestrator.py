@@ -1,7 +1,8 @@
 import hashlib
+import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from .chunking import TokenChunker
 from .cleaning import TextCleaner
@@ -11,6 +12,8 @@ from .extraction import TextExtractor
 from .generation import RAGQuizGenerationService
 from .schemas import QuizOutput, normalize_question_type
 from .vector_store import FaissVectorStore
+
+log = logging.getLogger("ai-quiz.orchestrator")
 
 
 @dataclass
@@ -37,14 +40,95 @@ class RAGQuizGenerator:
         self.vector_store = FaissVectorStore(self.config)
         self.generator = RAGQuizGenerationService(self.config)
 
+    def _split_for_summarization(self, text: str, chunk_size: int = 50000) -> List[str]:
+        chunks = []
+        start = 0
+        while start < len(text):
+            end = start + chunk_size
+            if end >= len(text):
+                chunks.append(text[start:])
+                break
+            # Find a near word boundary or newline
+            boundary = text.rfind("\n", start + chunk_size - 1000, end)
+            if boundary == -1:
+                boundary = text.rfind(" ", start + chunk_size - 500, end)
+            if boundary == -1 or boundary <= start:
+                boundary = end
+            chunks.append(text[start:boundary])
+            start = boundary
+        return chunks
+
     def generate(self, request: RAGQuizRequest) -> Dict[str, Any]:
         self._validate_request(request)
         self.config.require_gemini_key()
         raw_text, source_title = self._load_text(request)
+        
+        # Validate extracted text
+        if raw_text is None or not isinstance(raw_text, str) or not raw_text.strip() or len(raw_text.strip()) < 50:
+            raise ValueError("Document contains insufficient text.")
+            
         clean_text = self.cleaner.clean(raw_text)
-        if len(clean_text) < self.config.min_text_chars:
-            raise ValueError("Learning material contains insufficient extractable text for quiz generation.")
+        if clean_text is None or not clean_text.strip() or len(clean_text.strip()) < 50:
+            raise ValueError("Document contains insufficient text.")
 
+        file_size = "N/A"
+        if request.file_path:
+            try:
+                file_size = f"{Path(request.file_path).stat().st_size} bytes"
+            except Exception:
+                pass
+
+        # If extracted text exceeds Gemini context limit:
+        # - Split into chunks
+        # - Summarize each chunk
+        # - Merge summaries
+        # - Generate quiz from merged summary
+        if len(clean_text) > self.config.gemini_context_limit_chars:
+            log.info(f"Clean text length ({len(clean_text)}) exceeds Gemini context limit ({self.config.gemini_context_limit_chars}). Summarizing...")
+            chunks_to_summarize = self._split_for_summarization(clean_text)
+            
+            summaries = []
+            for i, chunk_text in enumerate(chunks_to_summarize):
+                log.info(f"Summarizing chunk {i+1}/{len(chunks_to_summarize)} for large document...")
+                summary = self.generator._summarize_chunk(
+                    chunk=chunk_text,
+                    doc_name=source_title,
+                    file_size=file_size,
+                    extracted_text_len=len(clean_text),
+                    first_500_chars=clean_text[:500]
+                )
+                summaries.append(summary)
+            
+            merged_summary = "\n\n".join(summaries)
+            log.info(f"Merged summaries length: {len(merged_summary)}")
+
+            quiz: QuizOutput = self.generator.generate(
+                context_text=merged_summary,
+                source_title=source_title,
+                difficulty=request.difficulty,
+                number_of_questions=request.number_of_questions,
+                question_type=request.question_type,
+                doc_name=source_title,
+                file_size=file_size,
+                extracted_text_len=len(clean_text),
+                first_500_chars=clean_text[:500]
+            )
+            
+            metadata = {
+                "trainingId": request.training_id,
+                "courseId": request.course_id,
+                "sourceTitle": source_title,
+                "sourceId": self._source_id(clean_text, source_title),
+                "embeddingModel": self.embeddings.model_name,
+                "faissIndexPath": "None (summarized direct generation)",
+                "chunkCount": len(chunks_to_summarize),
+                "retrievedChunkNumbers": [],
+                "retrievalTopK": 0,
+                "cleanTextPreview": clean_text[:50000],
+            }
+            return quiz.to_response(metadata=metadata)
+
+        # Standard RAG pipeline
         training_id = str(request.training_id or request.course_id or "unassigned")
         chunks = self.chunker.split(clean_text, training_id=training_id)
         if not chunks:
@@ -67,6 +151,10 @@ class RAGQuizGenerator:
             difficulty=request.difficulty,
             number_of_questions=request.number_of_questions,
             question_type=request.question_type,
+            doc_name=source_title,
+            file_size=file_size,
+            extracted_text_len=len(clean_text),
+            first_500_chars=clean_text[:500]
         )
 
         metadata = {

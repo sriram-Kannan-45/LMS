@@ -2,7 +2,7 @@
    assessment-consent.css
    Styles for AssessmentConsentGate.jsx + SessionLockedModal.jsx.
 
-   Palette: navy (#0f172a) text, indigo (#6366f1) accent, slate borders,
+   Palette: navy (#0f172a) text, indigo (#0D9488) accent, slate borders,
    white surfaces. No global selectors — every rule is prefixed with
    `.ac-` or its parent so it doesn't bleed into the rest of the app.
    ========================================================================== */
@@ -66,11 +66,11 @@
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #6366f1;
+  color: #0D9488;
   padding: 4px 9px;
   border-radius: 999px;
-  background: rgba(99, 102, 241, 0.10);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  background: rgba(13, 148, 136, 0.10);
+  border: 1px solid rgba(13, 148, 136, 0.25);
   flex-shrink: 0;
 }
 .ac-card__quiz-title {
@@ -123,10 +123,10 @@
   transition: all 200ms ease;
 }
 .ac-rail__dot--current {
-  background: #6366f1;
+  background: #0D9488;
   color: #ffffff;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.18);
+  border-color: #0D9488;
+  box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.18);
 }
 .ac-rail__dot--done {
   background: #10b981;
@@ -162,16 +162,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(99, 102, 241, 0.10);
-  color: #6366f1;
-  border: 1px solid rgba(99, 102, 241, 0.20);
+  background: rgba(13, 148, 136, 0.10);
+  color: #0D9488;
+  border: 1px solid rgba(13, 148, 136, 0.20);
   margin-bottom: 14px;
 }
 .ac-step__icon-wrap--accent {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.10));
-  color: #6366f1;
-  border-color: rgba(99, 102, 241, 0.25);
-  box-shadow: 0 6px 20px -6px rgba(99, 102, 241, 0.30);
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.12), rgba(20, 184, 166, 0.10));
+  color: #0D9488;
+  border-color: rgba(13, 148, 136, 0.25);
+  box-shadow: 0 6px 20px -6px rgba(13, 148, 136, 0.30);
 }
 .ac-step__title {
   margin: 0 0 6px;
@@ -214,7 +214,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #6366f1;
+  background: #0D9488;
 }
 .ac-step__list--bullets li::before {
   background: #f59e0b;
@@ -274,17 +274,17 @@
   cursor: not-allowed;
 }
 .ac-btn--primary {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%);
   color: #ffffff;
   box-shadow:
-    0 4px 14px rgba(99, 102, 241, 0.35),
-    0 1px 2px rgba(99, 102, 241, 0.20);
+    0 4px 14px rgba(13, 148, 136, 0.35),
+    0 1px 2px rgba(13, 148, 136, 0.20);
 }
 .ac-btn--primary:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow:
-    0 6px 22px rgba(99, 102, 241, 0.45),
-    0 2px 4px rgba(99, 102, 241, 0.25);
+    0 6px 22px rgba(13, 148, 136, 0.45),
+    0 2px 4px rgba(13, 148, 136, 0.25);
 }
 .ac-btn--ghost {
   background: transparent;

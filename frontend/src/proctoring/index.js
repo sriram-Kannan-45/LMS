@@ -17,7 +17,9 @@ export { default as ProctoredExamPage } from './components/ProctoredExamPage';
 export { default as ViolationOverlay } from './components/ViolationOverlay';
 export { default as TerminatedScreen } from './components/TerminatedScreen';
 export { default as TrainerProctoringDashboard } from './components/TrainerProctoringDashboard';
+export { default as TrainerMonitoringReport } from './components/TrainerMonitoringReport';
 export { default as ParticipantMonitorCard } from './components/ParticipantMonitorCard';
+export { default as SecurityBanner } from './components/SecurityBanner';
 
 export { default as useDeviceFingerprint } from './hooks/useDeviceFingerprint';
 export { default as useFullscreen } from './hooks/useFullscreen';
@@ -27,5 +29,6 @@ export { default as useScreenShare } from './hooks/useScreenShare';
 export { default as useNetworkStatus } from './hooks/useNetworkStatus';
 export { default as useExamTimer, formatRemaining } from './hooks/useExamTimer';
 export { default as useProctorMonitor } from './hooks/useProctorMonitor';
+export { default as useProctoringMedia } from './hooks/useProctoringMedia';
 
 export * from './constants';

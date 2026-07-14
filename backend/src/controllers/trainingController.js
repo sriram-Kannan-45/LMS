@@ -219,4 +219,282 @@ const getTrainingById = async (req, res) => {
   }
 };
 
-module.exports = { createTraining, getAllTrainings, getTrainingById };
+const updateTraining = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const { title, description, trainerId, trainerIds, startDate, endDate, capacity, sequentialLearning } = req.body;
+
+    const training = await Training.findByPk(id);
+    if (!training) return res.status(404).json({ error: 'Training not found' });
+
+    // Permissions check: ADMIN can update any; TRAINER can update if assigned
+    if (userRole !== 'ADMIN') {
+      if (userRole === 'TRAINER') {
+        const isAssigned = await TrainingTrainerAssignment.findOne({
+          where: { trainingId: id, trainerId: userId }
+        });
+        if (!isAssigned && training.trainerId !== userId) {
+          return res.status(403).json({ error: 'You are not authorized to update this training' });
+        }
+      } else {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    let finalTrainerIds = [];
+    if (Array.isArray(trainerIds)) {
+      finalTrainerIds = trainerIds.map(tId => parseInt(tId));
+    } else if (trainerId) {
+      finalTrainerIds = [parseInt(trainerId)];
+    }
+
+    if (finalTrainerIds.length > 0) {
+      const trainers = await User.findAll({ where: { id: finalTrainerIds, role: 'TRAINER' } });
+      if (trainers.length !== finalTrainerIds.length) {
+        return res.status(400).json({ error: 'One or more trainer IDs are invalid or not trainers' });
+      }
+
+      await TrainingTrainerAssignment.destroy({ where: { trainingId: id } });
+      const assignments = finalTrainerIds.map(tId => ({
+        trainingId: id,
+        trainerId: tId
+      }));
+      await TrainingTrainerAssignment.bulkCreate(assignments);
+    }
+
+    const primaryTrainerId = finalTrainerIds.length > 0 ? finalTrainerIds[0] : (trainerId ? parseInt(trainerId) : training.trainerId);
+
+    await training.update({
+      title: title || training.title,
+      description: description !== undefined ? description : training.description,
+      trainerId: primaryTrainerId,
+      startDate: startDate ? new Date(startDate) : training.startDate,
+      endDate: endDate ? new Date(endDate) : training.endDate,
+      capacity: capacity !== undefined ? (capacity ? parseInt(capacity) : null) : training.capacity,
+      sequentialLearning: sequentialLearning !== undefined ? !!sequentialLearning : training.sequentialLearning
+    });
+
+    // Automatically find/create/update corresponding Course
+    let course = await Course.findOne({ where: { trainingProgramId: id } });
+    if (!course) {
+      course = await Course.create({
+        trainingProgramId: id,
+        trainerId: primaryTrainerId,
+        title: title || training.title,
+        description: description !== undefined ? description : training.description,
+        status: 'PUBLISHED'
+      });
+    } else {
+      await course.update({
+        title: title || training.title,
+        description: description !== undefined ? description : training.description,
+        trainerId: primaryTrainerId
+      });
+    }
+
+    // Sync CourseTrainerAssignment
+    if (finalTrainerIds.length > 0) {
+      await CourseTrainerAssignment.destroy({ where: { courseId: course.id } });
+      const courseAssignments = finalTrainerIds.map(tId => ({
+        courseId: course.id,
+        trainerId: tId
+      }));
+      await CourseTrainerAssignment.bulkCreate(courseAssignments);
+    }
+
+    const updatedTraining = await Training.findByPk(id, {
+      include: [
+        { model: User, as: 'trainer', attributes: ['id', 'name'], required: false },
+        {
+          model: TrainingTrainerAssignment,
+          as: 'trainerAssignments',
+          include: [{ model: User, as: 'trainer', attributes: ['id', 'name'] }]
+        }
+      ]
+    });
+
+    const assignedTrainers = (updatedTraining.trainerAssignments || []).map(ta => ta.trainer).filter(Boolean);
+    const trainerNames = assignedTrainers.length > 0 ? assignedTrainers.map(tr => tr.name).join(', ') : (updatedTraining.trainer ? updatedTraining.trainer.name : null);
+    const resTrainerIds = assignedTrainers.length > 0 ? assignedTrainers.map(tr => tr.id) : (updatedTraining.trainerId ? [updatedTraining.trainerId] : []);
+
+    res.json({
+      message: 'Training updated successfully',
+      training: {
+        id: updatedTraining.id,
+        title: updatedTraining.title,
+        description: updatedTraining.description,
+        trainerId: updatedTraining.trainerId,
+        trainerIds: resTrainerIds,
+        trainerName: trainerNames,
+        startDate: updatedTraining.startDate,
+        endDate: updatedTraining.endDate,
+        capacity: updatedTraining.capacity,
+        sequentialLearning: updatedTraining.sequentialLearning
+      }
+    });
+  } catch (error) {
+    console.error('Update training error:', error.message);
+    res.status(500).json({ error: 'Server error updating training' });
+  }
+};
+
+const deleteTraining = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const {
+      Certificate,
+      Lesson,
+      LessonMaterial,
+      LessonQuiz,
+      QuizProgress,
+      LessonAssessment,
+      AssessmentSubmission,
+      LessonProgress,
+      ParticipantTracking,
+      AIQuiz,
+      AIQuestion,
+      QuizAttempt,
+      QuizAnswer,
+      QuizResult,
+      AssessmentSession,
+      ExamSession,
+      Violation,
+      ProctorActivity,
+      Feedback,
+      LiveSession,
+      Note,
+      AIDocument
+    } = require('../models');
+
+    const training = await Training.findByPk(id);
+    if (!training) return res.status(404).json({ error: 'Training not found' });
+
+    // Permissions check: ADMIN can delete any; TRAINER can delete if assigned
+    if (userRole !== 'ADMIN') {
+      if (userRole === 'TRAINER') {
+        const isAssigned = await TrainingTrainerAssignment.findOne({
+          where: { trainingId: id, trainerId: userId }
+        });
+        if (!isAssigned && training.trainerId !== userId) {
+          return res.status(403).json({ error: 'You are not authorized to delete this training' });
+        }
+      } else {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    // Find corresponding Course
+    const course = await Course.findOne({ where: { trainingProgramId: id } });
+    if (course) {
+      // 1. CourseTrainerAssignment
+      await CourseTrainerAssignment.destroy({ where: { courseId: course.id } });
+
+      // 2. Certificate
+      await Certificate.destroy({ where: { courseId: course.id } });
+
+      // 3. Enrollment (course-scoped)
+      await Enrollment.destroy({ where: { courseId: course.id } });
+
+      // 4. Lessons & their child models
+      const lessons = await Lesson.findAll({ where: { courseId: course.id } });
+      const lessonIds = lessons.map(l => l.id);
+      if (lessonIds.length > 0) {
+        // LessonMaterial
+        await LessonMaterial.destroy({ where: { lessonId: lessonIds } });
+
+        // LessonQuiz & QuizProgress
+        const lessonQuizzes = await LessonQuiz.findAll({ where: { lessonId: lessonIds } });
+        const lessonQuizIds = lessonQuizzes.map(lq => lq.id);
+        if (lessonQuizIds.length > 0) {
+          await QuizProgress.destroy({ where: { lessonQuizId: lessonQuizIds } });
+          await LessonQuiz.destroy({ where: { id: lessonQuizIds } });
+        }
+
+        // LessonAssessment & AssessmentSubmission
+        const lessonAssessments = await LessonAssessment.findAll({ where: { lessonId: lessonIds } });
+        const assessmentIds = lessonAssessments.map(la => la.id);
+        if (assessmentIds.length > 0) {
+          await AssessmentSubmission.destroy({ where: { assessmentId: assessmentIds } });
+          await LessonAssessment.destroy({ where: { id: assessmentIds } });
+        }
+
+        // LessonProgress
+        await LessonProgress.destroy({ where: { lessonId: lessonIds } });
+
+        // ParticipantTracking
+        await ParticipantTracking.destroy({ where: { lessonId: lessonIds } });
+      }
+
+      // 5. AIQuiz & its attempts/questions/sessions/results
+      const quizzes = await AIQuiz.findAll({ where: { courseId: course.id } });
+      const quizIds = quizzes.map(q => q.id);
+      if (quizIds.length > 0) {
+        // AIQuestion
+        await AIQuestion.destroy({ where: { quizId: quizIds } });
+
+        // QuizAttempt & answers/results/sessions
+        const attempts = await QuizAttempt.findAll({ where: { quizId: quizIds } });
+        const attemptIds = attempts.map(a => a.id);
+        if (attemptIds.length > 0) {
+          await QuizAnswer.destroy({ where: { attemptId: attemptIds } });
+          await QuizResult.destroy({ where: { attemptId: attemptIds } });
+          await AssessmentSession.destroy({ where: { attemptId: attemptIds } });
+          
+          const examSessions = await ExamSession.findAll({ where: { attemptId: attemptIds } });
+          const sessionIds = examSessions.map(es => es.id);
+          if (sessionIds.length > 0) {
+            await Violation.destroy({ where: { sessionId: sessionIds } });
+            await ProctorActivity.destroy({ where: { sessionId: sessionIds } });
+            await ExamSession.destroy({ where: { id: sessionIds } });
+          }
+          await QuizAttempt.destroy({ where: { id: attemptIds } });
+        }
+
+        // Direct QuizResult, AssessmentSession, ExamSession
+        await QuizResult.destroy({ where: { quizId: quizIds } });
+        await AssessmentSession.destroy({ where: { quizId: quizIds } });
+        
+        const directExamSessions = await ExamSession.findAll({ where: { quizId: quizIds } });
+        const directSessionIds = directExamSessions.map(es => es.id);
+        if (directSessionIds.length > 0) {
+          await Violation.destroy({ where: { sessionId: directSessionIds } });
+          await ProctorActivity.destroy({ where: { sessionId: directSessionIds } });
+          await ExamSession.destroy({ where: { id: directSessionIds } });
+        }
+
+        await AIQuiz.destroy({ where: { id: quizIds } });
+      }
+
+      // 6. Lessons themselves
+      if (lessonIds.length > 0) {
+        await Lesson.destroy({ where: { id: lessonIds } });
+      }
+
+      // 8. Finally, destroy the Course
+      await Course.destroy({ where: { id: course.id } });
+    }
+
+    // 9. Legacy / Training-scoped child models
+    await Feedback.destroy({ where: { trainingId: id } });
+    await Enrollment.destroy({ where: { trainingId: id } });
+    await LiveSession.destroy({ where: { trainingId: id } });
+    await Note.destroy({ where: { trainingId: id } });
+    await AIDocument.destroy({ where: { trainingId: id } });
+    await TrainingTrainerAssignment.destroy({ where: { trainingId: id } });
+
+    // 10. Destroy the training itself
+    await Training.destroy({ where: { id } });
+
+    res.json({ message: 'Training deleted successfully' });
+  } catch (error) {
+    console.error('Delete training error:', error.message);
+    res.status(500).json({ error: 'Server error deleting training' });
+  }
+};
+
+module.exports = { createTraining, getAllTrainings, getTrainingById, updateTraining, deleteTraining };

@@ -8,8 +8,9 @@ import AnimatedDropdown from '../components/AnimatedDropdown'
 import { useToast } from '../components/Toast'
 import Skeleton, { SkeletonTable } from '../components/Skeleton'
 import { API, API_BASE } from '../api/api'
-import { Loader2, TrendingUp, MessageSquare, Star } from 'lucide-react'
+import { Loader2, TrendingUp, MessageSquare, Star, User, Users, ClipboardList } from 'lucide-react'
 import AdminOverviewTab from '../components/admin/tabs/AdminOverviewTab'
+import { Button, Badge, Table, PageHeader, EmptyState, StatCard } from '../components/ui'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'
 const fmtDateTime = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'
@@ -173,8 +174,14 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       } else if (confirmModal.action === 'delete-trainer') {
         const r = await fetch(`${API_BASE}/admin/trainers/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
         const d = await r.json()
-        if (!r.ok) throw new Error(d.error)
-        success('Trainer removed successfully')
+        if (!r.ok) {
+          console.error('[AdminDashboard] Delete trainer failed:', r.status, d)
+          if (r.status === 500) {
+            throw new Error('Unexpected server error.')
+          }
+          throw new Error(d.message || d.error || 'Server error deleting trainer')
+        }
+        success(d.message || 'Trainer removed successfully')
         fetchTrainers(); fetchStats()
       } else if (confirmModal.action === 'delete-program') {
         const r = await fetch(`${API_BASE}/admin/training-programs/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
@@ -542,6 +549,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
           user={user}
           stats={stats}
           feedbacks={feedbacks}
+          trainings={trainings}
+          participants={participants}
           initialLoading={initialLoading}
           loading={loading}
         />
@@ -550,41 +559,43 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── PENDING APPROVAL ── */}
       {tab === 'pending' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
-            {pageTitle('Pending Approval')}
-          </div>
+          <PageHeader
+            title="Pending Approval"
+            subtitle="Review and approve participant registration requests."
+          />
           {initialLoading ? (
             <div className="ac-card"><SkeletonTable rows={3} /></div>
           ) : pendingParticipants.length === 0 ? (
-            <div className="ac-empty" style={{ maxWidth: 480, margin: '40px auto', padding: '36px 24px' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>✔️</div>
-              <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>All Approved</h3>
-              <p style={{ color: 'var(--academic-text-secondary)', fontSize: 13.5, margin: 0, lineHeight: 1.5 }}>
-                No participants are currently waiting for registration approval.
-              </p>
-            </div>
+            <EmptyState
+              icon={User}
+              title="All Approved"
+              description="No participants are currently waiting for registration approval."
+            />
           ) : (
-            <div className="ac-card" style={{ padding: 0 }}>
-              <div className="table-wrapper" style={{ border: 'none' }}>
-                <table className="table">
-                  <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Registered</th><th></th></tr></thead>
-                  <tbody>
-                    {pendingParticipants.map((p, i) => (
-                      <tr key={p.id}>
-                        <td style={{ color: 'var(--academic-text-muted)' }}>{i + 1}</td>
-                        <td className="font-medium">{p.name}</td>
-                        <td style={{ color: 'var(--academic-text-secondary)' }}>{p.email}</td>
-                        <td style={{ color: 'var(--academic-text-secondary)' }}>{p.phone || '-'}</td>
-                        <td style={{ color: 'var(--academic-text-secondary)' }}>{fmtDate(p.created_at)}</td>
-                        <td>
-                          <button className="ac-btn ac-btn-sm ac-btn-primary" onClick={() => handleApproveParticipant(p.id)} disabled={loading}>Approve</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <Table
+              columns={[
+                { key: 'name', header: 'Name', className: 'font-semibold text-slate-800 dark:text-slate-200' },
+                { key: 'email', header: 'Email' },
+                { key: 'phone', header: 'Phone', render: (row) => row.phone || '-' },
+                { key: 'created_at', header: 'Registered', render: (row) => fmtDate(row.created_at) },
+                {
+                  key: 'actions',
+                  header: '',
+                  className: 'text-right',
+                  render: (row) => (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => handleApproveParticipant(row.id)}
+                      disabled={loading}
+                    >
+                      Approve
+                    </Button>
+                  ),
+                },
+              ]}
+              data={pendingParticipants}
+            />
           )}
         </motion.div>
       )}
@@ -592,54 +603,67 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── TRAININGS (list) ── */}
       {tab === 'trainings' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
-            {pageTitle('Training Sessions')}
-            {trainings.length > 0 && (
-              <button className="ac-btn ac-btn-primary" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
-            )}
-          </div>
+          <PageHeader
+            title="Training Sessions"
+            subtitle="Manage scheduled training programs, enrollments, and status."
+            action={
+              trainings.length > 0 && (
+                <Button variant="primary" onClick={() => handleTabChange('createTraining')}>
+                  + Add Training
+                </Button>
+              )
+            }
+          />
           {initialLoading ? (
             <div className="ac-card"><SkeletonTable rows={5} /></div>
           ) : trainings.length === 0 ? (
-            <div className="ac-empty" style={{ maxWidth: 480, margin: '40px auto', padding: '36px 24px' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>📚</div>
-              <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>No Trainings Yet</h3>
-              <p style={{ color: 'var(--academic-text-secondary)', fontSize: 13.5, margin: '0 0 20px', lineHeight: 1.5 }}>
-                Create your first training session to schedule classes, assign trainers, and track enrollment.
-              </p>
-              <button className="ac-btn ac-btn-primary" onClick={() => handleTabChange('createTraining')}>
-                + Create Training
-              </button>
-            </div>
+            <EmptyState
+              icon={Users}
+              title="No Trainings Yet"
+              description="Create your first training session to schedule classes, assign trainers, and track enrollment."
+              actionLabel="+ Create Training"
+              onAction={() => handleTabChange('createTraining')}
+            />
           ) : (
-            <div className="ac-card" style={{ padding: 0 }}>
-              <div className="table-wrapper" style={{ border: 'none' }}>
-                <table className="table">
-                  <thead>
-                    <tr><th>#</th><th>Title</th><th>Trainer</th><th>Start</th><th>End</th><th>Capacity</th><th>Enrolled</th><th></th></tr>
-                  </thead>
-                  <tbody>
-                    {trainings.map((t, i) => (
-                      <tr key={t.id}>
-                        <td style={{ color: 'var(--academic-text-muted)' }}>{i + 1}</td>
-                        <td className="font-medium">{t.title}</td>
-                        <td>{t.trainerName ? <span className="ac-chip ac-chip-primary">{t.trainerName}</span> : <span className="ac-chip">Unassigned</span>}</td>
-                        <td style={{ color: 'var(--academic-text-secondary)' }}>{fmtDate(t.startDate)}</td>
-                        <td style={{ color: 'var(--academic-text-secondary)' }}>{fmtDate(t.endDate)}</td>
-                        <td>{t.capacity ? t.capacity : <span className="ac-chip">∞</span>}</td>
-                        <td>{t.enrolledCount ?? 0}</td>
-                        <td>
-                          <div className="flex gap-1.5 justify-end">
-                            <button className="ac-btn ac-btn-sm ac-btn-secondary" onClick={() => openEdit(t)}>Edit</button>
-                            <button className="ac-btn ac-btn-sm ac-btn-danger" onClick={() => handleDeleteTraining(t.id, t.title)}>Delete</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <Table
+              columns={[
+                { key: 'title', header: 'Title', className: 'font-semibold text-slate-800 dark:text-slate-200' },
+                {
+                  key: 'trainerName',
+                  header: 'Trainer',
+                  render: (row) =>
+                    row.trainerName ? (
+                      <Badge color="success">{row.trainerName}</Badge>
+                    ) : (
+                      <Badge color="neutral">Unassigned</Badge>
+                    ),
+                },
+                { key: 'startDate', header: 'Start', render: (row) => fmtDate(row.startDate) },
+                { key: 'endDate', header: 'End', render: (row) => fmtDate(row.endDate) },
+                {
+                  key: 'capacity',
+                  header: 'Capacity',
+                  render: (row) => (row.capacity ? row.capacity : <Badge color="neutral">∞</Badge>),
+                },
+                { key: 'enrolledCount', header: 'Enrolled', render: (row) => row.enrolledCount ?? 0 },
+                {
+                  key: 'actions',
+                  header: '',
+                  className: 'text-right',
+                  render: (row) => (
+                    <div className="flex gap-2 justify-end">
+                      <Button size="sm" variant="secondary" onClick={() => openEdit(row)}>
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="danger" onClick={() => handleDeleteTraining(row.id, row.title)}>
+                        Delete
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]}
+              data={trainings}
+            />
           )}
         </motion.div>
       )}
@@ -647,27 +671,29 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── TRAINERS (list) ── */}
       {tab === 'trainers' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
-            {pageTitle('Trainers')}
-            {trainers.length > 0 && (
-              <button className="ac-btn ac-btn-primary" onClick={() => handleTabChange('createTrainer')}>+ Add Trainer</button>
-            )}
-          </div>
+          <PageHeader
+            title="Trainers"
+            subtitle="Manage training instructors and assign courses."
+            action={
+              trainers.length > 0 && (
+                <Button variant="primary" onClick={() => handleTabChange('createTrainer')}>
+                  + Add Trainer
+                </Button>
+              )
+            }
+          />
           {initialLoading ? (
             <div className="ac-card"><SkeletonTable rows={5} /></div>
           ) : trainers.length === 0 ? (
-            <div className="ac-empty" style={{ maxWidth: 480, margin: '40px auto', padding: '36px 24px' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>👤</div>
-              <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>No Trainers Yet</h3>
-              <p style={{ color: 'var(--academic-text-secondary)', fontSize: 13.5, margin: '0 0 20px', lineHeight: 1.5 }}>
-                Add your first trainer to assign them courses and start tracking performance feedback.
-              </p>
-              <button className="ac-btn ac-btn-primary" onClick={() => handleTabChange('createTrainer')}>
-                + Add First Trainer
-              </button>
-            </div>
+            <EmptyState
+              icon={User}
+              title="No Trainers Yet"
+              description="Add your first trainer to assign them courses and start tracking performance feedback."
+              actionLabel="+ Add First Trainer"
+              onAction={() => handleTabChange('createTrainer')}
+            />
           ) : (
-            <div className="ac-card" style={{ padding: '8px 0' }}>
+            <div className="ac-card p-4">
               <TrainerList 
                 trainers={trainers}
                 token={user.token}
@@ -681,27 +707,29 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── PARTICIPANTS ── */}
       {tab === 'participants' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
-            {pageTitle('Participants')}
-            {participants.length > 0 && (
-              <button className="ac-btn ac-btn-primary" onClick={() => setAddParticipantModal(true)}>+ Add Participant</button>
-            )}
-          </div>
+          <PageHeader
+            title="Participants"
+            subtitle="Track enrolled learners, progress, and registration status."
+            action={
+              participants.length > 0 && (
+                <Button variant="primary" onClick={() => setAddParticipantModal(true)}>
+                  + Add Participant
+                </Button>
+              )
+            }
+          />
           {initialLoading ? (
             <div className="ac-card"><SkeletonTable rows={5} /></div>
           ) : participants.length === 0 ? (
-            <div className="ac-empty" style={{ maxWidth: 480, margin: '40px auto', padding: '36px 24px' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>👥</div>
-              <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>No Participants Yet</h3>
-              <p style={{ color: 'var(--academic-text-secondary)', fontSize: 13.5, margin: '0 0 20px', lineHeight: 1.5 }}>
-                Enrolled students and participants will appear here. Add your first participant to get started.
-              </p>
-              <button className="ac-btn ac-btn-primary" onClick={() => setAddParticipantModal(true)}>
-                + Add First Participant
-              </button>
-            </div>
+            <EmptyState
+              icon={Users}
+              title="No Participants Yet"
+              description="Enrolled students and participants will appear here. Add your first participant to get started."
+              actionLabel="+ Add First Participant"
+              onAction={() => setAddParticipantModal(true)}
+            />
           ) : (
-            <div className="ac-card">
+            <div className="ac-card p-4">
               <ParticipantList 
                 participants={participants}
                 loading={false}
@@ -824,58 +852,63 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── NOTES MANAGEMENT ── */}
       {tab === 'notes' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
-            {pageTitle('Notes Management')}
-            <div className="flex gap-2">
-              {[
-                { key: '', label: 'All', count: notes.length },
-                { key: 'pending', label: 'Pending', count: notes.filter(n => n.status?.toLowerCase() === 'pending').length },
-                { key: 'approved', label: 'Approved', count: notes.filter(n => n.status?.toLowerCase() === 'approved').length }
-              ].map(btn => (
-                <button
-                  key={btn.key}
-                  onClick={() => { setNoteFilter(btn.key); fetchNotes(btn.key) }}
-                  className={`ac-chip${noteFilter === btn.key ? ' ac-chip-primary' : ''}`}
-                  style={{ cursor: 'pointer', fontFamily: 'inherit' }}
-                >
-                  {btn.label} ({btn.count})
-                </button>
-              ))}
-            </div>
-          </div>
+          <PageHeader
+            title="Notes Management"
+            subtitle="Review and manage study resources uploaded by trainers."
+            action={
+              <div className="flex gap-2">
+                {[
+                  { key: '', label: 'All', count: notes.length },
+                  { key: 'pending', label: 'Pending', count: notes.filter(n => n.status?.toLowerCase() === 'pending').length },
+                  { key: 'approved', label: 'Approved', count: notes.filter(n => n.status?.toLowerCase() === 'approved').length }
+                ].map(btn => (
+                  <Button
+                    key={btn.key}
+                    onClick={() => { setNoteFilter(btn.key); fetchNotes(btn.key) }}
+                    variant={noteFilter === btn.key ? 'primary' : 'secondary'}
+                    size="sm"
+                  >
+                    {btn.label} ({btn.count})
+                  </Button>
+                ))}
+              </div>
+            }
+          />
           {notes.length === 0 ? (
-            <div className="ac-card ac-empty">
-              <p style={{ color: 'var(--academic-text-muted)' }}>
-                {noteFilter === 'pending' ? 'All pending notes have been reviewed.' : 
-                 noteFilter === 'approved' ? 'No approved notes yet.' : 
-                 'Notes will appear here when trainers upload them.'}
-              </p>
-            </div>
+            <EmptyState
+              icon={FileText}
+              title="No Notes Found"
+              description={
+                noteFilter === 'pending' ? 'All pending notes have been reviewed.' : 
+                noteFilter === 'approved' ? 'No approved notes yet.' : 
+                'Notes will appear here when trainers upload them.'
+              }
+            />
           ) : (
-            <div className="ac-stack-sm">
+            <div className="space-y-4">
               {notes.map((note, idx) => {
                 const isPending = note.status?.toUpperCase() === 'PENDING'
                 const isApproved = note.status?.toUpperCase() === 'APPROVED'
                 return (
-                  <div key={note.id || idx} className="ac-card">
+                  <Card key={note.id || idx} padding className="p-6">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className={`ac-chip ${isApproved ? 'ac-chip-success' : isPending ? 'ac-chip-warning' : 'ac-chip-danger'}`}>{note.status}</span>
-                          <span style={{ fontSize: 12, color: 'var(--academic-text-muted)' }}>{fmtDate(note.created_at)}</span>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge color={isApproved ? 'success' : isPending ? 'warning' : 'danger'}>{note.status}</Badge>
+                          <span className="text-xs text-slate-400">{fmtDate(note.created_at)}</span>
                         </div>
-                        <h4 style={{ fontWeight: 600, fontSize: 15, color: 'var(--academic-text)', fontFamily: "'Poppins', sans-serif" }}>{note.title}</h4>
-                        <p style={{ fontSize: 13, color: 'var(--academic-text-muted)', marginTop: 2 }}>{note.trainer?.name || 'Unknown'}</p>
-                        <p style={{ fontSize: 14, color: 'var(--academic-text-secondary)', marginTop: 8, lineHeight: 1.6 }}>{note.content}</p>
+                        <h4 className="text-base font-semibold text-slate-800 dark:text-slate-200">{note.title}</h4>
+                        <p className="text-xs text-slate-500 mt-1">Uploaded by: {note.trainer?.name || 'Unknown'}</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-3 leading-relaxed">{note.content}</p>
                       </div>
                       {isPending && (
                         <div className="flex gap-2 flex-shrink-0">
-                          <button className="ac-btn ac-btn-sm ac-btn-danger" onClick={() => handleRejectNote(note.id)} disabled={loading}>Reject</button>
-                          <button className="ac-btn ac-btn-sm ac-btn-primary" onClick={() => handleApproveNote(note.id)} disabled={loading}>Approve</button>
+                          <Button size="sm" variant="danger" onClick={() => handleRejectNote(note.id)} disabled={loading}>Reject</Button>
+                          <Button size="sm" variant="primary" onClick={() => handleApproveNote(note.id)} disabled={loading}>Approve</Button>
                         </div>
                       )}
                     </div>
-                  </div>
+                  </Card>
                 )
               })}
             </div>

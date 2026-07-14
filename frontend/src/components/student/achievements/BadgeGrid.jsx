@@ -133,9 +133,9 @@ export function buildBadgeCatalogue({ stats, enrollmentsCount = 0, streak = 0 })
 }
 
 const TONE_STYLES = {
-  primary: { bg: 'var(--academic-primary-50)', color: 'var(--academic-primary)', glow: 'rgba(59,130,246,0.18)' },
+  primary: { bg: 'var(--academic-primary-50)', color: 'var(--academic-primary)', glow: 'rgba(13,148,136,0.18)' },
   teal:    { bg: 'var(--academic-secondary-50)', color: 'var(--academic-secondary-600)', glow: 'rgba(20,184,166,0.16)' },
-  violet:  { bg: 'var(--academic-accent-50)', color: 'var(--academic-accent-500)', glow: 'rgba(139,92,246,0.16)' },
+  violet:  { bg: 'var(--academic-accent-50)', color: 'var(--academic-accent-500)', glow: 'rgba(20,184,166,0.16)' },
   warning: { bg: 'var(--academic-warning-50)', color: 'var(--academic-warning)', glow: 'rgba(245,158,11,0.16)' },
   danger:  { bg: 'var(--academic-danger-50)', color: 'var(--academic-danger)', glow: 'rgba(239,68,68,0.16)' },
 }

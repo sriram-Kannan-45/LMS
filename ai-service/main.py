@@ -27,7 +27,7 @@ import tempfile
 import time
 from typing import List, Dict, Any, Optional, Tuple, TypedDict
 import difflib
-from services.gemini_client import GeminiClient
+from services.gemini_client import GeminiClient, GeminiTemporaryError
 from services.prompt_builder import PromptBuilder
 from services.json_validator import JSONValidator
 from services.duplicate_remover import DuplicateRemover
@@ -35,7 +35,7 @@ from services.option_randomizer import OptionRandomizer
 from services.explanation_generator import ExplanationGenerator
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 import PyPDF2
 import docx
@@ -748,7 +748,12 @@ def safe_json_parse(text: str) -> Tuple[List[Dict], List[str]]:
 
 # ── LLM Setup (Gemini only — Groq removed) ────────────
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+raw_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+if raw_model not in ("gemini-2.5-flash", "gemini-2.5-pro"):
+    GEMINI_MODEL = "gemini-2.5-pro" if "pro" in raw_model.lower() else "gemini-2.5-flash"
+    log.warning(f"Global invalid model '{raw_model}' coerced to '{GEMINI_MODEL}'.")
+else:
+    GEMINI_MODEL = raw_model
 llm = None
 llm_type = "None"
 
@@ -924,6 +929,24 @@ Generate ONLY the JSON array:
 """
 
 MAX_RETRIES = 3
+
+
+def _parse_retry_delay(text: str) -> int | None:
+    """Extract retry_delay seconds from Gemini API error text (JSON or protobuf)."""
+    try:
+        data = json.loads(text)
+        details = data.get("error", {}).get("details", [])
+        for d in details:
+            rd = d.get("retry_delay") or {}
+            if rd.get("seconds"):
+                return int(rd["seconds"])
+    except Exception:
+        pass
+    m = re.search(r'retry_delay\s*\{[^}]*seconds:\s*(\d+)', text)
+    if m:
+        return int(m.group(1))
+    return None
+
 
 def _question_is_grounded(question: Dict, doc_tokens: set) -> bool:
     """
@@ -1580,6 +1603,16 @@ async def generate_rag_quiz(request: RAGGenerateRequest):
         raise HTTPException(status_code=422, detail=str(e))
     except QuizGenerationError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    except GeminiTemporaryError as e:
+        log.warning("Gemini temporary error after %d retries: %s", e.retries, e.api_message)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "status": 503,
+                "message": "Gemini AI is currently experiencing high demand. Please try again in a few moments.",
+            }
+        )
     except Exception as e:
         log.error("RAG quiz generation failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -1593,7 +1626,7 @@ async def generate_quiz(request: QuizRequest):
         if not request.text or len(request.text.strip()) < 50:
             raise HTTPException(
                 status_code=422,
-                detail="Text content is too short. Please provide at least 50 characters of text."
+                detail="Document contains insufficient text."
             )
 
         if request.num_questions < 1 or request.num_questions > 50:
@@ -1624,6 +1657,16 @@ async def generate_quiz(request: QuizRequest):
         raise HTTPException(status_code=422, detail=str(e))
     except QuizGenerationError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    except GeminiTemporaryError as e:
+        log.warning("Quiz generation: Gemini temporary error after %d retries: %s", e.retries, e.api_message)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "status": 503,
+                "message": "Gemini AI is currently experiencing high demand. Please try again in a few moments.",
+            }
+        )
     except Exception as e:
         log.error("Quiz generation failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -1825,9 +1868,11 @@ Response Format:
             except Exception as e:
                 last_error = e
                 error_str = str(e).lower()
-                # Gemini rate limit (429 RESOURCE_EXHAUSTED) — sleep longer
+                # Gemini rate limit (429 RESOURCE_EXHAUSTED) — sleep long enough
                 if "429" in error_str or "resource_exhausted" in error_str or "quota" in error_str or "rate" in error_str:
-                    delay = min(30 * attempt, 120)
+                    retry_delay = _parse_retry_delay(str(e))
+                    delay = max(30 * attempt, (retry_delay or 0) + 5)
+                    delay = min(delay, 180)
                     log.warning("Gemini rate limit hit on attempt %d — backing off %ds", attempt, delay)
                     await asyncio.sleep(delay)
                     continue
@@ -1952,6 +1997,16 @@ async def upload_and_generate(
         raise HTTPException(status_code=422, detail=str(e))
     except QuizGenerationError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    except GeminiTemporaryError as e:
+        log.warning("Upload-and-generate: Gemini temporary error after %d retries: %s", e.retries, e.api_message)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "status": 503,
+                "message": "Gemini AI is currently experiencing high demand. Please try again in a few moments.",
+            }
+        )
     except Exception as e:
         log.error("Upload-and-generate failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
@@ -2007,6 +2062,16 @@ async def trainer_generate_ai_quiz(
         raise HTTPException(status_code=422, detail=str(e))
     except QuizGenerationError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    except GeminiTemporaryError as e:
+        log.warning("Trainer RAG quiz: Gemini temporary error after %d retries: %s", e.retries, e.api_message)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "status": 503,
+                "message": "Gemini AI is currently experiencing high demand. Please try again in a few moments.",
+            }
+        )
     except Exception as e:
         log.error("Trainer RAG quiz generation failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2119,6 +2184,109 @@ def _invoke_json(prompt: str):
     except Exception:
         parsed, _ = _try_json_repair(text)
         return parsed
+
+
+class CodingProblemsRequest(BaseModel):
+    prompt: str
+    numProblems: int = 5
+    difficulty: str = "MEDIUM"
+    languages: str = "javascript,python"
+
+    @field_validator('numProblems')
+    @classmethod
+    def validate_count(cls, v):
+        if v < 1 or v > 20:
+            raise ValueError('Number of problems must be between 1 and 20.')
+        return v
+
+    @field_validator('difficulty')
+    @classmethod
+    def validate_difficulty(cls, v):
+        v = v.upper()
+        if v not in ('EASY', 'MEDIUM', 'HARD', 'MIXED'):
+            raise ValueError('Difficulty must be EASY, MEDIUM, HARD, or MIXED.')
+        return v
+
+
+CODING_PROBLEMS_SYSTEM = (
+    "You are an expert competitive programming question author. "
+    "Generate a set of coding problems in strict JSON. Return ONLY valid JSON, no markdown.\n"
+    "Schema:\n"
+    "{\n"
+    '  "title": string (overall assessment title),\n'
+    '  "problems": [\n'
+    "    {\n"
+    '      "title": string,\n'
+    '      "description": string (detailed problem statement),\n'
+    '      "constraints": string,\n'
+    '      "inputFormat": string,\n'
+    '      "outputFormat": string,\n'
+    '      "sampleInput": string,\n'
+    '      "sampleOutput": string,\n'
+    '      "explanation": string,\n'
+    '      "difficulty": "EASY"|"MEDIUM"|"HARD",\n'
+    '      "programmingLanguage": string,\n'
+    '      "starterCode": string (boilerplate code template),\n'
+    '      "expectedSolution": string (reference solution),\n'
+    '      "timeLimit": number (seconds, default 5),\n'
+    '      "memoryLimit": number (MB, default 256),\n'
+    '      "marks": number,\n'
+    '      "tags": string[],\n'
+    '      "testCases": [\n'
+    "        {\n"
+    '          "input": string,\n'
+    '          "expectedOutput": string,\n'
+    '          "isHidden": boolean,\n'
+    '          "description": string|null\n'
+    "        }\n"
+    "      ]\n"
+    "    }\n"
+    "  ]\n"
+    "}\n"
+    "For each problem, generate exactly 2 visible (isHidden=false) and 5 hidden (isHidden=true) test cases. "
+    "Suggest marks by difficulty: EASY=10, MEDIUM=20, HARD=30. "
+    "Distribute problems across the requested languages."
+)
+
+
+@app.post("/generate-coding-problems")
+async def generate_coding_problems(req: CodingProblemsRequest):
+    if llm is None:
+        raise HTTPException(status_code=503, detail="LLM not configured")
+    prompt = (
+        CODING_PROBLEMS_SYSTEM
+        + f"\n\nTopic: {req.prompt}. Number of problems: {req.numProblems}. "
+        + f"Difficulty: {req.difficulty}. Languages: {req.languages}."
+    )
+    last_error = None
+    for attempt in range(1, Config.MAX_RETRIES + 1):
+        try:
+            log.info("Generating %d coding problems (attempt %d/%d)...", req.numProblems, attempt, Config.MAX_RETRIES)
+            parsed = _invoke_json(prompt)
+            if not isinstance(parsed, dict) or "problems" not in parsed:
+                raise ValueError("response missing 'problems' array")
+            if not isinstance(parsed["problems"], list) or len(parsed["problems"]) == 0:
+                raise ValueError("problems array is empty")
+            title = parsed.get("title") or f"Coding Assessment: {req.prompt[:60]}"
+            return {
+                "title": title,
+                "problems": parsed["problems"],
+                "languages": req.languages.split(","),
+            }
+        except Exception as e:
+            last_error = e
+            log.warning("Coding problems generation attempt %d failed: %s", attempt, e)
+            if "429" in str(e).lower() or "resource_exhausted" in str(e) or "quota" in str(e):
+                retry_delay = _parse_retry_delay(str(e))
+                delay = max(30 * attempt, (retry_delay or 0) + 5)
+                delay = min(delay, 180)
+                log.warning("Rate limit hit on attempt %d — backing off %ds", attempt, delay)
+                await asyncio.sleep(delay)
+                continue
+            if attempt < Config.MAX_RETRIES:
+                await asyncio.sleep(Config.RETRY_DELAY * attempt)
+    log.error("Coding problems generation failed after %d attempts", Config.MAX_RETRIES)
+    raise HTTPException(status_code=422, detail=f"AI failed to generate coding problems: {last_error}")
 
 
 @app.post("/generate-coding-question")

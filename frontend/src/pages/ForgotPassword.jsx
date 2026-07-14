@@ -14,7 +14,7 @@ function getStrength(pw) {
   return s // 0-4
 }
 const STRENGTH_LABEL = ['', 'Weak', 'Fair', 'Good', 'Strong']
-const STRENGTH_COLOR = ['', '#ef4444', '#f59e0b', '#3b82f6', '#22c55e']
+const STRENGTH_COLOR = ['', '#ef4444', '#f59e0b', '#0D9488', '#22c55e']
 
 /* ── OTP digit input ── */
 function OtpInput({ value, onChange }) {
@@ -414,7 +414,7 @@ export default function ForgotPassword() {
           gap: 6px;
           background: none;
           border: none;
-          color: #2563eb;
+          color: #0F766E;
           font-size: 13px;
           font-weight: 600;
           cursor: pointer;
@@ -437,8 +437,8 @@ export default function ForgotPassword() {
           background: #e2e8f0;
           transition: background 0.3s;
         }
-        .fp-step-dot.active { background: #93c5fd; }
-        .fp-step-dot.done   { background: #2563eb; }
+        .fp-step-dot.active { background: #5eead4; }
+        .fp-step-dot.done   { background: #0F766E; }
 
         .fp-icon-wrap {
           width: 52px;
@@ -449,7 +449,7 @@ export default function ForgotPassword() {
           justify-content: center;
           margin-bottom: 16px;
         }
-        .fp-icon-wrap.blue { background: linear-gradient(135deg,#1d4ed8,#3b82f6); color:#fff; box-shadow: 0 6px 18px rgba(37,99,235,0.32); }
+        .fp-icon-wrap.blue { background: linear-gradient(135deg,#1d4ed8,#0D9488); color:#fff; box-shadow: 0 6px 18px rgba(37,99,235,0.32); }
         .fp-icon-wrap.green { background: linear-gradient(135deg,#16a34a,#22c55e); color:#fff; box-shadow: 0 6px 18px rgba(34,197,94,0.32); }
 
         .fp-title {
@@ -517,8 +517,8 @@ export default function ForgotPassword() {
           box-sizing: border-box;
         }
         .fp-input:focus {
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 4px rgba(59,130,246,0.14);
+          border-color: #0D9488;
+          box-shadow: 0 0 0 4px rgba(13,148,136,0.14);
           background: #fff;
         }
         .fp-eye {
@@ -534,12 +534,12 @@ export default function ForgotPassword() {
           border-radius: 8px;
           transition: color 0.2s;
         }
-        .fp-eye:hover { color: #2563eb; }
+        .fp-eye:hover { color: #0F766E; }
 
         .fp-btn {
           width: 100%;
           height: 50px;
-          background: linear-gradient(135deg,#1d4ed8,#3b82f6);
+          background: linear-gradient(135deg,#1d4ed8,#0D9488);
           color: #fff;
           border: none;
           border-radius: 13px;
@@ -584,11 +584,11 @@ export default function ForgotPassword() {
           font-family: inherit;
         }
         .fp-otp-box:focus {
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 4px rgba(59,130,246,0.14);
+          border-color: #0D9488;
+          box-shadow: 0 0 0 4px rgba(13,148,136,0.14);
           background: #fff;
         }
-        .fp-otp-box.filled { border-color: #2563eb; background: #eff6ff; }
+        .fp-otp-box.filled { border-color: #0F766E; background: #eff6ff; }
 
         /* resend */
         .fp-resend {
@@ -601,7 +601,7 @@ export default function ForgotPassword() {
           border: none;
           font-size: 13px;
           font-weight: 600;
-          color: #2563eb;
+          color: #0F766E;
           cursor: pointer;
           padding: 10px 0 0;
           font-family: inherit;

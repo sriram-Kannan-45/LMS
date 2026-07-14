@@ -11,15 +11,15 @@ function Avatar({ src, initials, size = 72 }) {
     <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
       <div
         className="absolute inset-0 rounded-full"
-        style={{ background: 'linear-gradient(135deg, #6366f1, #7c3aed)', padding: 2 }}
+        style={{ background: 'linear-gradient(135deg, #0D9488, #0D9488)', padding: 2 }}
       >
         <div className="w-full h-full rounded-full bg-white" />
       </div>
-      <div className="absolute inset-[3px] rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50">
+      <div className="absolute inset-[3px] rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-50">
         {src ? (
           <img src={src} alt="avatar" className="w-full h-full object-cover" />
         ) : (
-          <span className="font-display font-black text-indigo-600 select-none" style={{ fontSize: size * 0.35 }}>
+          <span className="font-display font-black text-primary-600 select-none" style={{ fontSize: size * 0.35 }}>
             {initials}
           </span>
         )}
@@ -85,7 +85,7 @@ function LevelBar({ xp }) {
 
 function SkillChip({ label }) {
   return (
-    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-200">
+    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-primary-50 text-primary-600 border border-primary-200">
       {label}
     </span>
   )
@@ -103,7 +103,7 @@ export default function ProfileCard({ user, profileData, rank, xp, onEditClick }
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="relative rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm"
     >
-      <div className="h-[3px] w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-400" />
+      <div className="h-[3px] w-full bg-gradient-to-r from-primary-500 via-primary-500 to-pink-400" />
 
       <div className="p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
@@ -154,7 +154,7 @@ export default function ProfileCard({ user, profileData, rank, xp, onEditClick }
             whileTap={{ scale: 0.96 }}
             onClick={onEditClick}
             id="edit-profile-btn"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-indigo-600 border border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 transition-all duration-200 flex-shrink-0"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-primary-600 border border-primary-200 hover:bg-primary-50 hover:border-primary-300 transition-all duration-200 flex-shrink-0"
           >
             <Edit3 size={15} />
             Edit

@@ -51,7 +51,7 @@ const enrollInTraining = async (req, res) => {
       participantId,
       trainingId,
       courseId: course.id,
-      status: 'PENDING'
+      status: 'ENROLLED'
     });
 
     const io = req.app.get('io');
@@ -75,7 +75,7 @@ const enrollInTraining = async (req, res) => {
     for (const tId of trainerIds) {
       await NotificationService.createNotification({
         userId: tId,
-        message: `${user?.name || 'A participant'} has requested to enroll in training: ${training.title}`,
+        message: `${user?.name || 'A participant'} has enrolled in training: ${training.title}`,
         type: 'ENROLLMENT',
         actionUrl: `/trainer`,
         relatedEntityId: enrollment.id,
@@ -86,7 +86,7 @@ const enrollInTraining = async (req, res) => {
     // Notify Participant
     await NotificationService.createNotification({
       userId: participantId,
-      message: `Your enrollment request for training: ${training.title} has been submitted to the trainer.`,
+      message: `You have been enrolled in training: ${training.title}.`,
       type: 'ENROLLMENT',
       actionUrl: `/participant`,
       relatedEntityId: enrollment.id,
@@ -97,13 +97,13 @@ const enrollInTraining = async (req, res) => {
     await ActivityService.logActivity({
       userId: participantId,
       userName: user?.name || 'Unknown',
-      action: 'ENROLLMENT_REQUESTED',
+      action: 'ENROLLMENT_DONE',
       entityType: 'Training',
       entityId: trainingId,
       details: { trainingName: training.title }
     }, io);
 
-    res.status(201).json({ message: 'Enrollment request submitted for approval', enrollment });
+    res.status(201).json({ message: 'Enrolled successfully', enrollment });
   } catch (error) {
     console.error('Enroll error:', error.message);
     res.status(500).json({ error: 'Server error during enrollment' });

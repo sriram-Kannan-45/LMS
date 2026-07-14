@@ -43,7 +43,7 @@ const User = sequelize.define('User', {
     defaultValue: 'PARTICIPANT'
   },
   status: {
-    type: DataTypes.ENUM('PENDING', 'APPROVED'),
+    type: DataTypes.ENUM('PENDING', 'APPROVED', 'INACTIVE'),
     allowNull: false,
     defaultValue: 'PENDING'
   },
@@ -56,6 +56,11 @@ const User = sequelize.define('User', {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Soft delete timestamp'
+  },
+  passwordVersion: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+    comment: 'Tracks password hash algorithm version for future upgrades'
   }
 }, {
   tableName: 'users',

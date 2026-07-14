@@ -1,77 +1,67 @@
-const axios = require('axios');
-require('dotenv').config();
+const { JudgeEngine } = require('../judge/engine');
+const { OutputComparator } = require('../judge/outputComparator');
+const { VERDICTS } = require('../judge/verdicts');
+const { getLanguageConfig } = require('../judge/languageConfig');
+const logger = require('../utils/logger');
 
-const JUDGE0_URL = process.env.JUDGE0_URL || 'http://localhost:2358';
+const judgeEngine = new JudgeEngine();
+const comparator = new OutputComparator();
 
-const JUDGE0_LANGUAGE_IDS = {
-  python: 71, javascript: 63, java: 62, c: 50, cpp: 54, csharp: 51, go: 60,
-};
-
-// Judge0 status IDs → our status codes
-const STATUS_MAP = { 3: 'PASSED', 4: 'FAILED', 5: 'TLE', 6: 'CE', 11: 'RE', 12: 'MLE' };
-
-const b64 = (s) => Buffer.from(s || '', 'utf8').toString('base64');
-const unb64 = (s) => (s ? Buffer.from(s, 'base64').toString('utf8') : '');
-
-/**
- * Run one source file against a single stdin via Judge0 (isolated container).
- * Returns { status, runtime_ms, memory_kb, actual_output, error_message }.
- */
-async function executeCode({ language, sourceCode, stdin, timeLimitMs = 5000, memoryLimitKb = 256000 }) {
-  const langId = JUDGE0_LANGUAGE_IDS[language];
-  if (!langId) throw new Error(`Unsupported language: ${language}`);
-
-  const res = await axios.post(
-    `${JUDGE0_URL}/submissions?base64_encoded=true&wait=true`,
-    {
-      language_id: langId,
-      source_code: b64(sourceCode),
-      stdin: b64(stdin),
-      cpu_time_limit: (timeLimitMs / 1000).toFixed(1),
-      memory_limit: memoryLimitKb,
-      enable_network: false,
-    },
-    { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
-  );
-
-  const r = res.data;
-  const stdout = unb64(r.stdout);
-  const stderr = unb64(r.stderr);
-  const compileOutput = unb64(r.compile_output);
+async function executeCode(code, language, input, timeLimit = 5, memoryLimit = 256) {
+  const result = await judgeEngine.runSingleTest({
+    code, language, stdin: input || '',
+    expectedOutput: null,
+    timeLimit, memoryLimit,
+  });
 
   return {
-    status: STATUS_MAP[r.status?.id] || 'FAILED',
-    runtime_ms: Math.round((parseFloat(r.time) || 0) * 1000),
-    memory_kb: r.memory || 0,
-    actual_output: stdout.trim(),
-    error_message: stderr || compileOutput || '',
+    output: result.actualOutput || '',
+    error: result.error || '',
+    status: result.verdict === VERDICTS.ACCEPTED ? 'ACCEPTED' : result.verdict,
+    executionTime: result.executionTime || 0,
+    memoryUsed: result.memoryUsed || 0,
+    compileOutput: result.compileOutput || '',
   };
 }
 
-/**
- * Run code against an ordered list of test cases.
- * Each test case: { id, input, expectedOutput, isHidden }.
- * Returns { results: [...], passedCount, totalCount }.
- */
-async function runTestCases({ language, sourceCode, testCases, timeLimitMs, memoryLimitKb }) {
+async function runTests(code, language, testCases, timeLimit, memoryLimit) {
   const results = [];
-  let passedCount = 0;
   for (const tc of testCases) {
-    const exec = await executeCode({ language, sourceCode, stdin: tc.input, timeLimitMs, memoryLimitKb });
-    const expected = (tc.expectedOutput || '').trim();
-    const passed = exec.status === 'PASSED' && exec.actual_output === expected;
-    if (passed) passedCount++;
+    const startTime = Date.now();
+    const result = await judgeEngine.runSingleTest({
+      code, language, input: tc.input,
+      expectedOutput: tc.expectedOutput,
+      timeLimit: tc.timeout || timeLimit,
+      memoryLimit: tc.memoryLimit || memoryLimit,
+    });
+
+    const actualOutput = tc.isHidden ? (result.verdict === VERDICTS.ACCEPTED ? '[Passed]' : '[Failed]') : (result.actualOutput || '');
+    const expectedOutput = tc.isHidden ? '[Hidden]' : (tc.expectedOutput || '');
+
     results.push({
-      testCaseId: tc.id,
-      isHidden: !!tc.isHidden,
-      status: passed ? 'PASSED' : (exec.status === 'PASSED' ? 'FAILED' : exec.status),
-      runtimeMs: exec.runtime_ms,
-      memoryKb: exec.memory_kb,
-      actualOutput: exec.actual_output,
-      errorMessage: exec.error_message,
+      testCaseId: tc.id || null,
+      input: tc.isHidden ? '[Hidden]' : tc.input,
+      expectedOutput,
+      actualOutput,
+      passed: result.verdict === VERDICTS.ACCEPTED,
+      status: result.verdict,
+      executionTime: result.executionTime || 0,
+      memoryUsed: result.memoryUsed || 0,
+      isHidden: tc.isHidden,
+      error: result.error || '',
+      compileOutput: result.compileOutput || '',
     });
   }
-  return { results, passedCount, totalCount: testCases.length };
+  return results;
 }
 
-module.exports = { executeCode, runTestCases, JUDGE0_LANGUAGE_IDS };
+async function runTestCase(code, language, testCase, timeLimit, memoryLimit) {
+  const results = await runTests(code, language, [testCase], timeLimit, memoryLimit);
+  return results[0];
+}
+
+function normalizeOutput(output) {
+  return comparator.normalize(output || '');
+}
+
+module.exports = { executeCode, runTests, runTestCase, normalizeOutput, judgeEngine, LANGUAGE_IDS: {}, LANGUAGE_EXT: {}, checkJudge0: async () => true };

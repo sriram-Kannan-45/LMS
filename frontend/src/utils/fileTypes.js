@@ -72,15 +72,15 @@ export function getFileCategory(noteOrName, fileType) {
 /* ───── Visual config per category ────────────────────────────────────── */
 const CATEGORY_META = {
   pdf:     { label: 'PDF',         icon: FileText,        color: '#ef4444', bg: 'rgba(239,68,68,0.10)' },
-  doc:     { label: 'Document',    icon: FileText,        color: '#2563eb', bg: 'rgba(37,99,235,0.10)' },
+  doc:     { label: 'Document',    icon: FileText,        color: '#0F766E', bg: 'rgba(37,99,235,0.10)' },
   text:    { label: 'Text',        icon: FileText,        color: '#64748b', bg: 'rgba(100,116,139,0.12)' },
   sheet:   { label: 'Spreadsheet', icon: FileSpreadsheet, color: '#10b981', bg: 'rgba(16,185,129,0.10)' },
   slide:   { label: 'Slides',      icon: Presentation,    color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-  image:   { label: 'Image',       icon: ImageIcon,       color: '#8b5cf6', bg: 'rgba(139,92,246,0.10)' },
+  image:   { label: 'Image',       icon: ImageIcon,       color: '#14B8A6', bg: 'rgba(20,184,166,0.10)' },
   video:   { label: 'Video',       icon: VideoIcon,       color: '#ec4899', bg: 'rgba(236,72,153,0.10)' },
   audio:   { label: 'Audio',       icon: Music,           color: '#06b6d4', bg: 'rgba(6,182,212,0.10)' },
   archive: { label: 'Archive',     icon: FileArchive,     color: '#a16207', bg: 'rgba(161,98,7,0.12)' },
-  link:    { label: 'Link',        icon: LinkIcon,        color: '#3b82f6', bg: 'rgba(59,130,246,0.10)' },
+  link:    { label: 'Link',        icon: LinkIcon,        color: '#0D9488', bg: 'rgba(13,148,136,0.10)' },
   file:    { label: 'File',        icon: FileGenericIcon, color: '#475569', bg: 'rgba(71,85,105,0.10)' },
 }
 

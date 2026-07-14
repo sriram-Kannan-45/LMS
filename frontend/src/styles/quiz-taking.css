@@ -9,12 +9,12 @@
    ============================================================================= */
 
 :root {
-  --qt-blue:        #3b82f6;
+  --qt-blue:        #0D9488;
   --qt-blue-50:     #eff6ff;
   --qt-blue-100:    #dbeafe;
   --qt-blue-200:    #bfdbfe;
-  --qt-blue-500:    #3b82f6;
-  --qt-blue-600:    #2563eb;
+  --qt-blue-500:    #0D9488;
+  --qt-blue-600:    #0F766E;
   --qt-blue-700:    #1d4ed8;
 
   --qt-text:        #0f172a;
@@ -38,7 +38,7 @@
   --qt-shadow-sm:   0 1px 2px rgba(15,23,42,0.04);
   --qt-shadow-md:   0 4px 12px rgba(15,23,42,0.06), 0 1px 3px rgba(15,23,42,0.04);
   --qt-shadow-lg:   0 18px 40px -10px rgba(37,99,235,0.18), 0 2px 8px rgba(15,23,42,0.06);
-  --qt-shadow-glow: 0 0 0 4px rgba(59,130,246,0.14);
+  --qt-shadow-glow: 0 0 0 4px rgba(13,148,136,0.14);
 
   --qt-radius:      14px;
   --qt-radius-sm:   10px;
@@ -53,8 +53,8 @@
   inset: 0;
   z-index: 9999;
   background:
-    radial-gradient(ellipse 70% 40% at 0% 0%, rgba(59,130,246,0.07), transparent 60%),
-    radial-gradient(ellipse 60% 35% at 100% 0%, rgba(99,102,241,0.05), transparent 55%),
+    radial-gradient(ellipse 70% 40% at 0% 0%, rgba(13,148,136,0.07), transparent 60%),
+    radial-gradient(ellipse 60% 35% at 100% 0%, rgba(13,148,136,0.05), transparent 55%),
     var(--qt-bg);
   display: flex;
   flex-direction: column;
@@ -62,7 +62,22 @@
   color: var(--qt-text);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  user-select: text;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.qt-app input,
+.qt-app textarea,
+.qt-app select,
+.qt-app button,
+.qt-app [contenteditable] {
+  user-select: auto;
+  -webkit-user-select: auto;
+  -moz-user-select: auto;
+  -ms-user-select: auto;
 }
 
 /* ─── Hide LMS chrome (sidebar + top header) while a quiz is active ───
@@ -230,7 +245,7 @@ body.qt-fullscreen-active {
   height: 100%;
   background: linear-gradient(90deg, var(--qt-blue-500), var(--qt-blue-700));
   border-radius: 0 999px 999px 0;
-  box-shadow: 0 0 12px rgba(59,130,246,0.45);
+  box-shadow: 0 0 12px rgba(13,148,136,0.45);
 }
 
 /* ─── BODY (main + sidebar) ───────────────────────────────────────────── */
@@ -325,7 +340,7 @@ body.qt-fullscreen-active {
 .qt-option--selected {
   border-color: var(--qt-blue-500);
   background: var(--qt-blue-50);
-  box-shadow: 0 0 0 4px rgba(59,130,246,0.10), 0 4px 14px rgba(59,130,246,0.10);
+  box-shadow: 0 0 0 4px rgba(13,148,136,0.10), 0 4px 14px rgba(13,148,136,0.10);
 }
 
 .qt-option__radio {
@@ -483,7 +498,7 @@ body.qt-fullscreen-active {
   border-radius: 5px;
   box-shadow: 0 0 0 3px rgba(37,99,235,0.18);
 }
-.qt-dot--done    { background: #93c5fd; }
+.qt-dot--done    { background: #5eead4; }
 .qt-dot:hover    { transform: scale(1.2); }
 
 /* ─── SIDEBAR ─────────────────────────────────────────────────────────── */
@@ -821,6 +836,35 @@ body.qt-fullscreen-active {
 }
 @keyframes qt-rotate {
   to { transform: rotate(360deg); }
+}
+
+/* ─── Print protection — blank all quiz content when printed ───────── */
+@media print {
+  .qt-app,
+  .qt-app * {
+    visibility: hidden !important;
+    display: none !important;
+  }
+  .qt-app::after {
+    content: "This assessment is protected and cannot be printed." !important;
+    visibility: visible !important;
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    color: #dc2626;
+    font-family: 'Poppins', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+    padding: 40px;
+    z-index: 999999;
+  }
+}
+
+/* ─── Watermark base guard ───────────────────────────────────────────── */
+.qt-app [aria-hidden="true"] {
+  pointer-events: none;
 }
 
 /* ─── Reduced motion ─────────────────────────────────────────────────── */

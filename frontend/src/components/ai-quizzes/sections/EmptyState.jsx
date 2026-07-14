@@ -6,7 +6,12 @@
  */
 import { Brain, RefreshCw, SearchX } from 'lucide-react';
 
-export default function EmptyState({ onRefresh, filtered = false }) {
+export default function EmptyState({ onRefresh, filtered = false, title, description }) {
+  const displayTitle = title || (filtered ? 'No quizzes match your search' : 'No quizzes available');
+  const displayDescription = description || (filtered
+    ? 'Try a different search term or difficulty filter.'
+    : 'Your trainer has not published any quizzes yet. Check back later.');
+
   return (
     <div
       className="flex flex-col items-center justify-center text-center"
@@ -23,8 +28,8 @@ export default function EmptyState({ onRefresh, filtered = false }) {
         className="mb-4 flex h-14 w-14 items-center justify-center"
         style={{
           background:
-            'linear-gradient(135deg, rgba(91,95,199,0.10), rgba(139,92,246,0.10))',
-          border: '1px solid rgba(91,95,199,0.18)',
+            'linear-gradient(135deg, rgba(13,148,136,0.10), rgba(20,184,166,0.10))',
+          border: '1px solid rgba(13,148,136,0.18)',
           borderRadius: 14,
           color: 'var(--indigo)',
         }}
@@ -36,15 +41,13 @@ export default function EmptyState({ onRefresh, filtered = false }) {
         className="text-[16px] font-semibold tracking-tight"
         style={{ color: 'var(--text)' }}
       >
-        {filtered ? 'No quizzes match your search' : 'No quizzes available'}
+        {displayTitle}
       </h3>
       <p
         className="mt-1.5 max-w-sm text-[13px] leading-relaxed"
         style={{ color: 'var(--text-2)' }}
       >
-        {filtered
-          ? 'Try a different search term or difficulty filter.'
-          : 'Your trainer has not published any quizzes yet. Check back later.'}
+        {displayDescription}
       </p>
 
       {!filtered && onRefresh && (

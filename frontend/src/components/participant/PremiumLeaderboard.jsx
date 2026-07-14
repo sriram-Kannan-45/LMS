@@ -44,10 +44,10 @@ function Avatar({ entry, size = 44, glow }) {
     <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
       <div
         className="absolute inset-0 rounded-full p-[2px]"
-        style={{ background: `linear-gradient(135deg, #6366f1, #7c3aed)` }}
+        style={{ background: `linear-gradient(135deg, #14B8A6, #0D9488)` }}
       >
         <div className="w-full h-full rounded-full bg-white overflow-hidden flex items-center justify-center">
-          <span className="font-display font-black text-indigo-600 select-none" style={{ fontSize: size * 0.35 }}>
+          <span className="font-display font-black text-primary-600 select-none" style={{ fontSize: size * 0.35 }}>
             {entry.initials}
           </span>
         </div>
@@ -66,7 +66,7 @@ function BadgeChip({ badgeKey }) {
 
 function NeonRank({ rank }) {
   const colors = { 1: '#b45309', 2: '#64748b', 3: '#c2410c' }
-  const color = colors[rank] || '#6366f1'
+  const color = colors[rank] || '#14B8A6'
   return (
     <span className="font-display text-lg font-black" style={{ color }}>
       #{rank}
@@ -92,7 +92,7 @@ function PodiumCard({ entry, rank, isCurrentUser, delay }) {
           className="absolute -top-5 inset-x-0 flex justify-center z-20"
         >
           <span className="px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider text-white"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #7c3aed)', boxShadow: '0 0 15px rgba(99,102,241,0.5)' }}
+            style={{ background: 'linear-gradient(135deg, #14B8A6, #0D9488)', boxShadow: '0 0 15px rgba(20,184,166,0.5)' }}
           >
             ✨ You
           </span>
@@ -163,13 +163,13 @@ function LeaderboardRow({ entry, rank, isCurrentUser, index, scoreKey }) {
       whileHover={{ x: 4, transition: { duration: 0.15 } }}
       className={`group relative flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3.5 rounded-lg border transition-all duration-200 ${
         isCurrentUser
-          ? 'border-indigo-300 bg-indigo-50'
+          ? 'border-primary-300 bg-primary-50'
           : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50'
       }`}
     >
       {isCurrentUser && (
         <div className="absolute inset-0 rounded-lg pointer-events-none"
-          style={{ boxShadow: 'inset 0 0 12px rgba(99,102,241,0.08)' }} />
+          style={{ boxShadow: 'inset 0 0 12px rgba(20,184,166,0.08)' }} />
       )}
 
       <div className="w-8 text-center flex-shrink-0">
@@ -181,10 +181,10 @@ function LeaderboardRow({ entry, rank, isCurrentUser, index, scoreKey }) {
           className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
           style={{
             background: isCurrentUser
-              ? 'linear-gradient(135deg, #6366f1, #7c3aed)'
+              ? 'linear-gradient(135deg, #14B8A6, #0D9488)'
               : `linear-gradient(135deg, ${tier.color}60, ${tier.color}30)`,
-            border: `1.5px solid ${isCurrentUser ? 'rgba(99,102,241,0.6)' : tier.color + '40'}`,
-            boxShadow: `0 0 12px ${isCurrentUser ? 'rgba(99,102,241,0.2)' : tier.color + '20'}`,
+            border: `1.5px solid ${isCurrentUser ? 'rgba(20,184,166,0.6)' : tier.color + '40'}`,
+            boxShadow: `0 0 12px ${isCurrentUser ? 'rgba(20,184,166,0.2)' : tier.color + '20'}`,
           }}
         >
           <span className="font-display">{entry.initials}</span>
@@ -195,7 +195,7 @@ function LeaderboardRow({ entry, rank, isCurrentUser, index, scoreKey }) {
         <div className="flex items-center gap-1.5 mb-0.5">
           <p className="font-display font-semibold text-base text-slate-900 truncate">{entry.name}</p>
           {isCurrentUser && (
-            <span className="text-xs font-black text-indigo-600 flex-shrink-0">✨ You</span>
+            <span className="text-xs font-black text-primary-600 flex-shrink-0">✨ You</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -237,7 +237,7 @@ function LeaderboardRow({ entry, rank, isCurrentUser, index, scoreKey }) {
             animate={{ width: `${entry[scoreKey]}%` }}
             transition={{ duration: 0.8, ease: 'easeOut', delay: index * 0.04 + 0.3 }}
             className="h-full rounded-full"
-            style={{ background: 'linear-gradient(90deg, #6366f1, #7c3aed)' }}
+            style={{ background: 'linear-gradient(90deg, #14B8A6, #0D9488)' }}
           />
         </div>
       </div>
@@ -340,8 +340,8 @@ export default function PremiumLeaderboard({ currentUserId = null, currentUserNa
                     : 'text-slate-500 hover:text-slate-700'
                 }`}
                 style={mode === key ? {
-                  background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
-                  boxShadow: '0 0 16px rgba(99,102,241,0.3)',
+                  background: 'linear-gradient(135deg, #14B8A6, #0D9488)',
+                  boxShadow: '0 0 16px rgba(20,184,166,0.3)',
                 } : {}}
               >
                 <Icon size={13} />
@@ -358,7 +358,7 @@ export default function PremiumLeaderboard({ currentUserId = null, currentUserNa
               value={search}
               onChange={e => setSearch(e.target.value)}
               id="leaderboard-search"
-              className="w-full pl-9 pr-4 py-2 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
+              className="w-full pl-9 pr-4 py-2 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 transition-all"
             />
           </div>
 
@@ -392,7 +392,7 @@ export default function PremiumLeaderboard({ currentUserId = null, currentUserNa
                       onClick={() => { setDept(d); setDeptOpen(false) }}
                       className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
                         dept === d
-                          ? 'text-indigo-600 bg-indigo-50'
+                          ? 'text-primary-600 bg-primary-50'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                       }`}
                     >
@@ -410,12 +410,12 @@ export default function PremiumLeaderboard({ currentUserId = null, currentUserNa
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-5 flex items-center gap-3 px-4 py-3 rounded-lg border border-indigo-200 bg-indigo-50"
+          className="mb-5 flex items-center gap-3 px-4 py-3 rounded-lg border border-primary-200 bg-primary-50"
         >
-          <Trophy size={16} className="text-indigo-500 flex-shrink-0" />
+          <Trophy size={16} className="text-primary-500 flex-shrink-0" />
           <span className="text-sm text-slate-700">
             You are currently ranked
-            <span className="font-black text-indigo-600 mx-1">#{currentUserRank}</span>
+            <span className="font-black text-primary-600 mx-1">#{currentUserRank}</span>
             out of {totalParticipants} participants
           </span>
         </motion.div>
@@ -486,7 +486,7 @@ export default function PremiumLeaderboard({ currentUserId = null, currentUserNa
       <div className="mt-5 grid grid-cols-3 gap-3">
         {[
           { label: 'Avg Score', value: `${(leaderboardData.reduce((s, e) => s + e.score, 0) / leaderboardData.length).toFixed(1)}%`, icon: Target, color: '#059669' },
-          { label: 'Total Quizzes', value: leaderboardData.reduce((s, e) => s + e.quizzesCompleted, 0), icon: BookOpen, color: '#6366f1' },
+          { label: 'Total Quizzes', value: leaderboardData.reduce((s, e) => s + e.quizzesCompleted, 0), icon: BookOpen, color: '#14B8A6' },
           { label: 'Top Streak', value: `${Math.max(...leaderboardData.map(e => e.streak))} days`, icon: Flame, color: '#ea580c' },
         ].map(({ label, value, icon: Icon, color }) => (
           <div

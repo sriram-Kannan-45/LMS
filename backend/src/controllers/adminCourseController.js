@@ -248,8 +248,51 @@ async function deleteProgram(req, res) {
       if (quizIds.length > 0) {
         const attempts = await QuizAttempt.findAll({ where: { quizId: { [Op.in]: quizIds } }, attributes: ['id'] });
         const attemptIds = attempts.map(a => a.id);
+        const { QuizAnswer, AssessmentSession, ExamSession, Violation, ProctorActivity, Screenshot } = require('../models');
+
+        await AssessmentSession.destroy({
+          where: {
+            [Op.or]: [
+              attemptIds.length > 0 ? { attemptId: { [Op.in]: attemptIds } } : null,
+              { quizId: { [Op.in]: quizIds } }
+            ].filter(Boolean)
+          }
+        });
+
+        const examSessions = await ExamSession.findAll({
+          where: {
+            [Op.or]: [
+              attemptIds.length > 0 ? { attemptId: { [Op.in]: attemptIds } } : null,
+              { quizId: { [Op.in]: quizIds } }
+            ].filter(Boolean)
+          },
+          attributes: ['id']
+        });
+        const sessionIds = examSessions.map(s => s.id);
+        if (sessionIds.length > 0) {
+          await Promise.all([
+            Violation.destroy({ where: { sessionId: { [Op.in]: sessionIds } } }),
+            ProctorActivity.destroy({ where: { sessionId: { [Op.in]: sessionIds } } }),
+            Screenshot.destroy({ where: { sessionId: { [Op.in]: sessionIds } } })
+          ]);
+
+          const fs = require('fs');
+          const path = require('path');
+          for (const sessionId of sessionIds) {
+            try {
+              const screenshotsDir = path.join(__dirname, '../../uploads/screenshots', String(sessionId));
+              if (fs.existsSync(screenshotsDir)) {
+                fs.rmSync(screenshotsDir, { recursive: true, force: true });
+              }
+            } catch (fileErr) {
+              console.error(`Failed to clean screenshots directory for session ${sessionId}:`, fileErr.message);
+            }
+          }
+
+          await ExamSession.destroy({ where: { id: { [Op.in]: sessionIds } } });
+        }
+
         if (attemptIds.length > 0) {
-          const { QuizAnswer } = require('../models');
           await QuizAnswer.destroy({ where: { attemptId: { [Op.in]: attemptIds } } });
           await QuizResult.destroy({ where: { attemptId: { [Op.in]: attemptIds } } });
         }
@@ -493,8 +536,51 @@ async function deleteCourse(req, res) {
       // dropping AIQuestion + AIQuiz.
       const attempts = await QuizAttempt.findAll({ where: { quizId: { [Op.in]: quizIds } }, attributes: ['id'] });
       const attemptIds = attempts.map(a => a.id);
+      const { QuizAnswer, AssessmentSession, ExamSession, Violation, ProctorActivity, Screenshot } = require('../models');
+
+      await AssessmentSession.destroy({
+        where: {
+          [Op.or]: [
+            attemptIds.length > 0 ? { attemptId: { [Op.in]: attemptIds } } : null,
+            { quizId: { [Op.in]: quizIds } }
+          ].filter(Boolean)
+        }
+      });
+
+      const examSessions = await ExamSession.findAll({
+        where: {
+          [Op.or]: [
+            attemptIds.length > 0 ? { attemptId: { [Op.in]: attemptIds } } : null,
+            { quizId: { [Op.in]: quizIds } }
+          ].filter(Boolean)
+        },
+        attributes: ['id']
+      });
+      const sessionIds = examSessions.map(s => s.id);
+      if (sessionIds.length > 0) {
+        await Promise.all([
+          Violation.destroy({ where: { sessionId: { [Op.in]: sessionIds } } }),
+          ProctorActivity.destroy({ where: { sessionId: { [Op.in]: sessionIds } } }),
+          Screenshot.destroy({ where: { sessionId: { [Op.in]: sessionIds } } })
+        ]);
+
+        const fs = require('fs');
+        const path = require('path');
+        for (const sessionId of sessionIds) {
+          try {
+            const screenshotsDir = path.join(__dirname, '../../uploads/screenshots', String(sessionId));
+            if (fs.existsSync(screenshotsDir)) {
+              fs.rmSync(screenshotsDir, { recursive: true, force: true });
+            }
+          } catch (fileErr) {
+            console.error(`Failed to clean screenshots directory for session ${sessionId}:`, fileErr.message);
+          }
+        }
+
+        await ExamSession.destroy({ where: { id: { [Op.in]: sessionIds } } });
+      }
+
       if (attemptIds.length > 0) {
-        const { QuizAnswer } = require('../models');
         await QuizAnswer.destroy({ where: { attemptId: { [Op.in]: attemptIds } } });
         await QuizResult.destroy({ where: { attemptId: { [Op.in]: attemptIds } } });
         await QuizProgress.destroy({ where: { lessonQuizId: { [Op.in]: attemptIds } } }).catch(() => {});

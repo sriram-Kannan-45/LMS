@@ -29,7 +29,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ShieldCheck, Lock, KeyRound, Wifi, MonitorPlay, Maximize2,
+  ShieldCheck, Lock, KeyRound, Wifi, MonitorPlay, Maximize2, Eye,
   Check, X as IconX, Loader2, ArrowRight, Info, Clock, FileText,
   AlertCircle, RefreshCw,
 } from 'lucide-react';
@@ -37,6 +37,7 @@ import {
 import { ProctorProvider, useProctor } from '../proctoring';
 import useAuthUser from '../proctoring/hooks/useAuthUser';
 import useDeviceFingerprint from '../proctoring/hooks/useDeviceFingerprint';
+import useProctoringMedia from '../proctoring/hooks/useProctoringMedia';
 import useScreenShare from '../proctoring/hooks/useScreenShare';
 import useFullscreen from '../proctoring/hooks/useFullscreen';
 import useNetworkStatus from '../proctoring/hooks/useNetworkStatus';
@@ -49,8 +50,8 @@ const T = {
   muted: '#3f3f46',
   text: '#fafafa',
   subtle: '#a1a1aa',
-  indigo: '#6366f1',
-  indigoDim: '#4338ca',
+  indigo: '#0D9488',
+  indigoDim: '#0F766E',
   green: '#22c55e',
   amber: '#f59e0b',
   red: '#ef4444',
@@ -143,11 +144,22 @@ function PreExamInner({ quizId, attemptId, quizData }) {
     onStop: () => proctor.report?.('SCREEN_SHARE_STOPPED'),
     onDenied: () => proctor.report?.('SCREEN_SHARE_DENIED'),
   });
-  useEffect(() => { streamRef.current = screenShare.stream; }, [screenShare.stream]);
+  useEffect(() => {
+    streamRef.current = screenShare.stream;
+    proctor.setScreenStream(screenShare.stream);
+  }, [screenShare.stream, proctor]);
 
   const fullscreen = useFullscreen({
     onExit: () => proctor.report?.('FULLSCREEN_EXIT'),
   });
+
+  const proctorMedia = useProctoringMedia({ enabled: false });
+
+  // Request camera/mic on mount
+  useEffect(() => {
+    proctorMedia.request();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Inject fonts + keyframes once
   useEffect(() => { ensureAssets(); }, []);
@@ -156,7 +168,9 @@ function PreExamInner({ quizId, attemptId, quizData }) {
   useEffect(() => {
     return () => {
       const s = streamRef.current;
-      if (s) try { s.getTracks().forEach((t) => t.stop()); } catch { /* swallow */ }
+      if (s && !justActivated.current) {
+        try { s.getTracks().forEach((t) => t.stop()); } catch { /* swallow */ }
+      }
       if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
     };
   }, []);
@@ -187,6 +201,17 @@ function PreExamInner({ quizId, attemptId, quizData }) {
       hint: fp ? 'Device recognised' : 'Generating fingerprint…',
     },
     {
+      key: 'camera',
+      icon: Eye,
+      label: 'Camera & Microphone access',
+      state: proctorMedia.error ? ERROR
+        : proctorMedia.cameraGranted && proctorMedia.micGranted ? COMPLETE
+        : ACTION,
+      hint: proctorMedia.error ? proctorMedia.error
+        : proctorMedia.cameraGranted && proctorMedia.micGranted ? 'Camera and microphone feeds authorized'
+        : 'Action required when you start',
+    },
+    {
       key: 'network',
       icon: Wifi,
       label: 'Internet connection stable',
@@ -212,13 +237,14 @@ function PreExamInner({ quizId, attemptId, quizData }) {
       hint: fullscreen.isFullscreen ? 'Locked into fullscreen'
         : 'Action required when you start',
     },
-  ], [authReady, userId, fp, isOnline, screenShare, fullscreen.isFullscreen]);
+  ], [authReady, userId, fp, proctorMedia, isOnline, screenShare, fullscreen.isFullscreen]);
 
   const passedCount = items.filter((it) => it.state === COMPLETE).length;
   const requiredPass =
     items[0].state === COMPLETE &&
     items[1].state === COMPLETE &&
-    items[2].state === COMPLETE;
+    items[2].state === COMPLETE &&
+    items[3].state === COMPLETE;
 
   // ── Begin click ───────────────────────────────────────────────────────
   const handleBegin = useCallback(async () => {
@@ -249,12 +275,12 @@ function PreExamInner({ quizId, attemptId, quizData }) {
         if (!ok) throw new Error('Fullscreen permission was denied');
       }
       // 3. INSERT exam_sessions row on the server
-      await proctor.start({
+      const s = await proctor.start({
         quizId, attemptId, fingerprintHash: fp, screenSharing: true,
       });
       // 4. PENDING -> ACTIVE
       justActivated.current = true;
-      await proctor.activate();
+      await proctor.activate(s.sessionId, s.sessionToken);
       // 5. useEffect on proctor.isActive will navigate
     } catch (e) {
       if (stuckTimerRef.current) { clearTimeout(stuckTimerRef.current); stuckTimerRef.current = null; }
@@ -298,6 +324,8 @@ function PreExamInner({ quizId, attemptId, quizData }) {
           quizTitle={quizData?.title}
           numQuestions={quizData?.questions?.length ?? quizData?.numQuestions ?? null}
           timeLimit={quizData?.timeLimit ?? null}
+          cameraStream={proctorMedia.stream}
+          cameraGranted={proctorMedia.cameraGranted}
         />
         <RightPanel
           items={items}
@@ -334,7 +362,7 @@ function TopBar({ statusLabel, statusDot }) {
           style={{
             background: `linear-gradient(135deg, ${T.indigo} 0%, ${T.indigoDim} 100%)`,
             borderRadius: 7,
-            boxShadow: '0 0 0 1px rgba(99,102,241,0.3), 0 4px 16px rgba(99,102,241,0.25)',
+            boxShadow: '0 0 0 1px rgba(13,148,136,0.3), 0 4px 16px rgba(13,148,136,0.25)',
           }}
           aria-hidden
         >
@@ -373,7 +401,15 @@ function TopBar({ statusLabel, statusDot }) {
 // ──────────────────────────────────────────────────────────────────────
 // Left panel (eyebrow / title / orb / rules)
 // ──────────────────────────────────────────────────────────────────────
-function LeftPanel({ quizTitle, numQuestions, timeLimit }) {
+function LeftPanel({ quizTitle, numQuestions, timeLimit, cameraStream, cameraGranted }) {
+  const camRef = useRef(null);
+  useEffect(() => {
+    if (camRef.current && cameraStream) {
+      camRef.current.srcObject = cameraStream;
+      camRef.current.play().catch(() => {});
+    }
+  }, [cameraStream]);
+
   return (
     <aside
       className="hidden flex-col justify-between overflow-hidden lg:flex"
@@ -409,10 +445,33 @@ function LeftPanel({ quizTitle, numQuestions, timeLimit }) {
         </p>
       </header>
 
-      {/* MIDDLE — orb visual + stat chips */}
+      {/* MIDDLE — orb visual + camera preview + stat chips */}
       <div className="flex flex-col items-center justify-center py-2">
         <Orb />
-        <div className="mt-8 flex items-center gap-2">
+        {/* Camera preview */}
+        {cameraStream && (
+          <div
+            className="mt-6 overflow-hidden rounded-2xl border-2 border-zinc-700 bg-black shadow-2xl"
+            style={{ width: 200, height: 150 }}
+          >
+            <video
+              ref={camRef}
+              muted
+              playsInline
+              className="h-full w-full scale-x-[-1] object-cover"
+            />
+          </div>
+        )}
+        {cameraGranted && !cameraStream && (
+          <div
+            className="mt-4 flex items-center gap-2 rounded-full px-3 py-1 text-[12px]"
+            style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.green }}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Camera access granted
+          </div>
+        )}
+        <div className="mt-6 flex items-center gap-2">
           <Chip icon={Clock}>
             {timeLimit != null ? `${timeLimit} min` : '— min'}
           </Chip>
@@ -436,6 +495,7 @@ function LeftPanel({ quizTitle, numQuestions, timeLimit }) {
           <Rule>Tab switching, copy/paste, and dev-tools are blocked.</Rule>
           <Rule>3 fullscreen exits trigger automatic submission.</Rule>
           <Rule>Your screen is monitored by your instructor.</Rule>
+          <Rule>Camera and microphone feeds are recorded for proctoring.</Rule>
           <Rule>Answers autosave continuously to the server.</Rule>
         </ul>
       </section>
@@ -452,7 +512,7 @@ function Orb() {
         style={{
           inset: 0,
           borderRadius: '50%',
-          border: `1px solid rgba(99,102,241,0.10)`,
+          border: `1px solid rgba(13,148,136,0.10)`,
         }}
         aria-hidden
       />
@@ -462,7 +522,7 @@ function Orb() {
         style={{
           inset: 20,
           borderRadius: '50%',
-          border: `1px solid rgba(99,102,241,0.20)`,
+          border: `1px solid rgba(13,148,136,0.20)`,
         }}
         aria-hidden
       />
@@ -473,7 +533,7 @@ function Orb() {
           inset: 40,
           borderRadius: '50%',
           background: `radial-gradient(circle at 30% 25%, ${T.indigoDim} 0%, #1e1b4b 100%)`,
-          boxShadow: '0 0 60px rgba(99,102,241,0.30), 0 0 0 1px rgba(99,102,241,0.35) inset',
+          boxShadow: '0 0 60px rgba(13,148,136,0.30), 0 0 0 1px rgba(13,148,136,0.35) inset',
         }}
       >
         <ShieldCheck size={64} color="#ffffff" strokeWidth={1.6} />
@@ -537,12 +597,12 @@ function RightPanel({
         <span
           className="mono inline-flex items-center gap-2 rounded-full px-3 py-1 text-[13px] font-semibold"
           style={{
-            background: 'rgba(99,102,241,0.15)',
+            background: 'rgba(13,148,136,0.15)',
             color: T.indigo,
-            border: '1px solid rgba(99,102,241,0.30)',
+            border: '1px solid rgba(13,148,136,0.30)',
           }}
         >
-          {passedCount} <span style={{ color: 'rgba(99,102,241,0.6)' }}>/</span> {items.length} verified
+          {passedCount} <span style={{ color: 'rgba(13,148,136,0.6)' }}>/</span> {items.length} verified
         </span>
       </div>
 
@@ -658,18 +718,18 @@ function ChecklistCard({ index, label, hint, state, icon: Icon }) {
       hint: '#4ade80',
     },
     [PENDING]: {
-      border: 'rgba(99,102,241,0.30)',
-      bg: 'rgba(99,102,241,0.05)',
-      iconBg: 'rgba(99,102,241,0.20)',
+      border: 'rgba(13,148,136,0.30)',
+      bg: 'rgba(13,148,136,0.05)',
+      iconBg: 'rgba(13,148,136,0.20)',
       iconBorder: 'none',
       iconColor: T.indigo,
       title: T.text,
       hint: T.indigo,
     },
     [ACTION]: {
-      border: 'rgba(99,102,241,0.30)',
-      bg: 'rgba(99,102,241,0.05)',
-      iconBg: 'rgba(99,102,241,0.20)',
+      border: 'rgba(13,148,136,0.30)',
+      bg: 'rgba(13,148,136,0.05)',
+      iconBg: 'rgba(13,148,136,0.20)',
       iconBorder: 'none',
       iconColor: T.indigo,
       title: T.text,
@@ -815,17 +875,17 @@ function BeginButton({ submitting, disabled, onClick }) {
       className="inline-flex items-center gap-2 text-[15px] font-semibold text-white"
       style={{
         background: disabled
-          ? 'rgba(99,102,241,0.15)'
-          : `linear-gradient(135deg, #6366f1 0%, #4338ca 100%)`,
+          ? 'rgba(13,148,136,0.15)'
+          : `linear-gradient(135deg, #0D9488 0%, #0F766E 100%)`,
         padding: '12px 28px',
         borderRadius: 10,
-        border: disabled ? '1px solid rgba(99,102,241,0.20)' : '1px solid rgba(99,102,241,0.5)',
+        border: disabled ? '1px solid rgba(13,148,136,0.20)' : '1px solid rgba(13,148,136,0.5)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.45 : 1,
         color: disabled ? 'rgba(255,255,255,0.4)' : '#ffffff',
         boxShadow: disabled
           ? 'none'
-          : '0 0 0 1px rgba(99,102,241,0.5), 0 4px 24px rgba(99,102,241,0.45), 0 0 40px rgba(99,102,241,0.20)',
+          : '0 0 0 1px rgba(13,148,136,0.5), 0 4px 24px rgba(13,148,136,0.45), 0 0 40px rgba(13,148,136,0.20)',
         transition: 'box-shadow 200ms ease, opacity 200ms ease, background 200ms ease',
       }}
     >

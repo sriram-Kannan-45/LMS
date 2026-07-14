@@ -45,13 +45,13 @@ function AvatarUpload({ currentSrc, initials, onChange }) {
         }`}
       >
         <div className="absolute inset-0 rounded-full p-[2px]"
-          style={{ background: 'linear-gradient(135deg, #6366f1, #7c3aed)' }}
+          style={{ background: 'linear-gradient(135deg, #14B8A6, #0D9488)' }}
         >
           <div className="w-full h-full rounded-full bg-white overflow-hidden flex items-center justify-center">
             {preview ? (
               <img src={preview} alt="avatar preview" className="w-full h-full object-cover" />
             ) : (
-              <span className="font-display text-2xl font-black text-indigo-600">{initials}</span>
+              <span className="font-display text-2xl font-black text-primary-600">{initials}</span>
             )}
           </div>
         </div>
@@ -59,8 +59,8 @@ function AvatarUpload({ currentSrc, initials, onChange }) {
           <Camera size={20} className="text-white" />
         </div>
         {dragging && (
-          <div className="absolute inset-0 rounded-full bg-indigo-500/30 border-2 border-indigo-400 border-dashed flex items-center justify-center">
-            <Upload size={20} className="text-indigo-600" />
+          <div className="absolute inset-0 rounded-full bg-primary-500/30 border-2 border-primary-400 border-dashed flex items-center justify-center">
+            <Upload size={20} className="text-primary-600" />
           </div>
         )}
       </motion.div>
@@ -78,7 +78,7 @@ function AvatarUpload({ currentSrc, initials, onChange }) {
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1.5 transition-colors"
+          className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1.5 transition-colors"
         >
           <Camera size={14} /> Change photo
         </button>
@@ -121,13 +121,13 @@ function SkillInput({ skills, onChange }) {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold bg-primary-50 text-primary-700 border border-primary-200"
             >
               {s}
               <button
                 type="button"
                 onClick={() => removeSkill(s)}
-                className="hover:text-indigo-900 transition-colors"
+                className="hover:text-primary-900 transition-colors"
               >
                 <X size={12} />
               </button>
@@ -143,14 +143,14 @@ function SkillInput({ skills, onChange }) {
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSkill() } }}
           placeholder="e.g. React, Python, Leadership…"
           maxLength={30}
-          className="flex-1 px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
+          className="flex-1 px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 transition-all"
         />
         <motion.button
           type="button"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={addSkill}
-          className="px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-sm font-medium"
+          className="px-3 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-all text-sm font-medium"
         >
           <Plus size={16} />
         </motion.button>
@@ -164,7 +164,7 @@ function FormField({ icon: Icon, label, children }) {
   return (
     <div>
       <label className="flex items-center gap-2 text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">
-        <Icon size={14} className="text-indigo-500" />
+        <Icon size={14} className="text-primary-500" />
         {label}
       </label>
       {children}
@@ -211,7 +211,7 @@ export default function EditProfileModal({ isOpen, profileData, userInitials, on
             transition={{ type: 'spring', stiffness: 260, damping: 26 }}
             className="fixed inset-x-4 bottom-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-lg z-50 rounded-t-2xl sm:rounded-xl overflow-hidden border border-slate-200 bg-white shadow-lg"
           >
-            <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-400" />
+            <div className="h-1 w-full bg-gradient-to-r from-primary-500 via-primary-500 to-pink-400" />
 
             <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
               <div>
@@ -242,7 +242,7 @@ export default function EditProfileModal({ isOpen, profileData, userInitials, on
                   onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                   placeholder="Your full name"
                   maxLength={60}
-                  className="w-full px-3 py-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all"
+                  className="w-full px-3 py-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 transition-all"
                 />
               </FormField>
 
@@ -253,7 +253,7 @@ export default function EditProfileModal({ isOpen, profileData, userInitials, on
                   placeholder="Tell us about yourself…"
                   rows={2}
                   maxLength={200}
-                  className="w-full px-3 py-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all resize-none"
+                  className="w-full px-3 py-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 transition-all resize-none"
                 />
                 <p className="text-right text-xs text-slate-500 mt-1.5">{(form.bio || '').length}/200</p>
               </FormField>
@@ -282,8 +282,8 @@ export default function EditProfileModal({ isOpen, profileData, userInitials, on
                 id="save-profile-btn"
                 className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all"
                 style={{
-                  background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
-                  boxShadow: '0 0 16px rgba(99,102,241,0.3)',
+                  background: 'linear-gradient(135deg, #14B8A6, #0D9488)',
+                  boxShadow: '0 0 16px rgba(13,148,136,0.3)',
                 }}
               >
                 <Save size={15} /> Save Changes

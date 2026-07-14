@@ -183,7 +183,7 @@ function ParticipantList({
               color: '#111827', outline: 'none',
               transition: 'border-color 200ms ease, box-shadow 200ms ease'
             }}
-            onFocus={e => { e.target.style.borderColor = '#7C3AED'; e.target.style.boxShadow = '0 0 0 3px rgba(124,58,237,0.12)' }}
+            onFocus={e => { e.target.style.borderColor = '#0D9488'; e.target.style.boxShadow = '0 0 0 3px rgba(13,148,136,0.12)' }}
             onBlur={e => { e.target.style.borderColor = '#ECECEC'; e.target.style.boxShadow = 'none' }}
           />
         </div>
@@ -246,7 +246,7 @@ function ParticipantList({
                 <td>
                   <div style={{
                     width: 30, height: 30, borderRadius: 9999,
-                    background: 'rgba(124,58,237,0.10)', color: '#7C3AED',
+                    background: 'rgba(13,148,136,0.10)', color: '#0D9488',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 11, fontWeight: 700, fontFamily: "'Poppins', sans-serif",
                     flexShrink: 0
@@ -277,7 +277,7 @@ function ParticipantList({
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           transition: 'all 150ms ease'
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#7C3AED'; e.currentTarget.style.color = '#7C3AED' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#0D9488'; e.currentTarget.style.color = '#0D9488' }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = '#ECECEC'; e.currentTarget.style.color = '#6B7280' }}
                       >
                         <Eye size={14} />
@@ -294,7 +294,7 @@ function ParticipantList({
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         transition: 'all 150ms ease'
                       }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = '#7C3AED'; e.currentTarget.style.color = '#7C3AED' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = '#0D9488'; e.currentTarget.style.color = '#0D9488' }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = '#ECECEC'; e.currentTarget.style.color = '#6B7280' }}
                     >
                       <Edit2 size={14} />
@@ -408,7 +408,7 @@ function ParticipantList({
                 }}>
                   <div style={{
                     width: 38, height: 38, borderRadius: 10,
-                    background: 'rgba(124,58,237,0.10)', color: '#7C3AED',
+                    background: 'rgba(13,148,136,0.10)', color: '#0D9488',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontWeight: 700, fontSize: 14, fontFamily: "'Poppins', sans-serif"
                   }}>

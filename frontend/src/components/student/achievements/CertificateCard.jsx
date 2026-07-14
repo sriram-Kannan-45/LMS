@@ -24,7 +24,7 @@ function downloadCertificate({ studentName, courseTitle, score, dateLabel, certI
   ctx.fillRect(0, 0, 1600, 1100)
 
   // Border
-  ctx.strokeStyle = '#3b82f6'
+  ctx.strokeStyle = '#0D9488'
   ctx.lineWidth = 6
   ctx.strokeRect(40, 40, 1520, 1020)
   ctx.strokeStyle = '#14b8a6'
@@ -47,7 +47,7 @@ function downloadCertificate({ studentName, courseTitle, score, dateLabel, certI
   ctx.fillText(studentName, 800, 410)
 
   // Underline
-  ctx.strokeStyle = '#3b82f6'
+  ctx.strokeStyle = '#0D9488'
   ctx.lineWidth = 3
   ctx.beginPath()
   ctx.moveTo(400, 440)
@@ -78,7 +78,7 @@ function downloadCertificate({ studentName, courseTitle, score, dateLabel, certI
   const afterCourseY = 590 + Math.max(1, lines.length) * 56 + 20
 
   // Score
-  ctx.fillStyle = '#3b82f6'
+  ctx.fillStyle = '#0D9488'
   ctx.font = 'bold 64px Outfit, sans-serif'
   ctx.fillText(`Score: ${score.toFixed(1)}%`, 800, afterCourseY + 60)
 
@@ -134,7 +134,7 @@ export default function CertificateCard({ certificate, studentName, index = 0 })
           width: 48, height: 48, borderRadius: 12,
           background: 'var(--academic-gradient-primary)', color: '#fff',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 8px 18px rgba(59,130,246,0.25)',
+          boxShadow: '0 8px 18px rgba(13,148,136,0.25)',
         }}>
           <Award size={22} />
         </div>

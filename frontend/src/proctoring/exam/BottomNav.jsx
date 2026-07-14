@@ -56,8 +56,8 @@ export default function BottomNav({ currentIndex, totalQuestions, flagged, quest
         whileHover={!atEnd ? { x: 2 } : {}}
         className="flex items-center gap-1.5 rounded-xl px-5 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
         style={{
-          background: 'linear-gradient(135deg, var(--eq-accent) 0%, #6d28d9 100%)',
-          boxShadow: '0 4px 12px -2px rgba(124, 58, 237, 0.4)',
+          background: 'linear-gradient(135deg, var(--eq-accent) 0%, #0F766E 100%)',
+          boxShadow: '0 4px 12px -2px rgba(13,148,136,0.4)',
         }}
       >
         <span className="hidden sm:inline">Next</span>

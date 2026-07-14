@@ -7,7 +7,7 @@
  */
 import { useEffect } from 'react';
 
-export default function useTabVisibility({ onHidden, onShown, onBlur, enabled = true }) {
+export default function useTabVisibility({ onHidden, onShown, onBlur, onFocus, enabled = true }) {
   useEffect(() => {
     if (!enabled) return;
     const visHandler = () => {
@@ -15,12 +15,15 @@ export default function useTabVisibility({ onHidden, onShown, onBlur, enabled = 
       else onShown?.();
     };
     const blurHandler = () => onBlur?.();
+    const focusHandler = () => onFocus?.();
 
     document.addEventListener('visibilitychange', visHandler);
     window.addEventListener('blur', blurHandler);
+    window.addEventListener('focus', focusHandler);
     return () => {
       document.removeEventListener('visibilitychange', visHandler);
       window.removeEventListener('blur', blurHandler);
+      window.removeEventListener('focus', focusHandler);
     };
-  }, [enabled, onHidden, onShown, onBlur]);
+  }, [enabled, onHidden, onShown, onBlur, onFocus]);
 }

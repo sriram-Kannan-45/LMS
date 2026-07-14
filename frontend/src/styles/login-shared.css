@@ -58,10 +58,10 @@
   --brand-50: #eff6ff;
   --brand-100: #dbeafe;
   --brand-200: #bfdbfe;
-  --brand-300: #93c5fd;
+  --brand-300: #5eead4;
   --brand-400: #60a5fa;
-  --brand-500: #3b82f6;
-  --brand-600: #2563eb;
+  --brand-500: #0D9488;
+  --brand-600: #0F766E;
   --brand-700: #1d4ed8;
   --brand-800: #1e40af;
   --brand-900: #1e3a8a;
@@ -1153,13 +1153,13 @@ body:has(.premium-login-page) {
 
 .trainer-input:hover:not(:focus) {
   background: rgba(255,255,255,0.95);
-  border-color: #93c5fd;
+  border-color: #5eead4;
 }
 
 .trainer-input:focus {
   background: #fff;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 4px rgba(59,130,246,0.15), 0 4px 12px rgba(59,130,246,0.08);
+  border-color: #0D9488;
+  box-shadow: 0 0 0 4px rgba(13,148,136,0.15), 0 4px 12px rgba(13,148,136,0.08);
 }
 
 .trainer-password-toggle {
@@ -1177,7 +1177,7 @@ body:has(.premium-login-page) {
   transition: color 0.2s, background 0.2s;
 }
 
-.trainer-password-toggle:hover { color: #3b82f6; background: rgba(59,130,246,0.08); }
+.trainer-password-toggle:hover { color: #0D9488; background: rgba(13,148,136,0.08); }
 
 .trainer-options-row {
   display: flex;
@@ -1221,12 +1221,12 @@ body:has(.premium-login-page) {
   flex-shrink: 0;
 }
 
-.trainer-checkbox-label:hover .trainer-checkmark { border-color: #3b82f6; }
+.trainer-checkbox-label:hover .trainer-checkmark { border-color: #0D9488; }
 
 .trainer-checkbox:checked + .trainer-checkmark {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  box-shadow: 0 2px 8px rgba(59,130,246,0.3);
+  background: #0D9488;
+  border-color: #0D9488;
+  box-shadow: 0 2px 8px rgba(13,148,136,0.3);
 }
 
 .trainer-checkbox:checked + .trainer-checkmark::after {
@@ -1244,7 +1244,7 @@ body:has(.premium-login-page) {
   border: none;
   font-size: 12.5px;
   font-weight: 500;
-  color: #3b82f6;
+  color: #0D9488;
   cursor: pointer;
   padding: 0;
   font-family: 'Poppins', sans-serif;
@@ -1276,8 +1276,8 @@ body:has(.premium-login-page) {
 .trainer-submit-btn--green { background: linear-gradient(135deg, #22c55e, #16a34a); box-shadow: 0 4px 14px rgba(34,197,94,0.35); }
 .trainer-submit-btn--green:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(34,197,94,0.45); }
 
-.trainer-submit-btn--blue { background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 4px 14px rgba(59,130,246,0.35); }
-.trainer-submit-btn--blue:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(59,130,246,0.45); }
+.trainer-submit-btn--blue { background: linear-gradient(135deg, #0D9488, #0F766E); box-shadow: 0 4px 14px rgba(13,148,136,0.35); }
+.trainer-submit-btn--blue:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(13,148,136,0.45); }
 
 .trainer-submit-btn--red { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 4px 14px rgba(239,68,68,0.35); }
 .trainer-submit-btn--red:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(239,68,68,0.45); }
@@ -1330,7 +1330,7 @@ body:has(.premium-login-page) {
   transition: all 0.25s;
 }
 
-.trainer-oauth-btn:hover { background: #fff; border-color: #93c5fd; box-shadow: 0 2px 8px rgba(59,130,246,0.08); }
+.trainer-oauth-btn:hover { background: #fff; border-color: #5eead4; box-shadow: 0 2px 8px rgba(13,148,136,0.08); }
 
 .trainer-switch-section {
   margin-top: 14px;
@@ -1374,9 +1374,9 @@ body:has(.premium-login-page) {
 
 .trainer-switch-btn:hover {
   background: rgba(255,255,255,0.95);
-  border-color: #93c5fd;
-  color: #2563eb;
-  box-shadow: 0 0 20px rgba(59,130,246,0.12);
+  border-color: #5eead4;
+  color: #0F766E;
+  box-shadow: 0 0 20px rgba(13,148,136,0.12);
   transform: translateY(-1px);
 }
 
